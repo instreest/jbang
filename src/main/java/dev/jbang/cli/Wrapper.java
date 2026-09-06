@@ -1,7 +1,6 @@
 package dev.jbang.cli;
 
 import static dev.jbang.cli.BaseCommand.*;
-import static java.nio.file.StandardCopyOption.COPY_ATTRIBUTES;
 import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
 
 import java.io.IOException;
@@ -83,14 +82,21 @@ public class Wrapper extends BaseCommand {
 
 		private void copyScripts(Path dir, Path dest) throws IOException {
 			for (String nm : SCRIPT_NAMES) {
-				Files.copy(dir.resolve(nm), dest.resolve(nm), COPY_ATTRIBUTES, REPLACE_EXISTING);
+				Path target = dest.resolve(nm);
+				// NB: we deliberately don't use COPY_ATTRIBUTES here, that would
+				// give the newly created files the timestamp of the JBang
+				// installation instead of the moment they were installed.
+				Files.copy(dir.resolve(nm), target, REPLACE_EXISTING);
+				if (!Util.isWindows()) {
+					Util.setExecutable(target);
+				}
 			}
 		}
 
 		private void copyJar(Path dir, Path dest) throws IOException {
 			Path jbdir = dest.resolve(DIR_NAME);
 			jbdir.toFile().mkdirs();
-			Files.copy(dir.resolve(JAR_NAME), jbdir.resolve(JAR_NAME), COPY_ATTRIBUTES, REPLACE_EXISTING);
+			Files.copy(dir.resolve(JAR_NAME), jbdir.resolve(JAR_NAME), REPLACE_EXISTING);
 		}
 	}
 }
