@@ -324,17 +324,22 @@ public final class Main {
 			Jdk def = jdkMan.getDefaultJdk();
 			realOut.println("Installed JDKs (<=default):");
 			for (Jdk j : jdkMan.listInstalled()) {
-				if ("default".equals(j.origin())) {
-					continue;
-				}
-				boolean isDef = def != null;
+				boolean isDef;
 				try {
 					isDef = def != null && Files.isSameFile(def.home(), j.home());
 				} catch (IOException e) {
 					isDef = false;
 				}
+				Path home = j.home();
+				if ("default".equals(j.origin())) {
+					try {
+						home = home.toRealPath();
+					} catch (IOException e) {
+						// keep the link path
+					}
+				}
 				realOut.println("   " + j.majorVersion() + " (" + j.version() + ", " + j.origin() + ") "
-						+ j.home() + (isDef ? " <" : ""));
+						+ home + (isDef ? " <" : ""));
 			}
 			return ExitException.EXIT_OK;
 		}

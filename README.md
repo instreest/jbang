@@ -22,7 +22,7 @@ but works for any script that only relies on those three directives.
 | `jbang info jar <script.java>` | prints the path of the built jar |
 | `jbang jdk default [<version>]`, `jdk install <version>`, `jdk list` | used by the launcher scripts |
 | `//DEPS g:a:v[:classifier][@type]` | resolved from Maven Central (mirrors/proxies from `~/.m2/settings.xml` are honoured); `@pom` entries act as BOMs |
-| `//JAVA 17` / `//JAVA 17+` | the JDK is looked up (running JVM, `currentjdk`, `JAVA_HOME`, `PATH`, `~/.jbang/cache/jdks`) and downloaded from Foojay when missing |
+| `//JAVA 17` / `//JAVA 17+` | the JDK is looked up (running JVM, `currentjdk`, `JAVA_HOME`, `PATH`, `~/.jbang/cache/jdks`) and downloaded when missing (Adoptium/Temurin API, falling back to the Oracle JDK download site) |
 | `//SOURCES file-or-glob ...` | relative to the declaring file, recursive |
 | `${property}` in directives | system properties, `-Dkey=value` and `os.detected.*` |
 | Global options | `--verbose`, `--quiet`, `--fresh`, `--offline` |
@@ -54,7 +54,7 @@ library only (`src/main/java/dev/jbang`, 20 small classes).
 | `JBANG_CACHE_DIR` | cache directory (default `$JBANG_DIR/cache`) |
 | `JBANG_REPO` | local Maven repository to use instead of `~/.m2/repository` |
 | `JBANG_DEFAULT_JAVA_VERSION` | JDK version to install when the script does not specify one (default 17) |
-| `JBANG_JDK_VENDOR` | Foojay distribution(s) to install, e.g. `temurin` |
+| `JBANG_JDK_DOWNLOAD_URL` | URL template that replaces the built-in download sources; placeholders `{version}`, `{os}`, `{oracleos}`, `{arch}`, `{ext}` |
 
 ## Building
 

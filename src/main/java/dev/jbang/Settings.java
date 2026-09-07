@@ -25,7 +25,6 @@ public final class Settings {
 	public static final String ENV_JBANG_CACHE_DIR = "JBANG_CACHE_DIR";
 	public static final String ENV_JBANG_REPO = "JBANG_REPO";
 	public static final String ENV_DEFAULT_JAVA_VERSION = "JBANG_DEFAULT_JAVA_VERSION";
-	public static final String ENV_JDK_VENDOR = "JBANG_JDK_VENDOR";
 
 	public static final String CP_SEPARATOR = File.pathSeparator;
 	public static final String DEFAULT_JDK = "currentjdk";
@@ -83,12 +82,6 @@ public final class Settings {
 			}
 		}
 		return Util.getOS() == Util.OS.alpine_linux ? DEFAULT_ALPINE_JAVA_VERSION : DEFAULT_JAVA_VERSION;
-	}
-
-	/** JDK distributions to install from (foojay "distro" parameter). */
-	public static String getJdkDistros() {
-		String v = System.getenv(ENV_JDK_VENDOR);
-		return v != null && !v.isEmpty() ? v : null;
 	}
 
 	private static Path mkdirs(Path dir) {

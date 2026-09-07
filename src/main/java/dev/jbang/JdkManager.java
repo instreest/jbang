@@ -7,15 +7,17 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Finds JDKs already present on the machine and installs missing ones from
- * the Foojay Disco API (the same service the launcher scripts use). Search
- * order for a requested version:
+ * Finds JDKs already present on the machine and installs missing ones by
+ * downloading them (see {@link #downloadUrls(int)}). Search order for a
+ * requested version:
  * <ol>
  * <li>the JVM running JBang</li>
  * <li>the default JDK link ($JBANG_DIR/currentjdk)</li>
@@ -26,7 +28,11 @@ import java.util.stream.Stream;
  * </ol>
  */
 public final class JdkManager {
-	private static final String FOOJAY_DIRECT_URI = "https://api.foojay.io/disco/v3.0/directuris?";
+	/** Optional URL template override, see {@link #downloadUrls(int)}. */
+	public static final String ENV_JDK_DOWNLOAD_URL = "JBANG_JDK_DOWNLOAD_URL";
+
+	private static final String ADOPTIUM_URL = "https://api.adoptium.net/v3/binary/latest/{version}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse";
+	private static final String ORACLE_URL = "https://download.oracle.com/java/{version}/latest/jdk-{version}_{oracleos}-{arch}_bin.{ext}";
 
 	private final Path jdksDir;
 	private final Path defaultLink;
@@ -140,9 +146,10 @@ public final class JdkManager {
 	}
 
 	/**
-	 * Downloads the latest GA release of the given major version from Foojay and
-	 * installs it as $JBANG_CACHE_DIR/jdks/&lt;version&gt;. When no default JDK
-	 * is set yet, the new JDK becomes the default.
+	 * Downloads the latest GA release of the given major version and installs it
+	 * as $JBANG_CACHE_DIR/jdks/&lt;version&gt;. The candidate URLs are tried in
+	 * order until one succeeds. When no default JDK is set yet, the new JDK
+	 * becomes the default.
 	 */
 	public Jdk install(int version) {
 		if (Util.isOffline()) {
@@ -151,34 +158,36 @@ public final class JdkManager {
 		}
 		Path jdkDir = jdksDir.resolve(Integer.toString(version));
 		Path tmpDir = jdksDir.resolve(version + ".tmp");
-		Util.deletePath(tmpDir, true);
-		String url = foojayUrl(version);
+		Path pkg = Settings.getCacheDir(Settings.CacheClass.urls)
+			.resolve("bootstrap-jdk-" + version + "." + archiveExtension());
 		Util.infoMsg("Downloading JDK " + version + ". Be patient, this can take several minutes...");
-		Util.verboseMsg("Downloading " + url);
-		Path pkg = null;
-		try {
-			String ext = Util.isWindows() ? "zip" : "tar.gz";
-			pkg = Settings.getCacheDir(Settings.CacheClass.urls).resolve("bootstrap-jdk-" + version + "." + ext);
-			Downloader.download(url, pkg);
-			Util.infoMsg("Installing JDK " + version + "...");
-			Unpacker.unpackJdk(pkg, tmpDir);
-			if (!Jdk.resolveVersion(tmpDir).isPresent()) {
-				throw new IOException("The JDK package does not seem to contain a valid JDK");
-			}
-			Util.deletePath(jdkDir, true);
-			Files.move(tmpDir, jdkDir);
-		} catch (IOException | RuntimeException e) {
+		List<String> failures = new ArrayList<>();
+		for (String url : downloadUrls(version)) {
 			Util.deletePath(tmpDir, true);
-			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
-					"Unable to download or install JDK version " + version + " (" + e.getMessage() + ")", e);
-		} finally {
-			if (pkg != null) {
+			try {
+				Util.verboseMsg("Downloading " + url);
+				Downloader.download(url, pkg);
+				Util.infoMsg("Installing JDK " + version + "...");
+				Unpacker.unpackJdk(pkg, tmpDir);
+				if (!Jdk.resolveVersion(tmpDir).isPresent()) {
+					throw new IOException("The JDK package does not seem to contain a valid JDK");
+				}
+				Util.deletePath(jdkDir, true);
+				Files.move(tmpDir, jdkDir);
+				break;
+			} catch (IOException | RuntimeException e) {
+				Util.verboseMsg("Download/install from " + url + " failed: " + e);
+				failures.add(url + " (" + e.getMessage() + ")");
+				Util.deletePath(tmpDir, true);
+			} finally {
 				Util.deletePath(pkg, true);
 			}
 		}
 		Jdk jdk = Jdk.of(jdkDir, "jbang");
 		if (jdk == null) {
-			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Failed to find JDK in: " + jdkDir);
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
+					"Unable to download or install JDK version " + version + ":\n   "
+							+ String.join("\n   ", failures));
 		}
 		installed = null;
 		if (getDefaultJdk() == null) {
@@ -187,23 +196,44 @@ public final class JdkManager {
 		return jdk;
 	}
 
-	static String foojayUrl(int version) {
-		String distros = Settings.getJdkDistros();
-		if (distros == null) {
-			distros = (version == 8 || version == 11 || version >= 17) ? "temurin" : "aoj";
+	/**
+	 * The URLs to try for downloading the given major version, in order. By
+	 * default the Adoptium (Eclipse Temurin) API is used, falling back to the
+	 * Oracle JDK download site for the versions it provides. The environment
+	 * variable JBANG_JDK_DOWNLOAD_URL replaces the whole list with a single
+	 * template; it may contain the placeholders {version}, {os} (linux,
+	 * alpine-linux, mac, windows, aix), {oracleos} (linux, macos, windows),
+	 * {arch} (x64, aarch64, ...) and {ext} (tar.gz or zip).
+	 */
+	static List<String> downloadUrls(int version) {
+		List<String> templates = new ArrayList<>();
+		String override = System.getenv(ENV_JDK_DOWNLOAD_URL);
+		if (override != null && !override.trim().isEmpty()) {
+			templates.add(override.trim());
+		} else {
+			templates.add(ADOPTIUM_URL);
+			templates.add(ORACLE_URL);
 		}
+		Map<String, String> vars = new LinkedHashMap<>();
 		Util.OS os = Util.getOS();
-		String libc = os == Util.OS.windows ? "c_std_lib"
-				: os == Util.OS.mac ? "libc" : os == Util.OS.alpine_linux ? "musl" : "glibc";
-		return FOOJAY_DIRECT_URI + "distro=" + distros
-				+ "&javafx_bundled=false"
-				+ "&libc_type=" + libc
-				+ "&archive_type=" + (os == Util.OS.windows ? "zip" : "tar.gz")
-				+ "&operating_system=" + os.name().replace('_', '-')
-				+ "&package_type=jdk"
-				+ "&version=" + version
-				+ "&architecture=" + Util.getArch().name()
-				+ "&latest=available";
+		vars.put("{version}", Integer.toString(version));
+		vars.put("{os}", os.name().replace('_', '-'));
+		vars.put("{oracleos}", os == Util.OS.mac ? "macos" : os.name());
+		vars.put("{arch}", Util.getArch().name());
+		vars.put("{ext}", archiveExtension());
+		List<String> urls = new ArrayList<>();
+		for (String t : templates) {
+			String url = t;
+			for (Map.Entry<String, String> e : vars.entrySet()) {
+				url = url.replace(e.getKey(), e.getValue());
+			}
+			urls.add(url);
+		}
+		return urls;
+	}
+
+	private static String archiveExtension() {
+		return Util.isWindows() ? "zip" : "tar.gz";
 	}
 
 	/** The JDK the default link points to, or null. */
