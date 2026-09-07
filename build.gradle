@@ -1,4 +1,6 @@
 import org.gradle.crypto.checksum.Checksum
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 
 plugins {
 	id "distribution"
@@ -218,9 +220,17 @@ tasks.withType(Test).configureEach {
 	maxParallelForks = Runtime.runtime.availableProcessors().intdiv(2) ?: 1
 }
 
-// to enable reproducible builds
-tasks.withType(AbstractArchiveTask) {
+// to enable reproducible builds.
+// Jars keep the fixed 1980-02-01 entry timestamp Gradle uses when timestamps
+// are not preserved. The distribution archives instead take their timestamps
+// from the staging directory built by 'stageDist', which normalizes every file
+// to a deterministic value (see below).
+tasks.withType(Jar).configureEach {
 	preserveFileTimestamps = false
+	reproducibleFileOrder = true
+}
+tasks.withType(AbstractArchiveTask).matching { !(it instanceof Jar) }.configureEach {
+	preserveFileTimestamps = true
 	reproducibleFileOrder = true
 }
 
@@ -319,6 +329,50 @@ def commonSpec = project.copySpec {
 	}
 }
 
+// The same constant Gradle writes when preserveFileTimestamps is false. ZIP
+// stores MS-DOS timestamps, which cannot express anything before 1980.
+def zipEntryEpoch = new GregorianCalendar(1980, 1, 1, 0, 0, 0).timeInMillis
+
+// Last commit time of a tracked file, or null when it cannot be determined
+// (no git on PATH, no .git directory, path not in history).
+def gitCommitTimeOf = { String relPath ->
+	try {
+		def output = providers.exec {
+			commandLine 'git', 'log', '-1', '--format=%ct', '--', relPath
+			ignoreExitValue = true
+		}
+		def seconds = output.standardOutput.asText.get().trim()
+		return (output.result.get().exitValue == 0 && seconds) ? (seconds as Long) : null
+	} catch (Exception ignored) {
+		return null
+	}
+}
+
+def distScriptNames = ['jbang', 'jbang.cmd', 'jbang.ps1']
+def distScriptTimes = distScriptNames.collectEntries {
+	[(it): gitCommitTimeOf("src/main/scripts/$it")]
+}
+
+// Stages the distribution contents and gives every file a deterministic
+// timestamp: the launcher scripts get the time of the commit that last changed
+// them, everything else gets the 1980 constant. Without this the scripts would
+// carry either the checkout time (not reproducible) or 1980 (jbangdev/jbang#300).
+def stageDist = tasks.register('stageDist', Sync) {
+	mustRunAfter('nativeImage')
+	dependsOn(versionTxt)
+	inputs.property('distScriptTimes', distScriptTimes.toString())
+	with commonSpec
+	into layout.buildDirectory.dir('dist-staging')
+	doLast {
+		destinationDir.traverse { file ->
+			def millis = (file.name in distScriptNames && distScriptTimes[file.name] != null)
+					? distScriptTimes[file.name] * 1000L
+					: zipEntryEpoch
+			Files.setLastModifiedTime(file.toPath(), FileTime.fromMillis(millis))
+		}
+	}
+}
+
 tasks.named('installDist') {
 	mustRunAfter('nativeImage')
 }
@@ -326,12 +380,12 @@ tasks.named('installDist') {
 distributions {
 	main {
 		contents {
-			with commonSpec
+			from stageDist
 		}
 	}
 	latest {
 		contents {
-			with commonSpec
+			from stageDist
 		}
 	}
 }
@@ -347,7 +401,7 @@ latestDistTar {
 tasks.register('nativeDistZip', Zip) {
 	dependsOn('nativeImage')
 	into(provider { "jbang-${project.version}" }) {
-		with commonSpec
+		from stageDist
 	}
 	archiveFileName.set(provider { "${getNativeBundleBaseName()}.zip" })
 }
@@ -355,7 +409,7 @@ tasks.register('nativeDistZip', Zip) {
 tasks.register('nativeDistTar', Tar) {
 	dependsOn('nativeImage')
 	into(provider { "jbang-${project.version}" }) {
-		with commonSpec
+		from stageDist
 	}
 	compression = Compression.NONE
 	archiveFileName.set(provider { "${getNativeBundleBaseName()}.tar" })
@@ -364,7 +418,7 @@ tasks.register('nativeDistTar', Tar) {
 tasks.register('latestNativeDistZip', Zip) {
 	dependsOn('nativeImage')
 	into("jbang") {
-		with commonSpec
+		from stageDist
 	}
 	archiveFileName.set(provider { "${getLatestNativeBundleBaseName()}.zip" })
 }
@@ -372,7 +426,7 @@ tasks.register('latestNativeDistZip', Zip) {
 tasks.register('latestNativeDistTar', Tar) {
 	dependsOn('nativeImage')
 	into("jbang") {
-		with commonSpec
+		from stageDist
 	}
 	compression = Compression.NONE
 	archiveFileName.set(provider { "${getLatestNativeBundleBaseName()}.tar" })
