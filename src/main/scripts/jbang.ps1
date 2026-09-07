@@ -63,7 +63,7 @@ if (-not (Test-Path env:JBANG_USE_NATIVE)) { $env:JBANG_USE_NATIVE="false" }
 # Base URL for downloading JBang releases.
 # Override for testing or corporate mirrors.
 # Example: $env:JBANG_DOWNLOAD_BASEURL='http://localhost:18080'
-if (-not (Test-Path env:JBANG_DOWNLOAD_BASEURL)) { $jbangDownloadBaseUrl='https://github.com/jbangdev/jbang/releases' } else { $jbangDownloadBaseUrl=$env:JBANG_DOWNLOAD_BASEURL }
+if (-not (Test-Path env:JBANG_DOWNLOAD_BASEURL)) { $jbangDownloadBaseUrl='https://github.com/instreest/jbang/releases' } else { $jbangDownloadBaseUrl=$env:JBANG_DOWNLOAD_BASEURL }
 
 # Number of retry attempts for downloads
 if (-not (Test-Path env:JBANG_DOWNLOAD_RETRY)) { $downloadRetry=5 } else { $downloadRetry=[int]$env:JBANG_DOWNLOAD_RETRY }

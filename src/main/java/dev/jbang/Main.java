@@ -1,311 +1,383 @@
 package dev.jbang;
 
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.Future;
-import java.util.logging.LogManager;
-import java.util.stream.Collectors;
+import java.util.Map;
 
-import org.aesh.AeshRuntimeRunner;
-import org.aesh.command.CommandResult;
+/**
+ * JBangLite command line.
+ *
+ * <pre>
+ * jbang [global options] [run] [run options] &lt;script.java&gt; [args...]
+ * jbang [global options] build [run options] &lt;script.java&gt;
+ * jbang [global options] info classpath [--deps-only] &lt;script.java&gt;
+ * jbang [global options] info jar &lt;script.java&gt;
+ * jbang [global options] jdk default [version]
+ * jbang [global options] jdk install &lt;version&gt;
+ * jbang [global options] jdk list
+ * jbang version
+ * </pre>
+ *
+ * Like the full JBang, <code>run</code> does not start the script itself: it
+ * prints the java command line on stdout and exits with status 255, which the
+ * launcher scripts (jbang, jbang.cmd, jbang.ps1) turn into an exec.
+ */
+public final class Main {
+	private static final List<String> COMMANDS = Arrays.asList("run", "build", "info", "jdk", "version", "help");
 
-import dev.jbang.catalog.Alias;
-import dev.jbang.catalog.Catalog;
-import dev.jbang.cli.JBang;
-import dev.jbang.search.SearchScorer;
-import dev.jbang.util.Util;
-import dev.jbang.util.VersionChecker;
+	/** Always the real stdout, even if something redirected System.out. */
+	private static final PrintStream realOut = new PrintStream(new FileOutputStream(FileDescriptor.out), true);
 
-public class Main {
+	private Main() {
+	}
+
 	public static void main(String... args) {
-		// In native-image mode the JVM never sees JBANG_JAVA_OPTIONS, so
-		// we parse -Dkey=value entries from it here and set them as system
-		// properties. On the JVM this is harmless (properties are already set).
-		applyJavaOptionsFromEnv();
-
-		// Set up JUL logging so the output looks like JBang output
+		int exitCode;
 		try {
-			LogManager.getLogManager().readConfiguration(Main.class.getResourceAsStream("/logging.properties"));
-		} catch (IOException e) {
-			// Ignore
-		}
-
-		if (AeshRuntimeRunner.handleDynamicCompletion(args, JBang.class)) {
-			return;
-		}
-
-		String[] newArgs = handleDefaultRun(args);
-
-		Util.verboseMsg("jbang version " + Util.getJBangVersion());
-		Future<String> versionCheckResult = VersionChecker.newerVersionAsync();
-		int exitCode = 0;
-		try {
-			CommandResult result = AeshRuntimeRunner.builder()
-				.command(JBang.class)
-				.args(newArgs)
-				.defaultValueProvider(new dev.jbang.cli.JBangDefaultValueProvider())
-				.execute();
-			if (result != null) {
-				exitCode = result.getResultValue();
-			}
+			exitCode = run(new ArrayList<>(Arrays.asList(args)));
 		} catch (ExitException e) {
-			if (e.getStatus() != 0) {
+			if (e.getStatus() != 0 && e.getStatus() != ExitException.EXIT_EXECUTE && e.getMessage() != null) {
 				Util.errorMsg(null, e);
 			}
 			exitCode = e.getStatus();
+		} catch (IOException | IllegalArgumentException | IllegalStateException e) {
+			Util.errorMsg(null, e);
+			exitCode = ExitException.EXIT_GENERIC_ERROR;
 		} catch (Exception e) {
-			// Unwrap to find the root cause
-			Throwable cause = e;
-			while (cause.getCause() != null) {
-				cause = cause.getCause();
-			}
-			if (cause instanceof IllegalArgumentException) {
-				// Converter/validation errors from aesh (e.g. invalid enum values)
-				Util.errorMsg(cause.getMessage());
-				exitCode = ExitException.EXIT_INVALID_INPUT;
-			} else if (cause instanceof ExitException) {
-				exitCode = ((ExitException) cause).getStatus();
-				if (exitCode != 0) {
-					Util.errorMsg(null, e);
-				}
-			} else {
-				Util.errorMsg(null, e);
-				if (Util.isVerbose()) {
-					Util.infoMsg(
-							"If you believe this a bug in jbang, open an issue at https://github.com/jbangdev/jbang/issues");
-				}
-				exitCode = ExitException.EXIT_INTERNAL_ERROR;
-			}
-		} finally {
-			VersionChecker.informOrCancel(versionCheckResult);
+			Util.errorMsg(null, e);
+			exitCode = ExitException.EXIT_INTERNAL_ERROR;
 		}
 		if (exitCode != 0) {
 			System.exit(exitCode);
 		}
 	}
 
-	private static Set<String> subcommandNames;
-
-	public static Set<String> getSubcommandNames() {
-		if (subcommandNames == null) {
-			Set<String> names = new LinkedHashSet<>();
-			names.add("run");
-			names.add("build");
-			names.add("edit");
-			names.add("init");
-			names.add("alias");
-			names.add("template");
-			names.add("catalog");
-			names.add("trust");
-			names.add("cache");
-			names.add("completion");
-			names.add("jdk");
-			names.add("version");
-			names.add("wrapper");
-			names.add("info");
-			names.add("app");
-			names.add("export");
-			names.add("config");
-			names.add("deps");
-			subcommandNames = names;
-		}
-		return subcommandNames;
-	}
-
-	/**
-	 * Reads {@code JBANG_JAVA_OPTIONS} from the environment and applies any
-	 * {@code -Dkey=value} entries as system properties. This makes proxy settings,
-	 * trust stores, etc. work in native-image mode where the JVM launcher isn't
-	 * there to process them.
-	 */
-	static void applyJavaOptionsFromEnv() {
-		// Only needed in native-image mode — on JVM the launcher handles -D flags
-		if (!dev.jbang.util.JavaUtil.inNativeImage()) {
-			return;
-		}
-		String opts = System.getenv("JBANG_JAVA_OPTIONS");
-		if (opts == null || opts.isEmpty()) {
-			return;
-		}
-		for (String token : opts.split("\\s+")) {
-			if (token.startsWith("-D") && token.length() > 2) {
-				String prop = token.substring(2);
-				int eq = prop.indexOf('=');
-				if (eq > 0) {
-					System.setProperty(prop.substring(0, eq), prop.substring(eq + 1));
-				} else {
-					System.setProperty(prop, "");
-				}
-			}
-		}
-	}
-
-	public static String[] handleDefaultRun(String[] args) {
-		if (args == null) {
-			return args;
-		}
-		// Filter out null entries that can appear when tests pass null in varargs
-		boolean hasNulls = false;
-		for (String a : args) {
-			if (a == null) {
-				hasNulls = true;
+	static int run(List<String> args) throws IOException {
+		// global options come before the command / script
+		while (!args.isEmpty() && args.get(0).startsWith("-")) {
+			String opt = args.remove(0);
+			switch (opt) {
+			case "--verbose":
+				Util.setVerbose(true);
 				break;
+			case "--quiet":
+				Util.setQuiet(true);
+				break;
+			case "--fresh":
+				Util.setFresh(true);
+				break;
+			case "-o":
+			case "--offline":
+				Util.setOffline(true);
+				break;
+			case "-h":
+			case "--help":
+				printHelp();
+				return ExitException.EXIT_OK;
+			case "-V":
+			case "--version":
+				realOut.println(Util.getJBangVersion());
+				return ExitException.EXIT_OK;
+			default:
+				// not a global option: it belongs to the implicit "run" command
+				args.add(0, opt);
+				return runScript(args, true);
 			}
 		}
-		if (hasNulls) {
-			List<String> filtered = new ArrayList<>();
-			for (String a : args) {
-				if (a != null) {
-					filtered.add(a);
-				}
-			}
-			args = filtered.toArray(new String[0]);
+		Util.verboseMsg("jbang version " + Util.getJBangVersion());
+		if (args.isEmpty()) {
+			printHelp();
+			return ExitException.EXIT_INVALID_INPUT;
 		}
-		List<String> leadingOpts = new ArrayList<>();
-		List<String> remainingArgs = new ArrayList<>();
-		boolean foundParam = false;
-		for (String arg : args) {
-			if (!arg.startsWith("-") || arg.equals("-") || arg.equals("--")) {
-				foundParam = true;
-			}
-			if (foundParam) {
-				remainingArgs.add(arg);
-			} else {
-				leadingOpts.add(arg);
-			}
+		String cmd = args.get(0);
+		if (!COMMANDS.contains(cmd)) {
+			// implicit run
+			return runScript(args, true);
 		}
-		// Check for deprecated flags in leading options only
-		for (String opt : leadingOpts) {
-			String key = opt.contains("=") ? opt.substring(0, opt.indexOf("=")) : opt;
-			String replacement = getDeprecatedFlagReplacement(key);
-			if (replacement != null) {
-				System.err.printf(
-						"%s is a deprecated and now removed flag. See %s for more details on its replacement.%n",
-						key, replacement);
-				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-						key + " is a deprecated and now removed flag");
-			}
-		}
-		// Check if we have a parameter, and it's not the same as any of the subcommand
-		// names
-		if (!remainingArgs.isEmpty()) {
-			String cmd = remainingArgs.get(0);
-			if (hasRunOpts(leadingOpts)) {
-				List<String> jbangOpts = stripNonInheritedJBangOpts(leadingOpts);
-				List<String> result = new ArrayList<>(jbangOpts);
-				result.add("run");
-				result.addAll(leadingOpts);
-				result.addAll(remainingArgs);
-				args = result.toArray(args);
-			} else if (!getSubcommandNames().contains(cmd)) {
-				if (Catalog.isValidName("jbang-" + cmd) && Alias.get("jbang-" + cmd) != null) {
-					// We found a matching "jbang-xxx" alias
-					remainingArgs.set(0, "jbang-" + cmd);
-				} else if (Catalog.isValidName(cmd) && Alias.get(cmd) != null) {
-					// We found an exactly matching alias.
-					// We do this test because we want aliases to have a higher
-					// priority than the next case, which is to look up commands
-					// in the user's PATH which might be slow-ish
-				} else if (Catalog.isValidName(cmd) && Util.searchPath("jbang-" + cmd) != null) {
-					// We found a matching "jbang-xxx" command on the user's PATH
-					List<String> result = new ArrayList<>();
-					result.add("jbang-" + cmd);
-					result.addAll(leadingOpts);
-					result.add("--");
-					result.addAll(remainingArgs.subList(1, remainingArgs.size()));
-					String cmdLine = String.join(" ", result);
-					Util.verboseMsg("run plugin: " + cmdLine);
-					System.out.println(cmdLine);
-					throw new ExitException(ExitException.EXIT_EXECUTE, cmdLine);
-				}
-				// Before falling through to implicit "run", check if the
-				// command looks like a typo of a known subcommand. Only
-				// suggest if the input doesn't look like a file/script
-				// reference (no path separators, no extensions, no URLs).
-				String suggestion = findClosestSubcommand(cmd);
-				if (suggestion != null && !looksLikeScriptRef(cmd)) {
-					Util.warnMsg("'" + cmd + "' is not a jbang command. Did you mean '" + suggestion + "'?");
-					Util.infoMsg("See 'jbang --help' for available commands.");
-				}
-				// In all other cases assume it's an implicit "run"
-				List<String> jbangOpts = stripNonInheritedJBangOpts(leadingOpts);
-				List<String> result = new ArrayList<>(jbangOpts);
-				result.add("run");
-				result.addAll(leadingOpts);
-				result.addAll(remainingArgs);
-				args = result.toArray(args);
-			}
-		}
-		return args;
-	}
-
-	private static boolean hasRunOpts(List<String> opts) {
-		boolean res = opts.contains("-i") || opts.contains("--interactive")
-				|| opts.contains("-c") || opts.contains("--code") || opts.contains("--build-dir");
-		res = res || opts.stream()
-			.anyMatch(o -> o.startsWith("-i=") || o.startsWith("--interactive=")
-					|| o.startsWith("-c=") || o.startsWith("--code=") || o.startsWith("--build-dir="));
-		return res;
-	}
-
-	private static String getDeprecatedFlagReplacement(String flag) {
-		switch (flag) {
-		case "--init":
-			return "jbang init --help";
-		case "--edit":
-		case "--edit-live":
-			return "jbang edit --help";
-		case "--trust":
-			return "jbang trust --help";
-		case "--alias":
-			return "jbang alias --help";
+		args.remove(0);
+		switch (cmd) {
+		case "run":
+			return runScript(args, true);
+		case "build":
+			return runScript(args, false);
+		case "info":
+			return info(args);
+		case "jdk":
+			return jdk(args);
+		case "version":
+			realOut.println(Util.getJBangVersion());
+			return ExitException.EXIT_OK;
 		default:
-			return null;
+			printHelp();
+			return ExitException.EXIT_OK;
 		}
 	}
 
-	/**
-	 * Finds the closest matching subcommand for a mistyped input using Levenshtein
-	 * distance. Returns the suggestion if the edit distance is small enough (max 2
-	 * for short commands, max 3 for longer ones), or null if no close match.
-	 */
-	public static String findClosestSubcommand(String input) {
-		String bestMatch = null;
-		int bestDistance = Integer.MAX_VALUE;
-		for (String cmd : getSubcommandNames()) {
-			int distance = SearchScorer.calculate(input.toLowerCase(), cmd.toLowerCase()).distance();
-			if (distance < bestDistance) {
-				bestDistance = distance;
-				bestMatch = cmd;
+	/** Options shared by run, build and info. */
+	private static final class ScriptOptions {
+		String javaVersion;
+		String mainClass;
+		final List<String> deps = new ArrayList<>();
+		final Map<String, String> properties = new LinkedHashMap<>();
+		final List<String> runtimeOptions = new ArrayList<>();
+		boolean depsOnly;
+		String script;
+		final List<String> userArgs = new ArrayList<>();
+
+		static ScriptOptions parse(List<String> args) {
+			ScriptOptions o = new ScriptOptions();
+			int i = 0;
+			while (i < args.size()) {
+				String a = args.get(i++);
+				if (o.script != null) {
+					o.userArgs.add(a);
+					continue;
+				}
+				String value = null;
+				int eq = a.indexOf('=');
+				String key = a;
+				if (a.startsWith("--") && eq > 0) {
+					key = a.substring(0, eq);
+					value = a.substring(eq + 1);
+				}
+				switch (key) {
+				case "--java":
+				case "-j":
+					o.javaVersion = value != null ? value : next(args, i++, key);
+					break;
+				case "--main":
+				case "-m":
+					o.mainClass = value != null ? value : next(args, i++, key);
+					break;
+				case "--deps":
+					o.deps.addAll(Arrays.asList((value != null ? value : next(args, i++, key)).split(",")));
+					break;
+				case "--runtime-option":
+				case "-R":
+					o.runtimeOptions.add(value != null ? value : next(args, i++, key));
+					break;
+				case "--deps-only":
+					o.depsOnly = true;
+					break;
+				case "--verbose":
+					Util.setVerbose(true);
+					break;
+				case "--quiet":
+					Util.setQuiet(true);
+					break;
+				case "--fresh":
+					Util.setFresh(true);
+					break;
+				case "-o":
+				case "--offline":
+					Util.setOffline(true);
+					break;
+				case "--":
+					if (i < args.size()) {
+						o.script = args.get(i++);
+					}
+					break;
+				default:
+					if (a.startsWith("-D") && a.length() > 2) {
+						String prop = a.substring(2);
+						int p = prop.indexOf('=');
+						o.properties.put(p > 0 ? prop.substring(0, p) : prop, p > 0 ? prop.substring(p + 1) : "");
+					} else if (a.startsWith("-R")) {
+						o.runtimeOptions.add(a.substring(2));
+					} else if (a.startsWith("-") && !a.equals("-")) {
+						throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Unknown option: " + a);
+					} else {
+						o.script = a;
+					}
+				}
 			}
+			if (o.script == null) {
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Missing required parameter: '<scriptOrFile>'");
+			}
+			return o;
 		}
-		// Threshold: max distance 2 for short commands (<=5 chars), 3 for longer
-		int maxDistance = input.length() <= 5 ? 2 : 3;
-		if (bestDistance > 0 && bestDistance <= maxDistance) {
-			return bestMatch;
+
+		private static String next(List<String> args, int i, String key) {
+			if (i >= args.size()) {
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Missing value for option " + key);
+			}
+			return args.get(i);
 		}
-		return null;
+
+		Project project() {
+			Path file = Paths.get(script);
+			if (!Files.isRegularFile(file)) {
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+						"Script or alias could not be found or read: '" + script + "'");
+			}
+			if (!file.toString().endsWith(".java")) {
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+						"Only .java source files are supported by JBangLite: '" + script + "'");
+			}
+			Project prj = new Project(file, properties, deps, javaVersion);
+			if (mainClass != null) {
+				prj.setMainClass(mainClass);
+			}
+			return prj;
+		}
 	}
 
-	/**
-	 * Returns true if the input looks like a script/file reference rather than a
-	 * mistyped command. Checks for path separators, file extensions, URLs, and GAV
-	 * coordinates.
-	 */
-	private static boolean looksLikeScriptRef(String input) {
-		return input.contains("/") || input.contains("\\")
-				|| input.contains(".") || input.contains(":")
-				|| input.startsWith("http") || input.startsWith("@");
+	private static int runScript(List<String> args, boolean execute) throws IOException {
+		ScriptOptions opts = ScriptOptions.parse(args);
+		Project prj = opts.project();
+		Path jar = new Builder(prj).build();
+		if (!execute) {
+			return ExitException.EXIT_OK;
+		}
+		if (prj.getMainClass() == null) {
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+					"No main class deduced, specified nor found. Use --main <main class> to specify a main class.");
+		}
+		Jdk jdk = prj.getJdk();
+		List<String> cmd = new ArrayList<>();
+		cmd.add(jdk.javaCmd());
+		cmd.addAll(opts.runtimeOptions);
+		prj.getUserProperties().forEach((k, v) -> cmd.add("-D" + k + "=" + v));
+		String cp = jar.toAbsolutePath().toString();
+		String deps = prj.getDependencyClassPath();
+		if (!deps.isEmpty()) {
+			cp += Settings.CP_SEPARATOR + deps;
+		}
+		cmd.addAll(Arrays.asList("-classpath", cp));
+		cmd.add(prj.getMainClass());
+		cmd.addAll(opts.userArgs);
+		String cmdline = CommandBuffer.of(cmd).applyWindowsMaxCliLimit().asCommandLine();
+		Util.verboseMsg("run: " + cmdline);
+		realOut.println(cmdline);
+		return ExitException.EXIT_EXECUTE;
 	}
 
-	private static List<String> stripNonInheritedJBangOpts(List<String> opts) {
-		List<String> jbangOpts = opts.stream()
-			.filter(o -> "--preview".equals(o) || o.startsWith("--preview="))
-			.collect(Collectors.toList());
-		opts.removeAll(jbangOpts);
-		return jbangOpts;
+	private static int info(List<String> args) {
+		if (args.isEmpty()) {
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+					"Missing required subcommand for 'info' (classpath, jar)");
+		}
+		String sub = args.remove(0);
+		ScriptOptions opts = ScriptOptions.parse(args);
+		Project prj = opts.project();
+		switch (sub) {
+		case "classpath": {
+			List<String> cp = new ArrayList<>();
+			if (!opts.depsOnly) {
+				cp.add(prj.getJarFile().toAbsolutePath().toString());
+			}
+			prj.resolveClassPath().forEach(a -> cp.add(a.getFile().toAbsolutePath().toString()));
+			realOut.println(String.join(Settings.CP_SEPARATOR, cp));
+			return ExitException.EXIT_OK;
+		}
+		case "jar":
+			realOut.println(prj.getJarFile().toAbsolutePath());
+			return ExitException.EXIT_OK;
+		default:
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Unknown info subcommand: " + sub);
+		}
+	}
+
+	private static int jdk(List<String> args) {
+		if (args.isEmpty()) {
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+					"Missing required subcommand for 'jdk' (default, install, list)");
+		}
+		String sub = args.remove(0);
+		JdkManager jdkMan = new JdkManager();
+		switch (sub) {
+		case "default": {
+			if (args.isEmpty()) {
+				Jdk def = jdkMan.getDefaultJdk();
+				realOut.println(def != null ? "Default JDK: " + def : "No default JDK set");
+			} else {
+				jdkMan.setDefaultJdk(jdkMan.getOrInstallJdk(requireVersion(args.get(0))));
+			}
+			return ExitException.EXIT_OK;
+		}
+		case "install":
+		case "i": {
+			if (args.isEmpty()) {
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Missing required parameter: '<version>'");
+			}
+			int version = Directives.minRequestedVersion(requireVersion(args.get(0)));
+			Jdk existing = jdkMan.listJBangJdks().stream()
+				.filter(j -> j.majorVersion() == version).findFirst().orElse(null);
+			if (existing != null) {
+				Util.infoMsg("JDK is already installed: " + existing);
+			} else {
+				Util.infoMsg("Installed JDK: " + jdkMan.install(version));
+			}
+			return ExitException.EXIT_OK;
+		}
+		case "list":
+		case "l": {
+			Jdk def = jdkMan.getDefaultJdk();
+			realOut.println("Installed JDKs (<=default):");
+			for (Jdk j : jdkMan.listInstalled()) {
+				if ("default".equals(j.origin())) {
+					continue;
+				}
+				boolean isDef = def != null;
+				try {
+					isDef = def != null && Files.isSameFile(def.home(), j.home());
+				} catch (IOException e) {
+					isDef = false;
+				}
+				realOut.println("   " + j.majorVersion() + " (" + j.version() + ", " + j.origin() + ") "
+						+ j.home() + (isDef ? " <" : ""));
+			}
+			return ExitException.EXIT_OK;
+		}
+		default:
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Unknown jdk subcommand: " + sub);
+		}
+	}
+
+	private static String requireVersion(String v) {
+		if (!Directives.isRequestedVersion(v)) {
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+					"Invalid JDK version '" + v + "', should be a number optionally followed by a plus sign");
+		}
+		return v;
+	}
+
+	private static void printHelp() {
+		realOut.println("jbang (JBangLite) " + Util.getJBangVersion());
+		realOut.println();
+		realOut.println("Builds and runs single-file Java programs that declare their needs with");
+		realOut.println("//DEPS, //JAVA and //SOURCES comment directives.");
+		realOut.println();
+		realOut.println("Usage:");
+		realOut.println("  jbang [<global options>] [run] [<options>] <script.java> [<args>...]");
+		realOut.println("  jbang [<global options>] build [<options>] <script.java>");
+		realOut.println("  jbang [<global options>] info classpath [--deps-only] <script.java>");
+		realOut.println("  jbang [<global options>] info jar <script.java>");
+		realOut.println("  jbang [<global options>] jdk default [<version>]");
+		realOut.println("  jbang [<global options>] jdk install <version>");
+		realOut.println("  jbang [<global options>] jdk list");
+		realOut.println("  jbang version");
+		realOut.println();
+		realOut.println("Global options:");
+		realOut.println("  --verbose        Print what is being done");
+		realOut.println("  --quiet          Only print errors");
+		realOut.println("  --fresh          Ignore caches and rebuild/re-resolve everything");
+		realOut.println("  -o, --offline    Never access the network");
+		realOut.println();
+		realOut.println("Script options:");
+		realOut.println("  -j, --java <v>   Use the given Java version (e.g. 17 or 17+)");
+		realOut.println("  -m, --main <c>   Main class to run");
+		realOut.println("  --deps <gav,...> Additional dependencies");
+		realOut.println("  -Dkey=value      System property for directive substitution and the script");
+		realOut.println("  -R<option>       Additional JVM option when running");
 	}
 }

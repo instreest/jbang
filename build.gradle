@@ -1,955 +1,106 @@
-import org.gradle.crypto.checksum.Checksum
-
 plugins {
+	id "java"
 	id "distribution"
 	id "com.gradleup.shadow" version "8.3.9"
-	id "java"
-	id "jvm-test-suite"
-	id "com.github.breadmoirai.github-release" version "2.4.1"
-
-	id 'org.gradle.crypto.checksum' version '1.4.0'
-	id "com.diffplug.spotless" version "8.6.0"
-	id 'com.github.gmazzo.buildconfig' version "3.1.0"
-	id "com.geoffgranum.gradle-conventional-changelog" version "0.3.1"
-	id "org.asciidoctor.jvm.convert" version "3.3.2"
-	id "org.ajoberstar.grgit" version "4.1.1"
-	id "org.sonarqube" version "4.0.0.2929"
-	id 'jacoco'
-	id 'maven-publish'
-	id 'eu.maveniverse.gradle.plugins.nisse-gradle-plugin' version '0.9.2'
-	id 'io.qameta.allure-report' version '2.12.0'
-	id "io.qameta.allure-adapter-base" version "2.12.0"
 }
 
-def allureVersion = '2.29.1'
-def aspectJVersion = '1.9.25'
-def assertjVersion = '3.27.7'
-def aeshVersion = '3.16.6'
-def devkitmanVersion = '0.4.9'
-def junitBomVersion = '5.14.4'
-def testcontainersVersion = '2.0.2'
-def tambouiVersion = '0.4.0'
-def wiremockVersion = '3.13.2'
-
-configurations {
-	agent {
-		canBeResolved = true
-		canBeConsumed = true
-	}
-}
-
-javadoc {
-	options.encoding = 'UTF-8'
-	//remove this to see all the missing tags/parameters.
-	options.addStringOption('Xdoclint:none', '-quiet')
-}
+// JBangLite: a reduced JBang that only supports //JAVA, //DEPS and //SOURCES
+// directives plus the compile/run machinery needed by java-call-hierarchy-exporter.
+version = project.hasProperty('jbangVersion') ? project.property('jbangVersion') : '0.1.0-lite'
 
 repositories {
-	mavenLocal()
 	mavenCentral()
-	//maven { url 'https://jitpack.io' }
 }
 
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(25)
-		vendor = JvmVendorSpec.ADOPTIUM
-	}
-	withJavadocJar()
-	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_1_8
+	targetCompatibility = JavaVersion.VERSION_1_8
 }
-
-// Configure toolchain for test execution (separate from compilation)
-// Can be set via -PtestJavaVersion=<version> and -PtestJavaVendor=<vendor>
-// Example: ./gradlew test -PtestJavaVersion=17 -PtestJavaVendor=adoptium
-def testJavaVersion = project.hasProperty('testJavaVersion')
-	? JavaLanguageVersion.of(project.property('testJavaVersion') as Integer)
-	: JavaLanguageVersion.of(11)
-def testJavaVendor = project.hasProperty('testJavaVendor')
-	? JvmVendorSpec.matching(project.property('testJavaVendor') as String)
-	: JvmVendorSpec.ADOPTIUM
-
-def testExecutionToolchain = project.javaToolchains.launcherFor {
-	languageVersion = testJavaVersion
-	vendor = testJavaVendor
-}
-
-
-// See https://docs.gradle.org/current/dsl/org.gradle.api.reporting.ReportingExtension.html
-// Extension is provided via Gradle's `reporting-base` plugin
-reporting {
-	baseDir = "$buildDir/reports"
-}
-
-allure {
-	version.set("2.33.0")
-	report {
-
-		// There might be several tasks producing the report, so the property
-		// configures a base directory for all the reports
-		// Each task creates its own subfolder there
-		reportDir.set(project.reporting.baseDirectory.dir("allure-report"))
-
-		// Enable single file generation to open without serving.
-		singleFile = true
-	}
-}
-
-publishing {
-	publications {
-		maven(MavenPublication) {
-			groupId = 'dev.jbang'
-			artifactId = 'jbang.bin'
-
-			from components.java
-
-			pom {
-				name = 'JBang CLI'
-				description = 'JBang Command Line Interface'
-				url = 'https://jbang.dev'
-				inceptionYear = '2019'
-				licenses {
-					license {
-						name = 'MIT'
-						url = 'https://github.com/jbangdev/jbang/blob/main/LICENSE'
-					}
-				}
-				developers {
-					developer {
-						id = 'maxandersen'
-						name = 'Max Rydahl Andersen'
-					}
-					developer {
-						id = 'quintesse'
-						name = 'Tako Schotanus'
-					}
-				}
-				scm {
-					connection = 'scm:git:https://github.com/jbangdev/jbang'
-					developerConnection = 'scm:git:https://github.com/jbangdev/jbang'
-					url = 'http://github.com/jbangdev/jbang'
-				}
-			}
-		}
-	}
-
-	repositories {
-		maven {
-			url = layout.buildDirectory.dir('staging-deploy')
-		}
-	}
-}
-
-sourceSets {
-	java9 {
-		java {
-			srcDirs = ['src/main/java9']
-			destinationDirectory.set(file('build/classes/java/main'))
-		}
-	}
-}
-sourceSets.main.compileClasspath += sourceSets.java9.output.classesDirs;
 
 dependencies {
-	implementation "dev.jbang:devkitman:${devkitmanVersion}"
-
-	implementation 'org.jspecify:jspecify:1.0.0'
-	implementation 'org.apache.commons:commons-text:1.15.0'
-	implementation 'org.apache.commons:commons-compress:1.27.1'
-	implementation("org.aesh:aesh:${aeshVersion}") {
-		exclude group: 'org.aesh', module: 'readline'
-	}
-	implementation 'org.aesh:readline-api:3.16.2'
-	annotationProcessor "org.aesh:aesh-processor:${aeshVersion}"
-	implementation 'io.quarkus.qute:qute-core:1.13.7.Final'
-	implementation 'org.codehaus.plexus:plexus-java:1.5.2'
-	implementation 'com.google.code.gson:gson:2.13.2'
-	implementation 'org.jsoup:jsoup:1.17.1'
-	implementation 'org.codejive:java-properties:0.0.7'
-
-	implementation "org.slf4j:slf4j-nop:2.0.18"
-	implementation "org.slf4j:jcl-over-slf4j:2.0.18"
-	implementation "org.jboss:jandex:2.2.3.Final"
-
+	// Maven dependency resolution (the one thing we really cannot re-implement ourselves)
 	implementation "eu.maveniverse.maven.mima:context:2.4.36"
 	runtimeOnly    "eu.maveniverse.maven.mima.runtime:standalone-static:2.4.36"
-	implementation "eu.maveniverse.maven.domtrip:domtrip-core:1.5.2"
-	implementation "eu.maveniverse.maven.domtrip:domtrip-maven:1.5.2"
-
-	implementation "dev.tamboui:tamboui-toolkit:$tambouiVersion"
-	implementation "dev.tamboui:tamboui-aesh-backend:$tambouiVersion"
-
-	// used in JBang as well (aside of nisse plugin in the build)
-	implementation "eu.maveniverse.maven.nisse:core:0.9.2"
-	implementation "eu.maveniverse.maven.nisse.sources:os-source:0.9.2"
-
-	testImplementation platform("org.junit:junit-bom:${junitBomVersion}")
-	testImplementation "org.junit.jupiter:junit-jupiter"
-	testImplementation "org.junit.platform:junit-platform-launcher"
-	testImplementation "com.github.stefanbirkner:system-rules:1.17.2"
-	testImplementation "org.assertj:assertj-core:${assertjVersion}"
-	testImplementation "org.hamcrest:hamcrest:3.0"
-	testImplementation "org.wiremock:wiremock:${wiremockVersion}"
-	testImplementation platform("io.qameta.allure:allure-bom:$allureVersion")
-	testImplementation "io.qameta.allure:allure-junit5"
-	// only for test running
-	agent "org.aspectj:aspectjweaver:$aspectJVersion"
-
-	if (project.hasProperty('allureMergeDirs')) {
-		project.property('allureMergeDirs').toString().split(',').each { dir ->
-			allureRawResultElements(files(dir.trim()))
-		}
-	} else {
-		allureRawResultElements(files("$buildDir/allure-results"))
-	}
-
+	implementation "org.slf4j:slf4j-nop:2.0.18"
+	implementation "org.slf4j:jcl-over-slf4j:2.0.18"
 }
 
-buildConfig {
-	packageName("dev.jbang.util")
-	buildConfigField('String', 'NAME', "\"${project.name}\"")
-	buildConfigField('String', 'VERSION', provider { "\"${project.version}\"" })
+tasks.withType(JavaCompile).configureEach {
+	options.encoding = 'UTF-8'
+	options.compilerArgs.addAll(['--release', '8', '-Xlint:deprecation', '-Xlint:-options'])
 }
 
-// to enable parallel test execution
-tasks.withType(Test).configureEach {
-	//environment "JAVA_HOME", "/Users/manderse/.local/share/mise/installs/java/graalvm-community-25.0.1"
-	//executable = new File("/Users/manderse/.local/share/mise/installs/java/graalvm-community-25.0.1/bin/java")
-	maxParallelForks = Runtime.runtime.availableProcessors().intdiv(2) ?: 1
-}
-
-// to enable reproducible builds
 tasks.withType(AbstractArchiveTask) {
 	preserveFileTimestamps = false
 	reproducibleFileOrder = true
-}
-
-sonarqube {
-	properties {
-		property "sonar.projectKey", "jbangdev_jbang"
-		property "sonar.organization", "jbangdev"
-		property "sonar.host.url", "https://sonarcloud.io"
-	}
-}
-
-spotless {
-	lineEndings 'UNIX'
-	format 'misc', {
-		target '**/*.gradle', '**/*.md', '**/.gitignore'
-		targetExclude 'CONTRIBUTORS.md', 'src/main/scripts/container/README.md', 'build/**/*', 'out/**/*'
-		// all-contributor bot adds non-indented code
-		trimTrailingWhitespace()
-		leadingSpacesToTabs(4)
-		endWithNewline()
-	}
-	java {
-		importOrder 'java', 'javax', 'org', 'com', 'dev.jbang', ''
-		removeUnusedImports()
-		eclipse().configFile "misc/eclipse_formatting_nowrap.xml"
-		targetExclude 'build/**/*'
-	}
-	format 'xml', {
-		targetExclude 'build/test-results', fileTree('.idea')
-		target '**/*.xml', '**/*.nuspec'
-	}
-}
-
-nisseConfig {
-	jgit {
-		countingVersion = true
-		countingStartPatch = 1
-		appendSnapshot = true
-		countingPattern = '%M.%m.%p(.%c)'
-	}
-	os {
-		active = true
-	}
-}
-
-// Version is computed by Nisse JGit counting version (replaces git-versioner plugin).
-// Walks commit history matching [major]/[minor]/[patch] in messages.
-// Must use afterEvaluate because the nisse plugin populates project.nisse in its own afterEvaluate.
-afterEvaluate {
-	def resolvedVersion = project.nisse['nisse.jgit.countingVersion']?.toString()
-	if (!resolvedVersion || resolvedVersion.matches('0\\.0\\.1-\\d+')) {
-		throw new GradleException("Invalid computed version '${resolvedVersion}'. Ensure semantic version tags exist (e.g., 'v0.120.0') or check fetch-depth/clone strategy.")
-	}
-	version = resolvedVersion
-}
-
-task printVersion {
-	group = "versioning"
-	description = "Print the project version"
-	doLast {
-		println project.version
-	}
-}
-
-task versionTxt() {
-	doLast {
-		new File(project.buildDir, "tmp/version.txt").text = project.version
-	}
-}
-
-def commonSpec = project.copySpec {
-	from('examples') {
-		include '**/*.java'
-		into 'examples'
-	}
-	from(shadowJar) {
-		into 'bin'
-	}
-	from(project.buildDir.toPath().resolve('tmp')) {
-		include 'version.txt'
-	}
-	from('src/main/scripts') {
-		include 'jbang'
-		include 'jbang.cmd'
-		include 'jbang.ps1'
-		into 'bin'
-	}
-	// Include native image binary renamed to platform-specific name (e.g. jbang.bin-linux-x64)
-	// Scripts look for the platform-named binary first, then fall back to jbang.bin
-	def nativeExecName = getNativeExecutableName()
-	def platformNativeExecName = getPlatformNativeExecutableName()
-	from(project.buildDir.toPath().resolve('native-image')) {
-		include nativeExecName
-		rename nativeExecName, platformNativeExecName
-		into 'bin'
-	}
-}
-
-tasks.named('installDist') {
-	mustRunAfter('nativeImage')
-}
-
-distributions {
-	main {
-		contents {
-			with commonSpec
-		}
-	}
-	latest {
-		contents {
-			with commonSpec
-		}
-	}
-}
-
-latestDistZip {
-	archiveFileName = "${project.name}.zip"
-}
-
-latestDistTar {
-	archiveFileName = "${project.name}.tar"
-}
-
-tasks.register('nativeDistZip', Zip) {
-	dependsOn('nativeImage')
-	into(provider { "jbang-${project.version}" }) {
-		with commonSpec
-	}
-	archiveFileName.set(provider { "${getNativeBundleBaseName()}.zip" })
-}
-
-tasks.register('nativeDistTar', Tar) {
-	dependsOn('nativeImage')
-	into(provider { "jbang-${project.version}" }) {
-		with commonSpec
-	}
-	compression = Compression.NONE
-	archiveFileName.set(provider { "${getNativeBundleBaseName()}.tar" })
-}
-
-tasks.register('latestNativeDistZip', Zip) {
-	dependsOn('nativeImage')
-	into("jbang") {
-		with commonSpec
-	}
-	archiveFileName.set(provider { "${getLatestNativeBundleBaseName()}.zip" })
-}
-
-tasks.register('latestNativeDistTar', Tar) {
-	dependsOn('nativeImage')
-	into("jbang") {
-		with commonSpec
-	}
-	compression = Compression.NONE
-	archiveFileName.set(provider { "${getLatestNativeBundleBaseName()}.tar" })
 }
 
 jar {
 	manifest {
 		attributes(
 			'Main-Class': 'dev.jbang.Main',
-			'Enable-Final-Field-Mutation': 'ALL-UNNAMED'
+			'JBang-Version': project.version
 		)
 	}
-	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-	doFirst {
-		manifest.attributes('JBang-Version': project.version)
-	}
-}
-
-// Common compiler settings for all Java compilation tasks
-tasks.withType(JavaCompile).configureEach {
-	options.encoding = 'UTF-8'
-	options.compilerArgs << "-Xlint:deprecation"
-	options.compilerArgs << '-parameters' // for allure reporting
-}
-
-compileJava {
-	options.compilerArgs.addAll(['--release', '8'])
-}
-
-compileTestJava {
-	options.compilerArgs.addAll(['--release', '11']) // wiremock requires java 11
-}
-
-compileJava9Java {
-	sourceCompatibility = 9
-	targetCompatibility = 9
-	options.compilerArgs.addAll(['--release', '9'])
 }
 
 shadowJar {
-	/*minimize() {
-		//exclude(dependency('org.slf4j:slf4j-api:.*'))
-		exclude(dependency('dev.jbang:devkitman:.*'))
-		exclude(dependency('eu.maveniverse.maven.mima:context:.*'))
-		exclude(dependency('eu.maveniverse.maven.mima.runtime:standalone-static:.*'))
-		exclude(dependency('org.slf4j:jcl-over-slf4j:.*'))
-		exclude(dependency('org.slf4j:slf4j-nop:.*'))
-		exclude(dependency('org.jboss.logging:jboss-logging:.*'))
-	}*/
 	mergeServiceFiles()
 	manifest {
 		attributes(
-			'Main-Class': 'dev.jbang.Main'
+			'Main-Class': 'dev.jbang.Main',
+			'JBang-Version': project.version
 		)
 	}
-	doFirst {
-		manifest.attributes('JBang-Version': project.version)
-	}
-	archiveFileName = "${archiveBaseName.get()}.${archiveExtension.get()}"
+	archiveFileName = "jbang.jar"
 }
 
-test {
-	useJUnitPlatform() {
-		excludeTags 'benchmark'
-	}
-	javaLauncher = testExecutionToolchain
-	def jvmArgsList = ["-javaagent:${configurations.agent.singleFile}"] // for allure reporting
-	if (testJavaVersion.asInt() >= 9) {
-		jvmArgsList.addAll([
-			"--add-opens", "java.base/java.lang=ALL-UNNAMED",
-			"--add-opens", "java.base/java.util=ALL-UNNAMED"
-		])
-	}
-	jvmArgs = jvmArgsList
-	//testLogging.showStandardStreams = true
-
-	/*testLogging {
-		events "passed", "skipped", "failed"
-		exceptionFormat "full"
-	}*/
-	//timeout.set(Duration.ofSeconds(60))
-
-	jacoco {
-		enabled = false
-	}
-
-	// Allow disabling WireMock via project property -PdisableWiremock=true
-	systemProperty('jbang.test.wiremock.enable', project.findProperty('disableWiremock') == 'true' ? 'false' : 'true')
-}
-
-task benchmark(type: Test) {
-	description = 'Run startup benchmark tests'
-	group = 'verification'
-	useJUnitPlatform() {
-		includeTags 'benchmark'
-	}
-	javaLauncher = testExecutionToolchain
-	def jvmArgsList = []
-	if (testJavaVersion.asInt() >= 9) {
-		jvmArgsList.addAll([
-			"--add-opens", "java.base/java.lang=ALL-UNNAMED",
-			"--add-opens", "java.base/java.util=ALL-UNNAMED"
-		])
-	}
-	jvmArgs = jvmArgsList
-	testLogging.showStandardStreams = true
-	systemProperty('jbang.test.wiremock.enable', project.findProperty('disableWiremock') == 'true' ? 'false' : 'true')
-}
-
-jacoco {
-	toolVersion = '0.8.14' // 0.8.14 supports java 25
-}
-
-jacocoTestReport {
-	afterEvaluate {
-		executionData fileTree(project.rootDir.absolutePath).include("**/build/jacoco/*.exec")
-	}
-
-	reports {
-		html.required = true
-		xml.required = true
-		csv.required = false
-	}
-}
-
-testing {
-	suites {
-		test {
-			useJUnitJupiter()
-		}
-
-		integrationTest(JvmTestSuite) {
-			dependencies {
-				implementation project()  // todo: shouldn't even need to depend on main code?
-				implementation platform("org.junit:junit-bom:${junitBomVersion}")
-				implementation "org.junit.jupiter:junit-jupiter"
-				implementation "org.junit.platform:junit-platform-launcher"
-				implementation "org.assertj:assertj-core:${assertjVersion}"
-				implementation 'org.zeroturnaround:zt-exec:1.12'
-				implementation platform("io.qameta.allure:allure-bom:${allureVersion}")
-				implementation "io.qameta.allure:allure-junit5"
-				implementation "org.wiremock:wiremock:${wiremockVersion}"
-				implementation "dev.jbang:devkitman:${devkitmanVersion}"
-				implementation "org.testcontainers:testcontainers:${testcontainersVersion}"
-				implementation "org.testcontainers:testcontainers-junit-jupiter:${testcontainersVersion}"
-			}
-
-			sources {
-				java {
-					srcDirs = ['src/it/java']
-					resources.srcDirs = ['src/it/resources']
-				}
-			}
-
-			targets {
-				all {
-					testTask.configure {
-						javaLauncher = testExecutionToolchain
-						shouldRunAfter(test) // todo: push to buildDist?
-					}
-				}
-			}
-		}
-	}
-}
-
-tasks.named('integrationTest') {
-	dependsOn("installDist") // todo: move to after buildDist
-}
-
-tasks.named('compileIntegrationTestJava') {
-	options.compilerArgs.addAll(['--release', '11']) // wiremock requires java 11
-}
-
-task karateExecute(type: JavaExec) {
-	classpath = sourceSets.test.runtimeClasspath
-	mainClass = System.properties.getProperty('mainClass')
-}
-
-task copyResources(type: Copy) {
-	from "${projectDir}/src/main/resources"
-	into "${buildDir}/classes/java/main"
-}
-processResources.dependsOn copyResources
-
-
-task copyTestResources(type: Copy) {
-	from "${projectDir}/itests"
-	into "${buildDir}/classes/java/test/itests"
-}
-processTestResources.dependsOn copyTestResources
-
-task createChecksum(type: Checksum) {
-	dependsOn(assembleDist)
-	files = files([distZip, latestDistZip, distTar, latestDistTar].outputs.files.flatten())
-	outputDir = distZip.destinationDirectory.asFile.get()
-	algorithm = Checksum.Algorithm.SHA256
-}
-
-task container(type: Copy) {
-	dependsOn(createChecksum)
-	inputs.property('version', provider { project.version })
-	from('src/main/scripts/container/')
-	include('*')
-	into(buildDir.toString() + '/container')
-	doFirst { t ->
-		t.filter(org.apache.tools.ant.filters.ReplaceTokens,
-				tokens: [
-						projectVersion: project.version,
-						sha256        : new File(distZip.archiveFile.asFile.get().absolutePath + '.sha256').text
-				]
-		)
-	}
-}
-
-task spec(type: Copy) {
-	dependsOn(createChecksum)
-	inputs.property('version', provider { project.version })
-	from('src/main/scripts/spec/jbang.spec')
-	into(buildDir.toString() + '/spec')
-	doFirst { t ->
-		t.filter(org.apache.tools.ant.filters.ReplaceTokens,
-				tokens: [
-						projectVersion: project.version,
-						sha256        : new File(distZip.archiveFile.asFile.get().absolutePath + '.sha256').text
-				]
-		)
-	}
-}
-
-task chocolatey(type: Copy) {
-	dependsOn(createChecksum)
-	inputs.property('version', provider { project.version })
-	from('src/main/scripts/choco')
-	into(buildDir.toString() + '/choco')
-	doFirst { t ->
-		t.filter(org.apache.tools.ant.filters.ReplaceTokens,
-				tokens: [
-						projectVersion: project.version,
-						sha256        : new File(distZip.archiveFile.asFile.get().absolutePath + '.sha256').text
-				]
-		)
-	}
-}
-
-task copyITests(type: Copy) {
-	from "${projectDir}/itests"
-	into "${buildDir}/itests"
-}
-
-task tagVersion {
-	group = "versioning"
-	description = "Tag and push the current version in git"
+task versionTxt() {
+	def out = layout.buildDirectory.file("tmp/version.txt")
+	outputs.file(out)
 	doLast {
-		def tagName = 'v' + project.version
-		println 'Tagging with ' + tagName
-		def existingTag = new ByteArrayOutputStream()
-		exec {
-			commandLine 'git', 'tag', '-l', tagName
-			standardOutput = existingTag
-		}
-		if (existingTag.toString().trim()) {
-			// Tag exists — verify it points to HEAD
-			def tagSha = new ByteArrayOutputStream()
-			exec {
-				commandLine 'git', 'rev-list', '-n', '1', tagName
-				standardOutput = tagSha
-			}
-			def headSha = new ByteArrayOutputStream()
-			exec {
-				commandLine 'git', 'rev-parse', 'HEAD'
-				standardOutput = headSha
-			}
-			if (tagSha.toString().trim() == headSha.toString().trim()) {
-				println "Tag '${tagName}' already exists at HEAD, skipping"
-				return
-			} else {
-				throw new GradleException("Tag '${tagName}' already exists but points to ${tagSha.toString().trim()}, not HEAD (${headSha.toString().trim()})")
-			}
-		}
-		exec {
-			commandLine 'git', 'tag', '-a', tagName, '-m', tagName
-		}
-		exec {
-			commandLine 'git', 'push', 'origin', tagName
+		out.get().asFile.text = project.version
+	}
+}
+
+def commonSpec = project.copySpec {
+	from(shadowJar) {
+		into 'bin'
+	}
+	from(versionTxt)
+	from('src/main/scripts') {
+		include 'jbang'
+		include 'jbang.cmd'
+		include 'jbang.ps1'
+		into 'bin'
+	}
+}
+
+distributions {
+	main {
+		distributionBaseName = 'jbang'
+		contents {
+			with commonSpec
 		}
 	}
 }
 
-asciidoctor {
-	sourceDir = file('.')
-	sources {
-		include 'readme.adoc'
+// "latest" bundles use the fixed root folder name "jbang" so that the
+// startup scripts can install them (jbang.tar / jbang.zip).
+tasks.register('latestDistZip', Zip) {
+	into('jbang') {
+		with commonSpec
 	}
-	outputDir = file('build/docs')
-	logDocuments = true
-	baseDirFollowsSourceDir()
+	destinationDirectory = layout.buildDirectory.dir('distributions')
+	archiveFileName = "jbang.zip"
 }
-
-task clidoc(type: Exec) {
-	doFirst {
-		println 'Generating cli man pages'
-		commandLine 'build/install/jbang/bin/jbang', '--cp', 'build/install/jbang/bin/jbang.jar', 'docs/genadoc.java', '-d', 'docs/modules/cli', '--force', 'dev.jbang.cli.JBang'
+tasks.register('latestDistTar', Tar) {
+	into('jbang') {
+		with commonSpec
 	}
+	destinationDirectory = layout.buildDirectory.dir('distributions')
+	archiveFileName = "jbang.tar"
 }
+assemble.dependsOn latestDistZip, latestDistTar
 
-//seems crazy we need versionTxt depend on all dist* but
-//didn't find better way yet.
-distZip.dependsOn(versionTxt)
-distTar.dependsOn(versionTxt)
-
-build.dependsOn(latestDistZip)
-build.dependsOn(latestDistTar)
-build.dependsOn(copyITests)
-build.dependsOn(chocolatey)
-build.dependsOn(container)
-build.dependsOn(spec)
-// clidoc not auto included as it depends on jbang...which isn't built at this time.
-//build.dependsOn(clidoc)
-
-compileJava.dependsOn(copyResources);
-compileJava.dependsOn(compileJava9Java);
-compileTestJava.dependsOn(compileJava9Java);
-
-// Don't know how to tell shadowJar _not_ to depend on this
-shadowJar.dependsOn(copyTestResources);
-
-// Function to generate parentSuite value based on environment
-def generateParentSuite(boolean isIntegrationTest = false, org.gradle.jvm.toolchain.JavaLanguageVersion testJavaVersion) {
-	def parts = []
-	parts.add(System.getProperty('os.name'))
-	parts.add(System.getProperty('os.arch'))
-	parts.add(System.getProperty('java.version'))
-	if (isIntegrationTest) {
-		parts.add("integration-test")
-	} else {
-		parts.add("unit-test")
-	}
-	if (System.getenv('JBANG_USE_NATIVE') == 'true') {
-		parts.add("native-image")
-	} else {
-		parts.add("jvm")
-	}
-	def javaVersionStr = System.getenv('_JBANG_TEST_JAVA_VERSION')
-	if (javaVersionStr == null || javaVersionStr.isEmpty()) {
-		javaVersionStr = testJavaVersion.asInt().toString()
-	}
-	parts.add(javaVersionStr)
-	try {
-		def grgit = org.ajoberstar.grgit.Grgit.open(dir: project.rootDir)
-		def gitSha = grgit.head().id
-		if (gitSha != null && !gitSha.isEmpty()) {
-			parts.add(gitSha.substring(0, Math.min(7, gitSha.length())))
-		}
-	} catch (ignored) {
-		// No git data available
-	}
-	return parts.join('-')
-}
-
-// Functions to derive native bundle metadata based on the current platform
-// Base native executable name as produced by the nativeImage task
-String getNativeExecutableName() {
-	def osName = System.getProperty('os.name').toLowerCase()
-	if (osName.contains('windows')) {
-		return 'jbang.bin.exe'
-	} else {
-		return 'jbang.bin'
-	}
-}
-
-// Platform-specific native binary name for distribution bundles
-String getPlatformNativeExecutableName() {
-	def os = getNativeBundleOs()
-	def arch = getNativeBundleArch()
-	if (os == 'windows') {
-		return "jbang.bin-${os}-${arch}.exe"
-	} else {
-		return "jbang.bin-${os}-${arch}"
-	}
-}
-
-String getNativeBundleOs() {
-	def osName = System.getProperty('os.name').toLowerCase()
-	if (osName.contains('mac') || osName.contains('darwin')) {
-		return 'mac'
-	} else if (osName.contains('windows')) {
-		return 'windows'
-	} else {
-		return 'linux'
-	}
-}
-
-String getNativeBundleArch() {
-	def arch = System.getProperty('os.arch').toLowerCase()
-	if (arch == 'x86_64' || arch == 'amd64') {
-		return 'x64'
-	} else if (arch == 'aarch64' || arch == 'arm64') {
-		return 'aarch64'
-	} else {
-		return arch.replaceAll('[^a-z0-9_]+', '-')
-	}
-}
-
-String getNativeBundleBaseName() {
-	return "${project.name}-${project.version}-${getNativeBundleOs()}-${getNativeBundleArch()}"
-}
-
-String getLatestNativeBundleBaseName() {
-	return "${project.name}-${getNativeBundleOs()}-${getNativeBundleArch()}"
-}
-
-// Configure resource processing for test and integrationTest
-processTestResources {
-	filesMatching('allure.properties') {
-		expand([
-			parentSuite: generateParentSuite(false, testJavaVersion)
-		])
-	}
-}
-
-processIntegrationTestResources {
-	filesMatching('allure.properties') {
-		expand([
-			parentSuite: generateParentSuite(true, testJavaVersion)
-		])
-	}
-}
-
-
-//fix implicit dependencies
-tasks.named("spotlessXml").configure { dependsOn("compileJava") }
-tasks.named("spotlessXml").configure { dependsOn("copyResources") }
-tasks.named("spotlessXml").configure { dependsOn("processResources") }
-tasks.named("spotlessXml").configure { dependsOn("compileTestJava") }
-tasks.named("spotlessXml").configure { dependsOn("copyTestResources") }
-tasks.named("spotlessXml").configure { dependsOn("chocolatey") }
-tasks.named("spotlessXml").configure { dependsOn("copyITests") }
-
-
-
-
-// Native image build task
-task nativeImage(type: Exec) {
-	dependsOn shadowJar
-	description = "Build native image executable"
-	group = "build"
-
-	def jarPath = shadowJar.archiveFile.get().asFile.path
-	def nativeExecName = getNativeExecutableName()
-	def nativeImageName = "native-image"
-	def outputDir = layout.buildDirectory.dir("native-image").get().asFile
-	if (System.getProperty("os.name").toLowerCase().contains("windows")) {
-		nativeImageName += ".cmd"
-	}
-
-	def nativeImageCmd = System.getenv("GRAALVM_HOME") ?
-		"${System.getenv('GRAALVM_HOME')}${File.separator}bin${File.separator}${nativeImageName}" :
-		"${nativeImageName}"
-
-
-	// Ensure output directory exists
-	doFirst {
-		outputDir.mkdirs()
-	}
-
-	commandLine nativeImageCmd, "-jar", jarPath, "${outputDir}${File.separator}${nativeExecName}",
-				"-H:ConfigurationFileDirectories=${projectDir}/src/native-image/config",
-				"-H:+ReportExceptionStackTraces",
-
-				"--enable-https",
-				"--exact-reachability-metadata", // https://www.graalvm.org/latest/reference-manual/native-image/metadata/ & https://github.com/oracle/graal/issues/7962
-				"--enable-url-protocols=jar", // to allow urlclassloader to scan file. https://github.com/oracle/graal/issues/1956 https://www.graalvm.org/jdk25/reference-manual/native-image/dynamic-features/URLProtocols/
-				"-H:-ParseRuntimeOptions" // so -Dkey=value will continue to be passed to jbang
-
-
-
-	doFirst {
-		println "Building native image from: $jarPath"
-
-		println "Output: ${outputDir}/${nativeExecName}"
-		println "Using native-image: $commandLine"
-	}
-
-	doLast {
-		// If double named (happens on windows) rename it back
-			def doubleExeFile = new File(outputDir, nativeExecName + ".exe")
-			if (doubleExeFile.exists()) {
-				def moved = doubleExeFile.renameTo(new File(outputDir, nativeExecName))
-				if (!moved) {
-					throw new RuntimeException("Failed to rename ${doubleExeFile} to ${nativeExecName}")
-				}
-			}
-		println "Native image built successfully: ${outputDir}/${nativeExecName}"
-	}
-
-	// Define outputs for Gradle's incremental build
-	outputs.file("${outputDir}/${nativeExecName}")
-}
-
-tasks.named("distTar").configure {
-	mustRunAfter(tasks.named("nativeImage"))
-}
-
-tasks.named("distZip").configure {
-	mustRunAfter(tasks.named("nativeImage"))
-}
-
-tasks.named("latestDistTar").configure {
-	mustRunAfter(tasks.named("nativeImage"))
-}
-
-tasks.named("latestDistZip").configure {
-	mustRunAfter(tasks.named("nativeImage"))
-}
-
-group = "dev.jbang"
-
-// Generate Allure environment.properties before tests run
-task generateAllureEnvironment {
-	description = "Generate Allure environment.properties with CI or local metadata"
-	group = "verification"
-
-	doLast {
-		def env = System.getenv()
-		def props = new Properties()
-		def allureDir = file("$buildDir/allure-results")
-		allureDir.mkdirs()
-
-		if (env['GITHUB_ACTIONS'] == 'true') {
-			props.setProperty('CI', 'GitHub Actions')
-			props.setProperty('GITHUB_REPOSITORY', env['GITHUB_REPOSITORY'] ?: '')
-			props.setProperty('GITHUB_REF', env['GITHUB_REF'] ?: '')
-			props.setProperty('GITHUB_REF_NAME', env['GITHUB_REF_NAME'] ?: '')
-			props.setProperty('GITHUB_SHA', env['GITHUB_SHA'] ?: '')
-			props.setProperty('GITHUB_RUN_ID', env['GITHUB_RUN_ID'] ?: '')
-			props.setProperty('GITHUB_RUN_NUMBER', env['GITHUB_RUN_NUMBER'] ?: '')
-			props.setProperty('GITHUB_WORKFLOW', env['GITHUB_WORKFLOW'] ?: '')
-			props.setProperty('RUNNER_OS', env['RUNNER_OS'] ?: '')
-			props.setProperty('RUNNER_ARCH', env['RUNNER_ARCH'] ?: '')
-		}
-		props.setProperty('OS', System.getProperty('os.name') + ' ' + System.getProperty('os.arch'))
-		props.setProperty('Java', System.getProperty('java.version'))
-		props.setProperty('User', System.getProperty('user.name'))
-		props.setProperty('ProjectVersion', project.version.toString())
-		try {
-			def grgit = org.ajoberstar.grgit.Grgit.open(dir: project.rootDir)
-			props.setProperty('GitBranch', grgit.branch.current().name)
-			props.setProperty('GitCommit', grgit.head().id)
-		} catch (ignored) {
-			// No git data available
-		}
-
-
-		new File(allureDir, 'environment.properties').withOutputStream { os ->
-			props.store(os, 'Generated by Gradle')
-		}
-
-		def osKey = (env['RUNNER_OS'] ?: System.getProperty('os.name')).replaceAll(/\s+/, '_')
-		def javaMajor = System.getProperty('java.version').split('\\.')[0] == '1'
-			? System.getProperty('java.version').split('\\.')[1]
-			: System.getProperty('java.version').split('\\.')[0]
-		def runnerName = env['RUNNER_OS'] ? "${env['RUNNER_OS']}-latest java${javaMajor}" : "local"
-		def executor = [
-			name      : runnerName,
-			type      : 'github',
-			reportName: "Allure Report (${osKey})",
-			buildName : env['GITHUB_RUN_NUMBER'] ? "ci-build #${env['GITHUB_RUN_NUMBER']} ${osKey}" : 'local',
-			buildUrl  : (env['GITHUB_SERVER_URL'] && env['GITHUB_REPOSITORY'] && env['GITHUB_RUN_ID'])
-				? "${env['GITHUB_SERVER_URL']}/${env['GITHUB_REPOSITORY']}/actions/runs/${env['GITHUB_RUN_ID']}"
-				: '',
-			buildOrder: (env['GITHUB_RUN_NUMBER'] ?: '0') as Integer,
-		]
-		new File(allureDir, 'executor.json').text = groovy.json.JsonOutput.toJson(executor)
-	}
-}
-
-// Ensure environment file exists before tests collect results
-tasks.named('test') { dependsOn(generateAllureEnvironment) }
-tasks.named('integrationTest') { dependsOn(generateAllureEnvironment) }
+assemble.dependsOn shadowJar

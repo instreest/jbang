@@ -1,4 +1,0 @@
-tasks:
-  - before: curl -Ls https://sh.jbang.dev | bash -s - app setup
-  - init: ./gradlew build
-  

@@ -12,7 +12,7 @@ javaVersion=${JBANG_DEFAULT_JAVA_VERSION:-17}
 # Base URL for downloading JBang releases.
 # Override for testing or corporate mirrors.
 # Example: JBANG_DOWNLOAD_BASEURL=http://localhost:18080
-jbangDownloadBaseUrl=${JBANG_DOWNLOAD_BASEURL:-https://github.com/jbangdev/jbang/releases}
+jbangDownloadBaseUrl=${JBANG_DOWNLOAD_BASEURL:-https://github.com/instreest/jbang/releases}
 
 # Number of retry attempts for downloads (curl/wget)
 downloadRetry=${JBANG_DOWNLOAD_RETRY:-5}

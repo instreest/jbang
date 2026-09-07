@@ -1,3 +1,0 @@
-// example of jsh without suffix.
-// use jbang --jsh to force it.
-System.out.println(args[0]);

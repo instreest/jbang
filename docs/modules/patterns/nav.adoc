@@ -1,2 +1,0 @@
-* xref:jbang:patterns:index.adoc[]
-* xref:jbang:patterns:single-file-cli.adoc[]
