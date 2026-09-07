@@ -8,7 +8,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
-/** An installed JDK: its home directory and version. */
+/**
+ * An installed JDK: its home directory and version. Version detection follows
+ * jbang-devkitman (MIT, see THIRD-PARTY.md).
+ */
 public final class Jdk {
 	private static final Pattern QUOTED = Pattern.compile("\"([^\"]+)\"");
 

@@ -16,8 +16,9 @@ import java.util.stream.Stream;
 
 /**
  * Finds JDKs already present on the machine and installs missing ones by
- * downloading them (see {@link #downloadUrls(int)}). Search order for a
- * requested version:
+ * downloading them (see {@link #downloadUrls(int)}). The lookup and install
+ * behaviour is a reduced re-implementation of jbang-devkitman (MIT, see
+ * THIRD-PARTY.md). Search order for a requested version:
  * <ol>
  * <li>the JVM running JBang</li>
  * <li>the default JDK link ($JBANG_DIR/currentjdk)</li>

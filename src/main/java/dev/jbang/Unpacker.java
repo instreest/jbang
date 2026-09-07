@@ -19,7 +19,9 @@ import java.util.zip.ZipFile;
 /**
  * Unpacks JDK archives (.zip and .tar.gz) using only the JDK's own APIs. The
  * single root folder of the archive is stripped and on macOS the
- * <code>Contents/Home</code> folder is selected.
+ * <code>Contents/Home</code> folder is selected. Mirrors the behaviour of
+ * jbang-devkitman's UnpackUtils (MIT, see THIRD-PARTY.md) without
+ * commons-compress.
  */
 final class Unpacker {
 	private Unpacker() {

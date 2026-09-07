@@ -7,8 +7,9 @@ import java.util.Properties;
  * Provides the <code>os.detected.*</code> properties (name, arch, classifier,
  * jfxname) that can be referenced from directives, e.g.
  * <code>//DEPS org.openjfx:javafx-base:21:${os.detected.jfxname}</code>. The
- * normalisation rules follow the well known os-maven-plugin so that classifiers
- * match what is published on Maven Central.
+ * normalisation rules follow the well known os-maven-plugin (Trustin Lee,
+ * Apache License 2.0) so that classifiers match what is published on Maven
+ * Central. See THIRD-PARTY.md.
  */
 public final class OsDetector {
 	public static final String PREFIX = "os.detected.";

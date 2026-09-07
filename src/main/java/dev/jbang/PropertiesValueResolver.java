@@ -7,6 +7,9 @@ import java.util.Properties;
  * Replaces references of the form ${[env.]name[,name2...][:default]} with
  * values from the given properties or environment variables.
  *
+ * Inherited unchanged in substance from JBang, where it was contributed from
+ * the JBoss/WildFly projects (Apache License 2.0). See THIRD-PARTY.md.
+ *
  * @author <a href="mailto:david.lloyd@redhat.com">David M. Lloyd</a>
  */
 public final class PropertiesValueResolver {

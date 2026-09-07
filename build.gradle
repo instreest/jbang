@@ -46,6 +46,9 @@ jar {
 
 shadowJar {
 	mergeServiceFiles()
+	// keep the license notices next to the bundled code
+	from('LICENSE') { into 'META-INF'; rename { 'LICENSE-jbang.txt' } }
+	from('THIRD-PARTY.md') { into 'META-INF'; rename { 'THIRD-PARTY-jbang.md' } }
 	manifest {
 		attributes(
 			'Main-Class': 'dev.jbang.Main',
@@ -68,6 +71,7 @@ def commonSpec = project.copySpec {
 		into 'bin'
 	}
 	from(versionTxt)
+	from('LICENSE', 'THIRD-PARTY.md', 'README.md')
 	from('src/main/scripts') {
 		include 'jbang'
 		include 'jbang.cmd'
