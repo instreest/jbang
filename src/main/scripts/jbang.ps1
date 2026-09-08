@@ -206,12 +206,7 @@ if (Test-Path "$jarPath.new") {
 $JAVA_EXEC=""
 $oldJavaHome=$env:JAVA_HOME
 if (-not $binaryPath) {
-  # A JDK bundled with JBangLite (jlink image in ..\runtime) always wins
-  if (Test-Path "$PSScriptRoot\..\runtime\bin\javac.exe") {
-    $env:JAVA_HOME=(Resolve-Path "$PSScriptRoot\..\runtime").Path
-    $JAVA_EXEC="$env:JAVA_HOME\bin\java.exe"
-  }
-  if (($JAVA_EXEC -eq "") -and (Test-Path env:JAVA_HOME)) {
+  if (Test-Path env:JAVA_HOME) {
     # Determine if a (working) JDK is available in JAVA_HOME
     if (Test-Path "$env:JAVA_HOME\bin\javac.exe") {
       $JAVA_EXEC="$env:JAVA_HOME\bin\java.exe"
