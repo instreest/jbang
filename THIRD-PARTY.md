@@ -15,6 +15,16 @@ MIT License.
 | `PropertiesValueResolver.java` | Written by David M. Lloyd (Red Hat) for the JBoss/WildFly projects, included in JBang | Apache License 2.0 / MIT (as distributed in JBang) |
 | `OsDetector.java` (OS and architecture normalisation tables) | [os-maven-plugin](https://github.com/trustin/os-maven-plugin) by Trustin Lee, as also used by the Nisse os-detector in JBang | Apache License 2.0 |
 
+## Data downloaded at runtime
+
+The list of downloadable JDKs comes from the JVM index published by the
+[Coursier](https://github.com/coursier/jvm-index) project (Apache License 2.0)
+as `io.get-coursier.jvm.indices:index-<platform>` on Maven Central. Only the
+index is retrieved from there; the JDK archives themselves are downloaded from
+each distributor's own site, and the license of the JDK that gets installed is
+the one of that distribution (Eclipse Temurin, the default, is GPLv2 with the
+Classpath Exception).
+
 ## Libraries bundled in `jbang.jar`
 
 | Library | License |

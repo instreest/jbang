@@ -44,13 +44,8 @@ public final class Project {
 		addSource(this.mainSource);
 		dependencies.addAll(extraDeps);
 		if (forcedJavaVersion != null) {
-			if (!Directives.isRequestedVersion(forcedJavaVersion)) {
-				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-						"Invalid Java version '" + forcedJavaVersion
-								+ "', should be a number optionally followed by a plus sign");
-			}
 			// the command line overrides whatever the sources requested
-			javaVersion = forcedJavaVersion;
+			javaVersion = RequestedVersion.parse(forcedJavaVersion).toString();
 		}
 	}
 
@@ -69,7 +64,7 @@ public final class Project {
 		dependencies.addAll(directives.dependencies());
 		String version = directives.javaVersion();
 		if (version != null && (javaVersion == null
-				|| new Directives.RequestedVersionComparator().compare(javaVersion, version) < 0)) {
+				|| RequestedVersion.parse(javaVersion).compareTo(RequestedVersion.parse(version)) < 0)) {
 			javaVersion = version;
 		}
 		Path baseDir = source.getParent();

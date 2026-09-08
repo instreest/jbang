@@ -224,6 +224,38 @@ public final class Util {
 		}
 	}
 
+	public static String readString(InputStream is) throws IOException {
+		java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+		byte[] buf = new byte[8192];
+		int n;
+		while ((n = is.read(buf)) > 0) {
+			out.write(buf, 0, n);
+		}
+		return new String(out.toByteArray(), StandardCharsets.UTF_8);
+	}
+
+	/** The SHA-256 of a file as a lower case hex string. */
+	public static String sha256(Path file) throws IOException {
+		final MessageDigest digest;
+		try {
+			digest = MessageDigest.getInstance("SHA-256");
+		} catch (NoSuchAlgorithmException e) {
+			throw new ExitException(ExitException.EXIT_INTERNAL_ERROR, e);
+		}
+		try (InputStream is = Files.newInputStream(file)) {
+			byte[] buf = new byte[65536];
+			int n;
+			while ((n = is.read(buf)) > 0) {
+				digest.update(buf, 0, n);
+			}
+		}
+		StringBuilder sb = new StringBuilder();
+		for (byte b : digest.digest()) {
+			sb.append(String.format("%02x", b));
+		}
+		return sb.toString();
+	}
+
 	public static Stream<String> stringLines(String text) {
 		return Arrays.stream(text.split("\\r?\\n"));
 	}

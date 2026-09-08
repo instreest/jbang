@@ -1,24 +1,25 @@
 package dev.jbang;
 
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Finds JDKs already present on the machine and installs missing ones by
- * downloading them (see {@link #downloadUrls(int)}). The lookup and install
- * behaviour is a reduced re-implementation of jbang-devkitman (MIT, see
- * THIRD-PARTY.md). Search order for a requested version:
+ * Finds JDKs already present on the machine and installs missing ones from the
+ * download URLs listed in the {@link JdkIndex}. Search order for a requested
+ * version:
  * <ol>
  * <li>the JVM running JBang</li>
  * <li>the default JDK link ($JBANG_DIR/currentjdk)</li>
@@ -29,12 +30,6 @@ import java.util.stream.Stream;
  * </ol>
  */
 public final class JdkManager {
-	/** Optional URL template override, see {@link #downloadUrls(int)}. */
-	public static final String ENV_JDK_DOWNLOAD_URL = "JBANG_JDK_DOWNLOAD_URL";
-
-	private static final String ADOPTIUM_URL = "https://api.adoptium.net/v3/binary/latest/{version}/ga/{os}/{arch}/jdk/hotspot/normal/eclipse";
-	private static final String ORACLE_URL = "https://download.oracle.com/java/{version}/latest/jdk-{version}_{oracleos}-{arch}_bin.{ext}";
-
 	private final Path jdksDir;
 	private final Path defaultLink;
 	private final int defaultJavaVersion;
@@ -52,40 +47,27 @@ public final class JdkManager {
 	}
 
 	/**
-	 * Returns a JDK matching the requested version ("17", "17+" or null for any),
-	 * installing one if necessary.
+	 * Returns a JDK matching the requested version ("17", "17+", "25.0.3" or
+	 * null for any), installing one if necessary.
 	 */
 	public Jdk getOrInstallJdk(String requestedVersion) {
-		int version = requestedVersion != null ? Directives.minRequestedVersion(requestedVersion) : 0;
-		boolean open = requestedVersion == null || Directives.isOpenVersion(requestedVersion);
-		Jdk jdk = getInstalledJdk(version, open);
-		if (jdk == null && version > 0 && open && version < defaultJavaVersion) {
-			// Prefer installing the default version when any newer one will do
-			jdk = getInstalledJdk(defaultJavaVersion, true);
-			if (jdk == null) {
-				jdk = install(defaultJavaVersion);
-			}
-		}
+		RequestedVersion version = requestedVersion != null
+				? RequestedVersion.parse(requestedVersion)
+				: RequestedVersion.ofMajor(defaultJavaVersion, true);
+		Jdk jdk = getInstalledJdk(version);
 		if (jdk == null) {
-			jdk = install(version > 0 ? version : defaultJavaVersion);
+			jdk = install(version);
 		}
 		Util.verboseMsg("Using JDK: " + jdk + " [" + jdk.origin() + "]");
 		return jdk;
 	}
 
 	/** Returns an already installed JDK matching the version, or null. */
-	public Jdk getInstalledJdk(int version, boolean open) {
+	public Jdk getInstalledJdk(RequestedVersion version) {
 		return listInstalled().stream()
-			.filter(j -> matches(j, version, open))
+			.filter(j -> version.matches(j.version()))
 			.findFirst()
 			.orElse(null);
-	}
-
-	private static boolean matches(Jdk jdk, int version, boolean open) {
-		if (version <= 0) {
-			return true;
-		}
-		return open ? jdk.majorVersion() >= version : jdk.majorVersion() == version;
 	}
 
 	/** All JDKs found, in search order (deduplicated by real path). */
@@ -114,16 +96,16 @@ public final class JdkManager {
 	}
 
 	private static void add(List<Jdk> jdks, Jdk jdk) {
-		if (jdk != null && jdks.stream().noneMatch(j -> sameHome(j, jdk))) {
+		if (jdk != null && jdks.stream().noneMatch(j -> sameHome(j.home(), jdk.home()))) {
 			jdks.add(jdk);
 		}
 	}
 
-	private static boolean sameHome(Jdk a, Jdk b) {
+	private static boolean sameHome(Path a, Path b) {
 		try {
-			return Files.isSameFile(a.home(), b.home());
+			return Files.isSameFile(a, b);
 		} catch (IOException e) {
-			return a.home().toAbsolutePath().equals(b.home().toAbsolutePath());
+			return a.toAbsolutePath().equals(b.toAbsolutePath());
 		}
 	}
 
@@ -138,7 +120,10 @@ public final class JdkManager {
 				.filter(d -> !d.getFileName().toString().endsWith(".tmp"))
 				.map(d -> Jdk.of(d, "jbang"))
 				.filter(Objects::nonNull)
-				.sorted(Comparator.comparingInt(Jdk::majorVersion).reversed())
+				.sorted(Comparator
+					.comparing((Jdk j) -> RequestedVersion.componentsOf(j.version()),
+							(a, b) -> RequestedVersion.compare(a, b))
+					.reversed())
 				.collect(Collectors.toList());
 		} catch (IOException e) {
 			Util.verboseMsg("Could not list " + jdksDir + ": " + e);
@@ -147,94 +132,120 @@ public final class JdkManager {
 	}
 
 	/**
-	 * Downloads the latest GA release of the given major version and installs it
-	 * as $JBANG_CACHE_DIR/jdks/&lt;version&gt;. The candidate URLs are tried in
-	 * order until one succeeds. When no default JDK is set yet, the new JDK
-	 * becomes the default.
+	 * Downloads and installs a JDK satisfying the request into
+	 * $JBANG_CACHE_DIR/jdks/&lt;version&gt;. The archive's SHA-256 is verified
+	 * against the checksum published next to it. A lock file makes concurrent
+	 * JBang processes wait for each other instead of installing on top of one
+	 * another. When no default JDK is set yet, the new JDK becomes the default.
 	 */
-	public Jdk install(int version) {
+	public Jdk install(RequestedVersion version) {
 		if (Util.isOffline()) {
 			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
 					"No suitable JDK was found for requested version " + version + " and we are offline");
 		}
-		Path jdkDir = jdksDir.resolve(Integer.toString(version));
-		Path tmpDir = jdksDir.resolve(version + ".tmp");
-		Path pkg = Settings.getCacheDir(Settings.CacheClass.urls)
-			.resolve("bootstrap-jdk-" + version + "." + archiveExtension());
-		Util.infoMsg("Downloading JDK " + version + ". Be patient, this can take several minutes...");
-		List<String> failures = new ArrayList<>();
-		for (String url : downloadUrls(version)) {
-			Util.deletePath(tmpDir, true);
-			try {
-				Util.verboseMsg("Downloading " + url);
-				Downloader.download(url, pkg);
-				Util.infoMsg("Installing JDK " + version + "...");
-				Unpacker.unpackJdk(pkg, tmpDir);
-				if (!Jdk.resolveVersion(tmpDir).isPresent()) {
-					throw new IOException("The JDK package does not seem to contain a valid JDK");
-				}
-				Util.deletePath(jdkDir, true);
-				Files.move(tmpDir, jdkDir);
-				break;
-			} catch (IOException | RuntimeException e) {
-				Util.verboseMsg("Download/install from " + url + " failed: " + e);
-				failures.add(url + " (" + e.getMessage() + ")");
-				Util.deletePath(tmpDir, true);
-			} finally {
-				Util.deletePath(pkg, true);
+		JdkIndex.Entry entry = selectEntry(version);
+		Path jdkDir = jdksDir.resolve(entry.version);
+		try (Lock lock = Lock.acquire(jdksDir.resolve(".locks").resolve(entry.version + ".lock"))) {
+			// another process may have installed this exact entry while we were
+			// waiting for the lock; the directory is named after the entry, so
+			// finding a JDK there means there is nothing left to download
+			installed = null;
+			Jdk existing = Jdk.of(jdkDir, "jbang");
+			if (existing != null) {
+				Util.verboseMsg("JDK " + entry.version + " is already installed: " + existing);
+				return finish(existing);
 			}
+			Jdk jdk = download(entry, jdkDir);
+			if (!version.matches(jdk.version())) {
+				Util.warnMsg("The JDK index listed version " + entry.version + " for the request '"
+						+ version + "' but the installed JDK reports " + jdk.version());
+			}
+			return finish(jdk);
+		}
+	}
+
+	private JdkIndex.Entry selectEntry(RequestedVersion version) {
+		JdkIndex index = JdkIndex.instance();
+		// For an open request we install a single major version rather than the
+		// newest JDK in existence: the default version when it satisfies the
+		// request, the requested major otherwise.
+		if (version.isOpen()) {
+			RequestedVersion preferred = RequestedVersion
+				.ofMajor(Math.max(version.major(), defaultJavaVersion), false);
+			Optional<JdkIndex.Entry> entry = index.find(preferred);
+			if (entry.isPresent()) {
+				return entry.get();
+			}
+			Util.verboseMsg("No JDK " + preferred + " available, looking for any " + version);
+		}
+		return index.find(version)
+			.orElseThrow(() -> new ExitException(ExitException.EXIT_INVALID_INPUT,
+					"No JDK matching version '" + version + "' is available for "
+							+ JdkIndex.platform() + " from " + JdkIndex.distros()));
+	}
+
+	private Jdk download(JdkIndex.Entry entry, Path jdkDir) {
+		Path tmpDir = jdksDir.resolve(entry.version + ".tmp");
+		Path pkg = Settings.getCacheDir(Settings.CacheClass.urls)
+			.resolve("bootstrap-jdk-" + entry.version + "." + entry.archiveType);
+		Util.deletePath(tmpDir, true);
+		Util.infoMsg("Downloading JDK " + entry.version + " (" + entry.distro
+				+ "). Be patient, this can take several minutes...");
+		Util.verboseMsg("Downloading " + entry.url);
+		try {
+			Downloader.download(entry.url, pkg);
+			verifyChecksum(entry, pkg);
+			Util.infoMsg("Installing JDK " + entry.version + "...");
+			Unpacker.unpackJdk(pkg, tmpDir);
+			if (!Jdk.resolveVersion(tmpDir).isPresent()) {
+				throw new IOException("The JDK package does not seem to contain a valid JDK");
+			}
+			Util.deletePath(jdkDir, true);
+			Files.move(tmpDir, jdkDir);
+		} catch (IOException | RuntimeException e) {
+			Util.deletePath(tmpDir, true);
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
+					"Unable to download or install JDK version " + entry.version + " from " + entry.url
+							+ " (" + e.getMessage() + ")",
+					e);
+		} finally {
+			Util.deletePath(pkg, true);
 		}
 		Jdk jdk = Jdk.of(jdkDir, "jbang");
 		if (jdk == null) {
-			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
-					"Unable to download or install JDK version " + version + ":\n   "
-							+ String.join("\n   ", failures));
-		}
-		installed = null;
-		if (getDefaultJdk() == null) {
-			setDefaultJdk(jdk);
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Failed to find JDK in: " + jdkDir);
 		}
 		return jdk;
 	}
 
 	/**
-	 * The URLs to try for downloading the given major version, in order. By
-	 * default the Adoptium (Eclipse Temurin) API is used, falling back to the
-	 * Oracle JDK download site for the versions it provides. The environment
-	 * variable JBANG_JDK_DOWNLOAD_URL replaces the whole list with a single
-	 * template; it may contain the placeholders {version}, {os} (linux,
-	 * alpine-linux, mac, windows, aix), {oracleos} (linux, macos, windows),
-	 * {arch} (x64, aarch64, ...) and {ext} (tar.gz or zip).
+	 * Verifies the downloaded archive against the SHA-256 published next to it
+	 * (".sha256.txt", as used by Temurin and others). A mismatch aborts the
+	 * installation; a checksum that cannot be fetched is only a warning, since
+	 * not every distribution publishes one.
 	 */
-	static List<String> downloadUrls(int version) {
-		List<String> templates = new ArrayList<>();
-		String override = System.getenv(ENV_JDK_DOWNLOAD_URL);
-		if (override != null && !override.trim().isEmpty()) {
-			templates.add(override.trim());
-		} else {
-			templates.add(ADOPTIUM_URL);
-			templates.add(ORACLE_URL);
+	private void verifyChecksum(JdkIndex.Entry entry, Path pkg) throws IOException {
+		Optional<String> published = Downloader.tryReadString(entry.url + ".sha256.txt");
+		if (!published.isPresent()) {
+			Util.warnMsg("No published SHA-256 found for " + entry.url + ", skipping verification");
+			return;
 		}
-		Map<String, String> vars = new LinkedHashMap<>();
-		Util.OS os = Util.getOS();
-		vars.put("{version}", Integer.toString(version));
-		vars.put("{os}", os.name().replace('_', '-'));
-		vars.put("{oracleos}", os == Util.OS.mac ? "macos" : os.name());
-		vars.put("{arch}", Util.getArch().name());
-		vars.put("{ext}", archiveExtension());
-		List<String> urls = new ArrayList<>();
-		for (String t : templates) {
-			String url = t;
-			for (Map.Entry<String, String> e : vars.entrySet()) {
-				url = url.replace(e.getKey(), e.getValue());
-			}
-			urls.add(url);
+		String expected = published.get().trim().split("\\s+")[0].toLowerCase();
+		String actual = Util.sha256(pkg);
+		if (!expected.equals(actual)) {
+			Util.deletePath(pkg, true);
+			throw new IOException("SHA-256 mismatch for " + entry.url
+					+ ": expected " + expected + " but got " + actual);
 		}
-		return urls;
+		Util.verboseMsg("SHA-256 verified: " + actual);
 	}
 
-	private static String archiveExtension() {
-		return Util.isWindows() ? "zip" : "tar.gz";
+	private Jdk finish(Jdk jdk) {
+		installed = null;
+		if (getDefaultJdk() == null) {
+			setDefaultJdk(jdk);
+		}
+		return jdk;
 	}
 
 	/** The JDK the default link points to, or null. */
@@ -252,7 +263,7 @@ public final class JdkManager {
 
 	public void setDefaultJdk(Jdk jdk) {
 		Jdk current = getDefaultJdk();
-		if (current != null && sameHome(current, jdk)) {
+		if (current != null && sameHome(current.home(), jdk.home())) {
 			Util.infoMsg("Default JDK already set to " + jdk.majorVersion());
 			return;
 		}
@@ -275,5 +286,49 @@ public final class JdkManager {
 			}
 		}
 		return jdkHome;
+	}
+
+	/** An inter-process lock held for the duration of an installation. */
+	private static final class Lock implements AutoCloseable {
+		private final Path file;
+		private final RandomAccessFile raf;
+		private final FileLock lock;
+
+		private Lock(Path file, RandomAccessFile raf, FileLock lock) {
+			this.file = file;
+			this.raf = raf;
+			this.lock = lock;
+		}
+
+		static Lock acquire(Path file) {
+			try {
+				Files.createDirectories(file.toAbsolutePath().getParent());
+				RandomAccessFile raf = new RandomAccessFile(file.toFile(), "rw");
+				FileChannel channel = raf.getChannel();
+				FileLock lock = channel.tryLock();
+				if (lock == null) {
+					Util.infoMsg("Waiting for another JBang process to finish installing a JDK...");
+					lock = channel.lock();
+				}
+				return new Lock(file, raf, lock);
+			} catch (IOException | RuntimeException e) {
+				Util.verboseMsg("Could not lock " + file + ", continuing without a lock: " + e);
+				return new Lock(file, null, null);
+			}
+		}
+
+		@Override
+		public void close() {
+			try {
+				if (lock != null) {
+					lock.release();
+				}
+				if (raf != null) {
+					raf.close();
+				}
+			} catch (IOException e) {
+				Util.verboseMsg("Could not release the lock on " + file + ": " + e);
+			}
+		}
 	}
 }

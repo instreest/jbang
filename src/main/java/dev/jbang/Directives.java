@@ -16,7 +16,8 @@ import java.util.stream.Stream;
  * contents of a Java source file:
  * <ul>
  * <li><code>//DEPS group:artifact:version[:classifier][@type] ...</code></li>
- * <li><code>//JAVA version[+]</code></li>
+ * <li><code>//JAVA version[+]</code>, e.g. <code>17</code>, <code>17+</code> or
+ * <code>25.0.3</code></li>
  * <li><code>//SOURCES file-or-glob ...</code></li>
  * </ul>
  * Values may reference properties using <code>${name}</code>.
@@ -31,8 +32,6 @@ public final class Directives {
 
 	// Values are separated by spaces, semicolons, commas or tabs (quotes allowed)
 	private static final Pattern Q2TL_SSCT = Pattern.compile("[^\\s;,\"']+|\"([^\"]*)\"|'([^']*)'");
-
-	private static final Pattern REQUESTED_VERSION = Pattern.compile("\\d+[+]?");
 
 	private final List<Directive> directives;
 
@@ -110,37 +109,18 @@ public final class Directives {
 	 * "17" or "17+", or null if not specified.
 	 */
 	public String javaVersion() {
-		Optional<String> version = values(JAVA)
+		Optional<RequestedVersion> version = values(JAVA)
 			.map(String::trim)
-			.filter(v -> {
-				if (!isRequestedVersion(v)) {
+			.map(v -> {
+				if (!RequestedVersion.isValid(v)) {
 					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-							"Invalid //JAVA version '" + v + "', should be a number optionally followed by a plus sign");
+							"Invalid //JAVA version '" + v
+									+ "', should be a version like 17, 17+, 25.0.3 or 25.0.3+");
 				}
-				return true;
+				return RequestedVersion.parse(v);
 			})
-			.max(new RequestedVersionComparator());
-		return version.orElse(null);
-	}
-
-	public static boolean isRequestedVersion(String rv) {
-		return rv != null && REQUESTED_VERSION.matcher(rv).matches();
-	}
-
-	public static boolean isOpenVersion(String rv) {
-		return rv.endsWith("+");
-	}
-
-	public static int minRequestedVersion(String rv) {
-		return Integer.parseInt(isOpenVersion(rv) ? rv.substring(0, rv.length() - 1) : rv);
-	}
-
-	public static boolean satisfiesRequestedVersion(String rv, int actual) {
-		if (rv == null) {
-			return true;
-		}
-		int req = minRequestedVersion(rv);
-		return isOpenVersion(rv) ? actual >= req : actual == req;
+			.max(RequestedVersion::compareTo);
+		return version.map(RequestedVersion::toString).orElse(null);
 	}
 
 	static List<String> quotedStringToList(String text) {
@@ -161,22 +141,4 @@ public final class Directives {
 		return matchList;
 	}
 
-	/** Orders requested versions: higher number first, exact before open. */
-	public static final class RequestedVersionComparator implements java.util.Comparator<String> {
-		@Override
-		public int compare(String v1, String v2) {
-			int n1 = minRequestedVersion(v1);
-			int n2 = minRequestedVersion(v2);
-			if (n1 != n2) {
-				return Integer.compare(n1, n2);
-			}
-			boolean o1 = isOpenVersion(v1);
-			boolean o2 = isOpenVersion(v2);
-			if (o1 == o2) {
-				return 0;
-			}
-			// exact versions are considered "higher" than open ones
-			return o1 ? -1 : 1;
-		}
-	}
 }

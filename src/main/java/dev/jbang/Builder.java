@@ -39,7 +39,13 @@ public final class Builder {
 			Util.verboseMsg("No build required. Reusing jar from " + jar);
 			return jar;
 		}
-		Path compileDir = project.getCompileDir();
+		// Compile into a directory of our own so that concurrent builds of the
+		// same script cannot delete each other's classes. The jar itself is
+		// written atomically, so whichever build finishes last wins.
+		Files.createDirectories(project.getBuildDir());
+		Path compileDir = keepClasses()
+				? project.getCompileDir()
+				: Files.createTempDirectory(project.getBuildDir(), "classes-");
 		Util.deletePath(compileDir, true);
 		Files.createDirectories(compileDir);
 		try {
@@ -47,11 +53,16 @@ public final class Builder {
 			findMain(compileDir);
 			createJar(compileDir, jar);
 		} finally {
-			if (!"true".equals(System.getProperty("jbang.build.keepclasses"))) {
+			if (!keepClasses()) {
 				Util.deletePath(compileDir, true);
 			}
 		}
 		return jar;
+	}
+
+	/** Keeps the compiled classes around for inspection. */
+	static boolean keepClasses() {
+		return "true".equals(System.getProperty("jbang.build.keepclasses"));
 	}
 
 	private boolean isUpToDate(Path jar) {
@@ -70,11 +81,15 @@ public final class Builder {
 				Util.verboseMsg("Building as previously built jar found but it has incomplete meta data.");
 				return false;
 			}
-			int built = Jdk.parseJavaVersion(buildJdk);
-			if (!Directives.satisfiesRequestedVersion(project.getJavaVersion(), built)
-					|| project.getJdk().majorVersion() < built) {
-				Util.verboseMsg("Building as the jar was built with Java " + built
-						+ " which does not match the requested/available JDK.");
+			String requested = project.getJavaVersion();
+			if (requested != null && !RequestedVersion.parse(requested).matches(buildJdk)) {
+				Util.verboseMsg("Building as the jar was built with Java " + buildJdk
+						+ " which does not satisfy the requested version " + requested + ".");
+				return false;
+			}
+			if (project.getJdk().majorVersion() < Jdk.parseJavaVersion(buildJdk)) {
+				Util.verboseMsg("Building as the jar was built with Java " + buildJdk
+						+ " which is newer than the JDK available now.");
 				return false;
 			}
 			if (project.getMainClass() == null) {
@@ -143,14 +158,17 @@ public final class Builder {
 		Manifest manifest = new Manifest();
 		Attributes attrs = manifest.getMainAttributes();
 		attrs.put(Attributes.Name.MANIFEST_VERSION, "1.0");
-		int buildJdk = project.getJdk().majorVersion();
-		attrs.putValue(ATTR_BUILD_JDK, buildJdk >= 9 ? Integer.toString(buildJdk) : "1." + buildJdk);
+		// the full version, so that a pinned request like //JAVA 25.0.3 can be
+		// checked against a previously built jar
+		attrs.putValue(ATTR_BUILD_JDK, project.getJdk().version());
 		if (project.getMainClass() != null) {
 			attrs.put(Attributes.Name.MAIN_CLASS, project.getMainClass());
 		}
 		Util.verboseMsg("Package: " + jar);
 		Files.createDirectories(jar.getParent());
-		Path tmp = jar.resolveSibling(jar.getFileName() + ".tmp");
+		// a temporary file of our own, so that concurrent builds of the same
+		// script do not write into each other's jar
+		Path tmp = Files.createTempFile(jar.getParent(), jar.getFileName().toString(), ".tmp");
 		try (OutputStream os = Files.newOutputStream(tmp); JarOutputStream jos = new JarOutputStream(os, manifest);
 				Stream<Path> files = Files.walk(compileDir)) {
 			List<Path> entries = files.filter(Files::isRegularFile).sorted().collect(Collectors.toList());

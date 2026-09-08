@@ -300,7 +300,7 @@ public final class Main {
 				Jdk def = jdkMan.getDefaultJdk();
 				realOut.println(def != null ? "Default JDK: " + def : "No default JDK set");
 			} else {
-				jdkMan.setDefaultJdk(jdkMan.getOrInstallJdk(requireVersion(args.get(0))));
+				jdkMan.setDefaultJdk(jdkMan.getOrInstallJdk(args.get(0)));
 			}
 			return ExitException.EXIT_OK;
 		}
@@ -309,9 +309,9 @@ public final class Main {
 			if (args.isEmpty()) {
 				throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Missing required parameter: '<version>'");
 			}
-			int version = Directives.minRequestedVersion(requireVersion(args.get(0)));
+			RequestedVersion version = RequestedVersion.parse(args.get(0));
 			Jdk existing = jdkMan.listJBangJdks().stream()
-				.filter(j -> j.majorVersion() == version).findFirst().orElse(null);
+				.filter(j -> version.matches(j.version())).findFirst().orElse(null);
 			if (existing != null) {
 				Util.infoMsg("JDK is already installed: " + existing);
 			} else {
@@ -348,14 +348,6 @@ public final class Main {
 		}
 	}
 
-	private static String requireVersion(String v) {
-		if (!Directives.isRequestedVersion(v)) {
-			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-					"Invalid JDK version '" + v + "', should be a number optionally followed by a plus sign");
-		}
-		return v;
-	}
-
 	private static void printHelp() {
 		realOut.println("jbang (JBangLite) " + Util.getJBangVersion());
 		realOut.println();
@@ -379,7 +371,7 @@ public final class Main {
 		realOut.println("  -o, --offline    Never access the network");
 		realOut.println();
 		realOut.println("Script options:");
-		realOut.println("  -j, --java <v>   Use the given Java version (e.g. 17 or 17+)");
+		realOut.println("  -j, --java <v>   Use the given Java version (e.g. 17, 17+ or 25.0.3)");
 		realOut.println("  -m, --main <c>   Main class to run");
 		realOut.println("  --deps <gav,...> Additional dependencies");
 		realOut.println("  -Dkey=value      System property for directive substitution and the script");

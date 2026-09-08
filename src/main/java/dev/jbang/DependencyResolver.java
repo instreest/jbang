@@ -25,6 +25,8 @@ import org.eclipse.aether.graph.Dependency;
 import org.eclipse.aether.resolution.ArtifactDescriptorException;
 import org.eclipse.aether.resolution.ArtifactDescriptorRequest;
 import org.eclipse.aether.resolution.ArtifactDescriptorResult;
+import org.eclipse.aether.resolution.ArtifactRequest;
+import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.ArtifactResult;
 import org.eclipse.aether.resolution.DependencyRequest;
 import org.eclipse.aether.resolution.DependencyResolutionException;
@@ -97,6 +99,53 @@ public final class DependencyResolver implements Closeable {
 			DependencyCache.store(key, artifacts);
 			Util.verboseMsg("Resolved artifact(s): " + artifacts);
 			return artifacts;
+		}
+	}
+
+	/**
+	 * Resolves a single artifact (without its dependencies) and returns its
+	 * local file. The coordinate may use a version range such as
+	 * <code>[0,)</code> to get the newest available version. Because this goes
+	 * through Maven Resolver, mirrors, proxies and credentials configured in
+	 * <code>~/.m2/settings.xml</code> apply, and the result is cached in the
+	 * local repository.
+	 */
+	public static Path resolveArtifact(String coord) {
+		try (DependencyResolver resolver = new DependencyResolver(Util.isOffline(), Util.isFresh())) {
+			return resolver.doResolveArtifact(coord);
+		}
+	}
+
+	private Path doResolveArtifact(String coord) {
+		Artifact artifact = toArtifact(coord);
+		String version = artifact.getVersion();
+		if (version.startsWith("[") || version.startsWith("(")) {
+			try {
+				VersionRangeResult range = context.repositorySystem()
+					.resolveVersionRange(context.repositorySystemSession(),
+							new VersionRangeRequest()
+								.setArtifact(artifact)
+								.setRepositories(context.remoteRepositories()));
+				if (range.getHighestVersion() == null) {
+					throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
+							"No version of " + coord + " is available");
+				}
+				artifact = artifact.setVersion(range.getHighestVersion().toString());
+			} catch (VersionRangeResolutionException e) {
+				throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
+						"Could not resolve version range of " + coord + ": " + e.getMessage(), e);
+			}
+		}
+		try {
+			ArtifactResult result = context.repositorySystem()
+				.resolveArtifact(context.repositorySystemSession(),
+						new ArtifactRequest()
+							.setArtifact(artifact)
+							.setRepositories(context.remoteRepositories()));
+			return result.getArtifact().getFile().toPath();
+		} catch (ArtifactResolutionException e) {
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
+					"Could not resolve " + coord + ": " + e.getMessage(), e);
 		}
 	}
 
