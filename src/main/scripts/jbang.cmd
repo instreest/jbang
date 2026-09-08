@@ -54,7 +54,7 @@ if exist "%jarPath%.new" (
 rem Find/get a JDK (only needed for JAR execution)
 set JAVA_EXEC=
 rem A JDK bundled with JBangLite (jlink image in ..\runtime) always wins
-if exist "%~dp0..\runtime\bin\java.exe" (
+if exist "%~dp0..\runtime\bin\javac.exe" (
   set JAVA_HOME=%~dp0..\runtime
   set JAVA_EXEC=%~dp0..\runtime\bin\java.exe
 )

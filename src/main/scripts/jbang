@@ -86,7 +86,7 @@ javacInPath() {
 setup_java_exec() {
   unset JAVA_EXEC
   # A JDK bundled with JBangLite (jlink image in ../runtime) always wins
-  if [ -x "$abs_jbang_dir/../runtime/bin/java" ]; then
+  if [ -x "$abs_jbang_dir/../runtime/bin/javac" ]; then
     export JAVA_HOME="$(cd "$abs_jbang_dir/../runtime" && pwd)"
     JAVA_EXEC="$JAVA_HOME/bin/java"
   fi

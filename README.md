@@ -77,12 +77,11 @@ to set the version.
 
 produces `build/distributions/jbang-<version>-<os>-<arch>.tar.gz` / `.zip` that
 additionally contain `jbang/runtime/`, a JDK 25 shrunk with `jlink` to the modules
-`jbang.jar` itself needs (`java.base`, `java.compiler`, `java.naming`,
-`java.security.jgss`, `java.sql`, `jdk.charsets`, `jdk.unsupported`). The launcher
-scripts run `jbang.jar` on that runtime, so JBangLite starts without any JDK on the
-machine. The runtime is **not** used for scripts: it has no `javac`, and the JDK that
-compiles and runs a script (`//JAVA`, `currentjdk`) is located or downloaded by JBang
-as usual, exactly as in a distribution without a bundled runtime. The JDK to shrink is
+JBangLite and typical scripts need (`java.se`, `jdk.compiler`, `jdk.unsupported`,
+`jdk.charsets`, `jdk.localedata`, `jdk.zipfs`; about 86 MB unpacked, 64 MB compressed,
+versus 376 MB for a full JDK). The launcher scripts and `jbang.jar` use that runtime
+before anything else, so no JDK needs to be installed or downloaded on the target
+machine, and a script declaring `//JAVA 25` runs on it directly. The JDK to shrink is
 downloaded from the Adoptium API by default; `-PjlinkJdkUrl=<url>` points at a
 mirror, and `-PjlinkJdkUrl`/`-PjlinkPlatform` select other platforms. jlink requires
 a JDK of the same major version as the jmods, so cross-building needs

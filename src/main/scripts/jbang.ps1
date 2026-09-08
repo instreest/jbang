@@ -207,7 +207,7 @@ $JAVA_EXEC=""
 $oldJavaHome=$env:JAVA_HOME
 if (-not $binaryPath) {
   # A JDK bundled with JBangLite (jlink image in ..\runtime) always wins
-  if (Test-Path "$PSScriptRoot\..\runtime\bin\java.exe") {
+  if (Test-Path "$PSScriptRoot\..\runtime\bin\javac.exe") {
     $env:JAVA_HOME=(Resolve-Path "$PSScriptRoot\..\runtime").Path
     $JAVA_EXEC="$env:JAVA_HOME\bin\java.exe"
   }
