@@ -26,3 +26,17 @@ MIT License.
 
 The exact list of bundled artifacts can be printed with
 `./gradlew dependencies --configuration runtimeClasspath`.
+
+## Runtime bundles (`jbang-<version>-<os>-<arch>.tar.gz` / `.zip`)
+
+These archives additionally contain `jbang/runtime/`, a runtime image created with
+`jlink` from a JDK 25. By default that JDK is
+[Eclipse Temurin](https://adoptium.net/), distributed under the
+GNU General Public License, version 2, with the Classpath Exception
+(GPLv2+CE); the full license texts shipped with the JDK are preserved in
+`jbang/runtime/legal/`. The `legal/` folder must be kept when redistributing a
+bundle. If a bundle is built from a different JDK (`-PjlinkJdk` / `-PjlinkJdkUrl`),
+the license of that JDK applies to `runtime/` instead; note that the Oracle JDK is
+distributed under the Oracle No-Fee Terms and Conditions, which are different
+from the GPL, so only redistribute bundles built from an OpenJDK build such as
+Temurin unless you have checked those terms.

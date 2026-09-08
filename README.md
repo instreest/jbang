@@ -67,6 +67,26 @@ and `jbang.zip` (root folder `jbang/` with `bin/jbang*`, as expected by the laun
 scripts) plus versioned `jbang-<version>.tar/.zip`. Pass `-PjbangVersion=x.y.z`
 to set the version.
 
+### Bundles with a built-in JDK 25
+
+```bash
+./gradlew bundleDist                        # Temurin 25 for this machine's platform
+./gradlew bundleDist -PjlinkJdk=/path/to/jdk-25   # use a local JDK 25 (needs its jmods/)
+./gradlew bundleDist -PjlinkPlatform=windows-x64 -PjlinkTool=/path/to/jdk-25   # cross-build
+```
+
+produces `build/distributions/jbang-<version>-<os>-<arch>.tar.gz` / `.zip` that
+additionally contain `jbang/runtime/`, a JDK 25 shrunk with `jlink` to the modules
+JBangLite and typical scripts need (`java.se`, `jdk.compiler`, `jdk.unsupported`,
+`jdk.charsets`, `jdk.localedata`, `jdk.zipfs`; about 86 MB unpacked, 64 MB compressed,
+versus 376 MB for a full JDK). The launcher scripts and `jbang.jar` use that runtime
+before anything else, so no JDK needs to be installed or downloaded on the target
+machine, and a script declaring `//JAVA 25` runs on it directly. The JDK to shrink is
+downloaded from the Adoptium API by default; `-PjlinkJdkUrl=<url>` points at a
+mirror, and `-PjlinkJdkUrl`/`-PjlinkPlatform` select other platforms. jlink requires
+a JDK of the same major version as the jmods, so cross-building needs
+`-PjlinkTool=<JDK 25 home>` when Gradle itself runs on an older JDK.
+
 There is no test suite, release pipeline, or CI configuration in this fork.
 
 ## License

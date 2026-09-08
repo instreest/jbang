@@ -21,6 +21,8 @@ import java.util.stream.Stream;
  * THIRD-PARTY.md). Search order for a requested version:
  * <ol>
  * <li>the JVM running JBang</li>
+ * <li>the runtime bundled with JBangLite (<code>runtime/</code> next to
+ * <code>bin/jbang.jar</code>)</li>
  * <li>the default JDK link ($JBANG_DIR/currentjdk)</li>
  * <li>JAVA_HOME</li>
  * <li>javac found on the PATH</li>
@@ -93,6 +95,7 @@ public final class JdkManager {
 		if (installed == null) {
 			List<Jdk> jdks = new ArrayList<>();
 			add(jdks, Jdk.of(jre2jdk(Paths.get(System.getProperty("java.home"))), "current"));
+			add(jdks, Jdk.of(bundledRuntime(), "bundled"));
 			add(jdks, Jdk.of(defaultLink, "default"));
 			String javaHome = System.getenv("JAVA_HOME");
 			if (javaHome != null && !javaHome.isEmpty()) {
@@ -111,6 +114,23 @@ public final class JdkManager {
 			installed = jdks;
 		}
 		return installed;
+	}
+
+	/** The jlink image shipped in the distribution (bin/../runtime), or null. */
+	static Path bundledRuntime() {
+		try {
+			Path jar = Paths.get(JdkManager.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+			Path bin = jar.getParent();
+			if (bin != null && bin.getParent() != null) {
+				Path runtime = bin.getParent().resolve("runtime");
+				if (Jdk.hasJavac(runtime)) {
+					return runtime;
+				}
+			}
+		} catch (Exception e) {
+			Util.verboseMsg("Could not determine location of jbang.jar: " + e);
+		}
+		return null;
 	}
 
 	private static void add(List<Jdk> jdks, Jdk jdk) {
