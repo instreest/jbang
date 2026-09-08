@@ -110,8 +110,10 @@ assemble.dependsOn latestDistZip, latestDistTar
 assemble.dependsOn shadowJar
 
 // ---------------------------------------------------------------------------
-// Bundled runtime: a jlink-shrunk JDK 25 shipped next to jbang.jar so that
-// neither JBangLite itself nor the scripts it runs need a JDK on the machine.
+// Bundled runtime: a jlink-shrunk JDK 25 shipped next to jbang.jar. It is used
+// exclusively to run jbang.jar itself; the JDK used to compile and run scripts
+// is still located or downloaded by JBang (see JdkManager) and does not need
+// to exist on the machine beforehand.
 //
 //   ./gradlew bundleDist                       (downloads Temurin 25 for this host)
 //   ./gradlew bundleDist -PjlinkJdk=/path/jdk  (use a local JDK 25 with jmods)
@@ -122,13 +124,16 @@ assemble.dependsOn shadowJar
 // downloaded target-platform JDK.
 // ---------------------------------------------------------------------------
 
+// Only what jbang.jar needs (see `jdeps --print-module-deps jbang.jar`);
+// javac and the full API come from the JDK that JBang installs for scripts.
 def jlinkModules = [
-	'java.se',          // the whole standard API, scripts may use any of it
-	'jdk.compiler',     // javac
-	'jdk.unsupported',  // sun.misc.Unsafe etc. used by many libraries
-	'jdk.charsets',     // extended charsets (e.g. MS932 on Japanese Windows)
-	'jdk.localedata',   // locales other than English
-	'jdk.zipfs',        // jar:/zip: file systems
+	'java.base',
+	'java.compiler',       // required by Maven Resolver / plexus
+	'java.naming',
+	'java.security.jgss',  // SPNEGO/Kerberos proxy authentication in the HTTP transport
+	'java.sql',            // referenced by Maven model code (pulls in java.xml)
+	'jdk.charsets',        // console charsets such as MS932 on Japanese Windows
+	'jdk.unsupported',     // sun.misc.Unsafe used by some resolver dependencies
 ].join(',')
 
 def hostPlatform() {

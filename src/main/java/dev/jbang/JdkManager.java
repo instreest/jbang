@@ -20,9 +20,9 @@ import java.util.stream.Stream;
  * behaviour is a reduced re-implementation of jbang-devkitman (MIT, see
  * THIRD-PARTY.md). Search order for a requested version:
  * <ol>
- * <li>the JVM running JBang</li>
- * <li>the runtime bundled with JBangLite (<code>runtime/</code> next to
- * <code>bin/jbang.jar</code>)</li>
+ * <li>the JVM running JBang, unless it is the runtime bundled with JBangLite
+ * (<code>runtime/</code> next to <code>bin/jbang.jar</code>): that image is
+ * only meant to run JBang itself and is never used for scripts</li>
  * <li>the default JDK link ($JBANG_DIR/currentjdk)</li>
  * <li>JAVA_HOME</li>
  * <li>javac found on the PATH</li>
@@ -94,8 +94,13 @@ public final class JdkManager {
 	public List<Jdk> listInstalled() {
 		if (installed == null) {
 			List<Jdk> jdks = new ArrayList<>();
-			add(jdks, Jdk.of(jre2jdk(Paths.get(System.getProperty("java.home"))), "current"));
-			add(jdks, Jdk.of(bundledRuntime(), "bundled"));
+			Jdk current = Jdk.of(jre2jdk(Paths.get(System.getProperty("java.home"))), "current");
+			Path bundled = bundledRuntime();
+			if (current != null && bundled != null && sameHome(current.home(), bundled)) {
+				Util.verboseMsg("Ignoring the bundled JBangLite runtime as a JDK for scripts: " + bundled);
+			} else {
+				add(jdks, current);
+			}
 			add(jdks, Jdk.of(defaultLink, "default"));
 			String javaHome = System.getenv("JAVA_HOME");
 			if (javaHome != null && !javaHome.isEmpty()) {
@@ -123,7 +128,7 @@ public final class JdkManager {
 			Path bin = jar.getParent();
 			if (bin != null && bin.getParent() != null) {
 				Path runtime = bin.getParent().resolve("runtime");
-				if (Jdk.hasJavac(runtime)) {
+				if (Files.isRegularFile(runtime.resolve("release"))) {
 					return runtime;
 				}
 			}
@@ -140,10 +145,14 @@ public final class JdkManager {
 	}
 
 	private static boolean sameHome(Jdk a, Jdk b) {
+		return sameHome(a.home(), b.home());
+	}
+
+	private static boolean sameHome(Path a, Path b) {
 		try {
-			return Files.isSameFile(a.home(), b.home());
+			return Files.isSameFile(a, b);
 		} catch (IOException e) {
-			return a.home().toAbsolutePath().equals(b.home().toAbsolutePath());
+			return a.toAbsolutePath().equals(b.toAbsolutePath());
 		}
 	}
 

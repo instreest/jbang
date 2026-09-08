@@ -30,7 +30,7 @@ The exact list of bundled artifacts can be printed with
 ## Runtime bundles (`jbang-<version>-<os>-<arch>.tar.gz` / `.zip`)
 
 These archives additionally contain `jbang/runtime/`, a runtime image created with
-`jlink` from a JDK 25. By default that JDK is
+`jlink` from a JDK 25 that is used only to run `jbang.jar` itself. By default that JDK is
 [Eclipse Temurin](https://adoptium.net/), distributed under the
 GNU General Public License, version 2, with the Classpath Exception
 (GPLv2+CE); the full license texts shipped with the JDK are preserved in
