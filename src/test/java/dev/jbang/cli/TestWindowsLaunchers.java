@@ -64,16 +64,34 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	}
 
 	@Test
-	void cmdDelegatesToPs1() throws Exception {
-		// Without a usable native binary jbang.cmd must hand over to jbang.ps1,
-		// which warns and falls back to the jar
+	void cmdWarnsAndFallsBackToJarWithoutNativeBinary() throws Exception {
 		RunResult result = runLauncher(cmdLauncher(), "JBANG_USE_NATIVE", "true", "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("WARNING: JBang native binary"), result.stderr);
 		assertTrue(result.stdout.contains("some output"), result.stdout);
+	}
+
+	@Test
+	void cmdRunsNativeBinaryDirectly() throws Exception {
+		// A stand-in for jbang.bin.exe: a copy of jbang.cmd would recurse, so use cmd.exe itself
+		Files.copy(Paths.get(System.getenv("ComSpec")), binDir.resolve("jbang.bin.exe"));
+		RunResult result = runLauncher(cmdLauncher(), "JBANG_USE_NATIVE", "true", "/c", "echo native & exit 6");
+		assertEquals(6, result.exitCode, result.stderr);
+		assertTrue(result.stdout.contains("native"), result.stdout);
+	}
+
+	@Test
+	void cmdDelegatesToPs1() throws Exception {
+		// A staged jbang.jar.new is handled by jbang.ps1, which replaces the jar and runs it
+		Files.copy(binDir.resolve("jbang.jar"), binDir.resolve("jbang.jar.new"));
+		RunResult result = runLauncher(cmdLauncher(), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertTrue(result.stdout.contains("some output"), result.stdout);
+		assertTrue(Files.notExists(binDir.resolve("jbang.jar.new")));
 		assertEquals(Arrays.asList("cmd", binDir.resolve("jbang.cmd").toString()), Files.readAllLines(envFile));
 
-		result = runLauncher(cmdLauncher(), "JBANG_USE_NATIVE", "true", "exec", "cmd /c exit 5");
+		Files.copy(binDir.resolve("jbang.jar"), binDir.resolve("jbang.jar.new"));
+		result = runLauncher(cmdLauncher(), "exec", "cmd /c exit 5");
 		assertEquals(5, result.exitCode, result.stderr);
 	}
 

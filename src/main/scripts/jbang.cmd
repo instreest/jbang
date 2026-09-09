@@ -1,7 +1,7 @@
 @echo off
 rem JBang launcher for CMD.
-rem When a JDK and the JBang jar can be found without any further work, JBang
-rem is started directly from here. Everything else (native binaries, downloading
+rem When the native binary, or a JDK and the JBang jar, can be found without any
+rem further work, JBang is started directly from here. Everything else (downloading
 rem JBang or a JDK, updating a staged jbang.jar.new) is delegated to jbang.ps1,
 rem which is told it runs on behalf of CMD via JBANG_RUNTIME_SHELL=cmd.
 rem Either way, when JBang asks for a command to be executed (exit code 255)
@@ -19,8 +19,24 @@ set "JBANG_LAUNCH_CMD=%~f0"
 rem tell jbang whether stdin is a tty or not
 2>nul >nul timeout /t 0 && (set "JBANG_STDIN_NOTTY=false") || (set "JBANG_STDIN_NOTTY=true")
 
-rem Fast path: run the jar next to this script with an already available JDK
-if "%JBANG_USE_NATIVE%"=="true" goto :delegate
+rem Fast path 1: run the native binary next to this script
+if not "%JBANG_USE_NATIVE%"=="true" goto :jar
+rem detect architecture for platform-specific binary lookup
+set "jbang_arch=x64"
+if "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "jbang_arch=aarch64"
+rem Look for platform-specific native binary first, then fall back to jbang.bin.exe
+if exist "%~dp0jbang.bin-windows-%jbang_arch%.exe" (
+  set CMD="%~dp0jbang.bin-windows-%jbang_arch%.exe"
+  goto :run
+)
+if exist "%~dp0jbang.bin.exe" (
+  set CMD="%~dp0jbang.bin.exe"
+  goto :run
+)
+echo WARNING: JBang native binary (jbang.bin-windows-%jbang_arch%.exe or jbang.bin.exe^) not found in %~dp0 1>&2
+
+:jar
+rem Fast path 2: run the jar next to this script with an already available JDK
 if exist "%~dp0jbang.jar" (
   set "jarPath=%~dp0jbang.jar"
 ) else if exist "%~dp0.jbang\jbang.jar" (
