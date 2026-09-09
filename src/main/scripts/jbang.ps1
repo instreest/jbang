@@ -200,7 +200,10 @@ function Install-BootstrapJdk {
     New-Item -ItemType Directory -Force -Path "$TDIR\jdks" >$null 2>&1
     $entry = Get-JvmIndexEntry (Get-JvmIndexPlatform)
     if (-not $entry) { Fail "No Temurin $bootstrapJavaVersion found in the JVM index" }
-    $archive = "$TDIR\bootstrap-jdk.zip"
+    # The index says how the archive is packed; keep its extension so the file
+    # on disk matches what was downloaded, as jbang.jar does
+    $type = if ($entry.Type -eq 'tgz') { 'tar.gz' } else { $entry.Type }
+    $archive = "$TDIR\bootstrap-jdk.$type"
 
     [Console]::Error.WriteLine("No Java found. Downloading Temurin $($entry.Version). Be patient, this can take several minutes...")
     if (-not (Invoke-Download $entry.Url $archive)) { Fail "Error downloading JDK from $($entry.Url)" }
@@ -219,7 +222,16 @@ function Install-BootstrapJdk {
     [Console]::Error.WriteLine("Installing Temurin $($entry.Version)...")
     $tmpdir = "$TDIR\jdks\bootstrap.tmp"
     Remove-Item -LiteralPath "$tmpdir" -Force -Recurse -ErrorAction Ignore >$null 2>&1
-    try { Expand-Archive -Path $archive -DestinationPath "$tmpdir" } catch { Fail "Error installing JDK" }
+    New-Item -ItemType Directory -Force -Path "$tmpdir" >$null 2>&1
+    if ($type -eq 'zip') {
+        try { Expand-Archive -Path $archive -DestinationPath "$tmpdir" } catch { Fail "Error installing JDK" }
+    } else {
+        & tar -xf "$archive" -C "$tmpdir"
+        if ($LASTEXITCODE -ne 0) {
+            Remove-Item -LiteralPath "$tmpdir" -Force -Recurse -ErrorAction Ignore >$null 2>&1
+            Fail "Error installing JDK"
+        }
+    }
     foreach ($d in Get-ChildItem -Directory -Path "$tmpdir") {
         Move-Item -Path "$($d.FullName)\*" -Destination "$tmpdir" -Force
     }
@@ -229,7 +241,7 @@ function Install-BootstrapJdk {
     }
     Remove-Item -LiteralPath "$TDIR\jdks\bootstrap" -Force -Recurse -ErrorAction Ignore >$null 2>&1
     Rename-Item -Path "$tmpdir" -NewName "bootstrap" >$null 2>&1
-    Remove-Item -LiteralPath $archive -Force -ErrorAction Ignore >$null 2>&1
+    Remove-Item -LiteralPath $archive, "$TDIR\bootstrap-jdk.sha256" -Force -ErrorAction Ignore >$null 2>&1
 }
 
 # Returns the major version (e.g. 8, 11, 17) of the JDK in the given directory as
