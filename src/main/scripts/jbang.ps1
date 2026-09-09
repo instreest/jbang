@@ -182,6 +182,11 @@ function Get-JavaMajorVersion {
 # Determines the java executable to use for running the JAR, downloading a JDK if needed.
 # Sets $env:JAVA_HOME to match.
 function Find-JavaExec {
+    # The JDK selected with 'jbang jdk default' takes precedence
+    if (Test-Path "$JBDIR\currentjdk\bin\javac.exe") {
+        $env:JAVA_HOME="$JBDIR\currentjdk"
+        return "$JBDIR\currentjdk\bin\java.exe"
+    }
     if ($env:JAVA_HOME) {
         # Determine if a (working) JDK is available in JAVA_HOME
         if (Test-Path "$env:JAVA_HOME\bin\javac.exe") {
@@ -197,10 +202,6 @@ function Find-JavaExec {
         } else {
             [Console]::Error.WriteLine("JAVA_HOME is set but does not seem to point to a valid Java JDK")
         }
-    }
-    if (Test-Path "$JBDIR\currentjdk\bin\javac.exe") {
-        $env:JAVA_HOME="$JBDIR\currentjdk"
-        return "$JBDIR\currentjdk\bin\java.exe"
     }
     $env:JAVA_HOME="$TDIR\jdks\$javaVersion"
     $javaExec="$env:JAVA_HOME\bin\java.exe"

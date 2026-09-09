@@ -73,29 +73,30 @@ exit /b %ERRORLEVEL%
 rem Finds an installed JDK (same order as jbang.ps1) and sets JAVA_EXEC and JAVA_HOME.
 rem Fails when none is found, in which case jbang.ps1 will download one.
 :find_java
-if "%JAVA_HOME%"=="" goto :find_java_path
-if not exist "%JAVA_HOME%\bin\javac.exe" (
-  echo JAVA_HOME is set but does not seem to point to a valid Java JDK 1>&2
-  goto :find_java_path
-)
-rem Ignore a JDK in JAVA_HOME that is older than the version JBang would install itself
-call :java_major "%JAVA_HOME%"
-if "%javaMajor%"=="" (
-  echo JAVA_HOME is set but the Java version could not be determined, ignoring it 1>&2
-  goto :find_java_path
-)
-if %javaMajor% LSS %javaVersion% (
-  echo JAVA_HOME points to Java %javaMajor% which is older than Java %javaVersion%, ignoring it 1>&2
-  goto :find_java_path
-)
-set "JAVA_EXEC=%JAVA_HOME%\bin\java.exe"
-exit /b 0
-:find_java_path
+rem The JDK selected with 'jbang jdk default' takes precedence
 if exist "%JBDIR%\currentjdk\bin\javac.exe" (
   set "JAVA_HOME=%JBDIR%\currentjdk"
   set "JAVA_EXEC=%JBDIR%\currentjdk\bin\java.exe"
   exit /b 0
 )
+if "%JAVA_HOME%"=="" goto :find_java_cached
+if not exist "%JAVA_HOME%\bin\javac.exe" (
+  echo JAVA_HOME is set but does not seem to point to a valid Java JDK 1>&2
+  goto :find_java_cached
+)
+rem Ignore a JDK in JAVA_HOME that is older than the version JBang would install itself
+call :java_major "%JAVA_HOME%"
+if "%javaMajor%"=="" (
+  echo JAVA_HOME is set but the Java version could not be determined, ignoring it 1>&2
+  goto :find_java_cached
+)
+if %javaMajor% LSS %javaVersion% (
+  echo JAVA_HOME points to Java %javaMajor% which is older than Java %javaVersion%, ignoring it 1>&2
+  goto :find_java_cached
+)
+set "JAVA_EXEC=%JAVA_HOME%\bin\java.exe"
+exit /b 0
+:find_java_cached
 if exist "%TDIR%\jdks\%javaVersion%\bin\javac.exe" (
   set "JAVA_HOME=%TDIR%\jdks\%javaVersion%"
   set "JAVA_EXEC=%TDIR%\jdks\%javaVersion%\bin\java.exe"

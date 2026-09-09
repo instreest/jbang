@@ -1,6 +1,7 @@
 package dev.jbang.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -97,15 +98,31 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void cmdIgnoresOldJavaHome() throws Exception {
-		linkCurrentJdk();
+		linkCachedJdk();
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
 	}
 
 	@Test
-	void cmdIgnoresJavaHomeOfUnknownVersion() throws Exception {
+	void cmdPrefersCurrentJdkOverJavaHome() throws Exception {
 		linkCurrentJdk();
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
+	}
+
+	@Test
+	void ps1PrefersCurrentJdkOverJavaHome() throws Exception {
+		linkCurrentJdk();
+		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
+	}
+
+	@Test
+	void cmdIgnoresJavaHomeOfUnknownVersion() throws Exception {
+		linkCachedJdk();
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk(null), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("could not be determined"), result.stderr);
@@ -113,7 +130,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void ps1IgnoresJavaHomeOfUnknownVersion() throws Exception {
-		linkCurrentJdk();
+		linkCachedJdk();
 		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk(null), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("could not be determined"), result.stderr);
@@ -121,7 +138,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void ps1IgnoresOldJavaHome() throws Exception {
-		linkCurrentJdk();
+		linkCachedJdk();
 		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
@@ -143,14 +160,27 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	}
 
 	/**
+	 * Makes the running JDK available as JBANG_CACHE_DIR\jdks\17 (as if JBang
+	 * had downloaded it) so the launchers have a JDK to fall back to when
+	 * JAVA_HOME is rejected, without downloading one.
+	 */
+	private void linkCachedJdk() throws Exception {
+		Path jdks = Files.createDirectories(tempDir.resolve("cache/jdks"));
+		link(jdks.resolve("17"), Paths.get(System.getProperty("java.home")));
+	}
+
+	/**
 	 * Makes the running JDK available as JBANG_DIR\currentjdk (as 'jbang jdk
-	 * default' would) so the launchers have a JDK to fall back to when JAVA_HOME
-	 * is rejected, without downloading one.
+	 * default' would).
 	 */
 	private void linkCurrentJdk() throws Exception {
 		Path jbangHome = Files.createDirectories(tempDir.resolve("jbang-home"));
-		RunResult result = runProcess(Arrays.asList("cmd.exe", "/c", "mklink", "/j",
-				jbangHome.resolve("currentjdk").toString(), System.getProperty("java.home")), System.getenv());
+		link(jbangHome.resolve("currentjdk"), Paths.get(System.getProperty("java.home")));
+	}
+
+	private void link(Path link, Path target) throws Exception {
+		RunResult result = runProcess(
+				Arrays.asList("cmd.exe", "/c", "mklink", "/j", link.toString(), target.toString()), System.getenv());
 		assertEquals(0, result.exitCode, result.stderr);
 	}
 
