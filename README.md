@@ -44,7 +44,7 @@ applied the same way:
 
 | Kept | Removed |
 | --- | --- |
-| `run` (the default), `info classpath`, `info jar`, `jdk default/install/list`, `version` | `build`, `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `info tools/docs` |
+| `run` (the default), `info classpath`, `jdk default`, `version` | `build`, `info jar`, `jdk install/list`, `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `info tools/docs` |
 | `.java` sources | `.jsh`, `.kt`, `.groovy`, `.md`, jars and GAVs as scripts |
 | local files | remote scripts, gists, catalogs and aliases |
 | plain jars | native images, integrations (Quarkus and friends) |
@@ -72,7 +72,8 @@ is `jdk default <version>`, right after they installed a JDK themselves:
 | `jbang.ps1` | `jdk default <version>` | same |
 | `jbang.cmd` | none | finds a JDK itself, otherwise delegates to `jbang.ps1` |
 
-`jdk install` and `jdk list` are for people, not for the scripts.
+`jdk install` and `jdk list` were removed: nothing but people used them, and
+JDKs for scripts are provisioned by the jar itself.
 
 ## Staying in sync with JBang
 

@@ -18,7 +18,6 @@ import dev.jbang.source.AppBuilder;
 import dev.jbang.source.CmdGenerator;
 import dev.jbang.source.Project;
 import dev.jbang.util.CommandBuffer;
-import dev.jbang.util.RequestedVersion;
 import dev.jbang.util.Util;
 
 /**
@@ -28,10 +27,7 @@ import dev.jbang.util.Util;
  * jbang [global options] [run] [run options] &lt;script.java&gt; [args...]
  * jbang [global options] build [run options] &lt;script.java&gt;
  * jbang [global options] info classpath [--deps-only] &lt;script.java&gt;
- * jbang [global options] info jar &lt;script.java&gt;
  * jbang [global options] jdk default [version]
- * jbang [global options] jdk install &lt;version&gt;
- * jbang [global options] jdk list
  * jbang version
  * </pre>
  *
@@ -290,7 +286,7 @@ public final class Main {
 	private static int info(List<String> args) {
 		if (args.isEmpty()) {
 			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-					"Missing required subcommand for 'info' (classpath, jar)");
+					"Missing required subcommand for 'info' (classpath)");
 		}
 		String sub = args.remove(0);
 		ScriptOptions opts = ScriptOptions.parse(args);
@@ -305,9 +301,6 @@ public final class Main {
 			realOut.println(String.join(Settings.CP_SEPARATOR, cp));
 			return ExitException.EXIT_OK;
 		}
-		case "jar":
-			realOut.println(prj.getJarFile().toAbsolutePath());
-			return ExitException.EXIT_OK;
 		default:
 			throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Unknown info subcommand: " + sub);
 		}
@@ -316,7 +309,7 @@ public final class Main {
 	private static int jdk(List<String> args) {
 		if (args.isEmpty()) {
 			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-					"Missing required subcommand for 'jdk' (default, install, list)");
+					"Missing required subcommand for 'jdk' (default)");
 		}
 		String sub = args.remove(0);
 		JdkManager jdkMan = new JdkManager();
@@ -327,45 +320,6 @@ public final class Main {
 				realOut.println(def != null ? "Default JDK: " + def : "No default JDK set");
 			} else {
 				jdkMan.setDefaultJdk(jdkMan.getOrInstallJdk(args.get(0)));
-			}
-			return ExitException.EXIT_OK;
-		}
-		case "install":
-		case "i": {
-			if (args.isEmpty()) {
-				throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Missing required parameter: '<version>'");
-			}
-			RequestedVersion version = RequestedVersion.parse(args.get(0));
-			Jdk existing = jdkMan.listJBangJdks().stream()
-				.filter(j -> version.matches(j.version())).findFirst().orElse(null);
-			if (existing != null) {
-				Util.infoMsg("JDK is already installed: " + existing);
-			} else {
-				Util.infoMsg("Installed JDK: " + jdkMan.install(version));
-			}
-			return ExitException.EXIT_OK;
-		}
-		case "list":
-		case "l": {
-			Jdk def = jdkMan.getDefaultJdk();
-			realOut.println("Installed JDKs (<=default):");
-			for (Jdk j : jdkMan.listInstalled()) {
-				boolean isDef;
-				try {
-					isDef = def != null && Files.isSameFile(def.home(), j.home());
-				} catch (IOException e) {
-					isDef = false;
-				}
-				Path home = j.home();
-				if ("default".equals(j.origin())) {
-					try {
-						home = home.toRealPath();
-					} catch (IOException e) {
-						// keep the link path
-					}
-				}
-				realOut.println("   " + j.majorVersion() + " (" + j.version() + ", " + j.origin() + ") "
-						+ home + (isDef ? " <" : ""));
 			}
 			return ExitException.EXIT_OK;
 		}
@@ -383,10 +337,7 @@ public final class Main {
 		realOut.println("Usage:");
 		realOut.println("  jbang [<global options>] [run] [<options>] <script.java> [<args>...]");
 		realOut.println("  jbang [<global options>] info classpath [--deps-only] <script.java>");
-		realOut.println("  jbang [<global options>] info jar <script.java>");
 		realOut.println("  jbang [<global options>] jdk default [<version>]");
-		realOut.println("  jbang [<global options>] jdk install <version>");
-		realOut.println("  jbang [<global options>] jdk list");
 		realOut.println("  jbang version");
 		realOut.println();
 		realOut.println("Global options:");
