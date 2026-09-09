@@ -26,9 +26,10 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
 /**
- * Functional tests for the Windows launchers (jbang.cmd and jbang.ps1) using a
- * fake jbang.jar: exit codes must be propagated, output must be shown and the
- * command JBang asks to be executed (exit code 255) must be run by the launcher.
+ * Functional tests for the Windows launcher (jbang.cmd) using a fake jbang.jar:
+ * exit codes must be propagated, output must be shown and the command JBang
+ * asks to be executed (exit code 255) must be run by the launcher. jbang.cmd is
+ * self-contained, so there is no PowerShell launcher to hand over to.
  */
 @EnabledOnOs(OS.WINDOWS)
 class TestWindowsLaunchers extends AbstractScriptTest {
@@ -38,10 +39,8 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@BeforeEach
 	void setupLaunchers() throws IOException {
-		requirePowerShell();
 		binDir = Files.createDirectories(tempDir.resolve("bin"));
-		Files.copy(PS1_SCRIPT, binDir.resolve("jbang.ps1"));
-		Files.copy(PS1_SCRIPT.resolveSibling("jbang.cmd"), binDir.resolve("jbang.cmd"));
+		Files.copy(CMD_SCRIPT, binDir.resolve("jbang.cmd"));
 		createFakeJar(binDir.resolve("jbang.jar"));
 		envFile = tempDir.resolve("env.txt");
 	}
@@ -81,28 +80,16 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		assertTrue(result.stdout.contains("native"), result.stdout);
 	}
 
-	@Test
-	void cmdDelegatesToPs1() throws Exception {
-		// A staged jbang.jar.new is handled by jbang.ps1, which replaces the jar and runs it
-		Files.copy(binDir.resolve("jbang.jar"), binDir.resolve("jbang.jar.new"));
-		RunResult result = runLauncher(cmdLauncher(), "exit", "3");
-		assertEquals(3, result.exitCode, result.stderr);
-		assertTrue(result.stdout.contains("some output"), result.stdout);
-		assertTrue(Files.notExists(binDir.resolve("jbang.jar.new")));
-		assertEquals(Arrays.asList("cmd", binDir.resolve("jbang.cmd").toString()), Files.readAllLines(envFile));
-
-		Files.copy(binDir.resolve("jbang.jar"), binDir.resolve("jbang.jar.new"));
-		result = runLauncher(cmdLauncher(), "exec", "cmd /c exit 5");
-		assertEquals(5, result.exitCode, result.stderr);
-	}
 
 	@Test
 	void cmdIgnoresOldJavaHome() throws Exception {
-		stubPs1();
-		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
-		assertEquals(42, result.exitCode, result.stderr);
+		// With JAVA_HOME rejected and no JDK of its own, jbang.cmd tries to
+		// download one; an unreachable JVM index makes that fail quickly.
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"),
+				"JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
+		assertTrue(result.exitCode != 0, result.stderr);
 		assertTrue(result.stderr.contains("older than Java 11"), result.stderr);
-		assertTrue(result.stdout.contains("delegated to jbang.ps1"), result.stdout);
+		assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
 	}
 
 	@Test
@@ -113,13 +100,6 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
 	}
 
-	@Test
-	void ps1PrefersBootstrapJdkOverJavaHome() throws Exception {
-		linkCachedJdk();
-		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
-		assertEquals(3, result.exitCode, result.stderr);
-		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
-	}
 
 	@Test
 	void cmdPrefersCurrentJdkOverJavaHome() throws Exception {
@@ -129,47 +109,17 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
 	}
 
-	@Test
-	void ps1PrefersCurrentJdkOverJavaHome() throws Exception {
-		linkCurrentJdk();
-		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
-		assertEquals(3, result.exitCode, result.stderr);
-		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
-	}
 
 	@Test
 	void cmdIgnoresJavaHomeOfUnknownVersion() throws Exception {
-		stubPs1();
-		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk(null), "exit", "3");
-		assertEquals(42, result.exitCode, result.stderr);
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk(null),
+				"JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
+		assertTrue(result.exitCode != 0, result.stderr);
 		assertTrue(result.stderr.contains("could not be determined"), result.stderr);
 	}
 
-	@Test
-	void ps1IgnoresOldJavaHome() throws Exception {
-		// With JAVA_HOME rejected and no JDK of its own, jbang.ps1 tries to download
-		// one; an unreachable JVM index makes that fail quickly.
-		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"),
-				"JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
-		assertEquals(1, result.exitCode, result.stderr);
-		assertTrue(result.stderr.contains("older than Java 11"), result.stderr);
-		assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
-	}
 
-	@Test
-	void ps1PropagatesExitCodeAndOutput() throws Exception {
-		RunResult result = runLauncher(ps1Launcher(), "exit", "3");
-		assertEquals(3, result.exitCode, result.stderr);
-		assertTrue(result.stdout.contains("some output"), result.stdout);
-		assertEquals(Arrays.asList("powershell", binDir.resolve("jbang.ps1").toString()),
-				Files.readAllLines(envFile));
-	}
 
-	@Test
-	void ps1ExecutesGeneratedCommand() throws Exception {
-		RunResult result = runLauncher(ps1Launcher(), "exec", "cmd /c exit 5");
-		assertEquals(5, result.exitCode, result.stderr);
-	}
 
 	/**
 	 * Makes the running JDK available as JBANG_CACHE_DIR\jdks\bootstrap (as if
@@ -182,8 +132,8 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	}
 
 	/**
-	 * Makes the running JDK available as JBANG_DIR\currentjdk (as 'jbang jdk
-	 * default' would).
+	 * Makes the running JDK available as JBANG_DIR\currentjdk (as jbang.jar
+	 * does for the JDK a script asks for with //JAVA).
 	 */
 	private void linkCurrentJdk() throws Exception {
 		Path jbangHome = Files.createDirectories(tempDir.resolve("jbang-home"));
@@ -196,23 +146,11 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		assertEquals(0, result.exitCode, result.stderr);
 	}
 
-	/**
-	 * Replaces jbang.ps1 with a stub so a test can tell that jbang.cmd handed over
-	 * to it instead of running the jar itself.
-	 */
-	private void stubPs1() throws IOException {
-		Files.write(binDir.resolve("jbang.ps1"), Arrays.asList("Write-Output 'delegated to jbang.ps1'", "exit 42"),
-				StandardCharsets.UTF_8);
-	}
 
 	private List<String> cmdLauncher() {
 		return new ArrayList<>(Arrays.asList("cmd.exe", "/c", binDir.resolve("jbang.cmd").toString()));
 	}
 
-	private List<String> ps1Launcher() {
-		return new ArrayList<>(Arrays.asList(psCommand, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
-				binDir.resolve("jbang.ps1").toString()));
-	}
 
 	private RunResult runLauncher(List<String> command, String... args) throws Exception {
 		Map<String, String> env = new HashMap<>(System.getenv());

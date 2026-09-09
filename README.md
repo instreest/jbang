@@ -89,11 +89,11 @@ options are `--java`, `--main`, `--module`, `--deps`, `--repos`,
 The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<name>.jar`,
 `~/.jbang/cache/jdks/<version>`, `~/.jbang/currentjdk`), and `run` still prints the
 `java` command line and exits with status 255 so the launcher scripts
-(`jbang`, `jbang.cmd`, `jbang.ps1`) can exec it.
+(`jbang`, `jbang.cmd`) can exec it.
 
 ### What the launcher scripts need
 
-The scripts (`jbang`, `jbang.cmd`, `jbang.ps1`) find or install a JDK on their
+The scripts (`jbang` for POSIX shells, `jbang.cmd` for Windows) find or install a JDK on their
 own and then run `jbang.jar` with it; they never call a subcommand of the jar.
 Which JVM runs `jbang.jar` hardly matters, so the search is deliberately short:
 
@@ -104,8 +104,9 @@ Which JVM runs `jbang.jar` hardly matters, so the search is deliberately short:
 
 Anything Java 11 or newer is accepted. If nothing is found, the scripts download
 the newest Temurin 25 into `$JBANG_CACHE_DIR/jdks/bootstrap`, verify its
-published SHA-256 and use that. `jbang.cmd` does not download: it delegates to
-`jbang.ps1` when it finds no usable JDK.
+published SHA-256 and use that. `jbang.cmd` is self-contained — it uses the
+`curl`, `tar` and `certutil` that Windows ships with, so no PowerShell is
+involved and there is no `jbang.ps1` in this fork.
 
 The download uses the very same JVM index the jar uses for `//JAVA`, the
 Coursier index published on Maven Central

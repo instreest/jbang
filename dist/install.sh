@@ -31,7 +31,6 @@ base="$rawBaseUrl/$repo/$ref/dist"
 files="
 jbang jbang
 jbang.cmd jbang.cmd
-jbang.ps1 jbang.ps1
 install.sh install.sh
 install.cmd install.cmd
 README.md README.md

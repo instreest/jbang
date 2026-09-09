@@ -31,14 +31,6 @@ class TestScriptDownloadVersion extends AbstractScriptTest {
 		return env;
 	}
 
-	private Map<String, String> psEnv(String version) {
-		Map<String, String> env = basePsEnv(version);
-		env.put("JBANG_DOWNLOAD_BASEURL", wm.baseUrl());
-		env.put("JBANG_DOWNLOAD_VERSION", version);
-		env.put("JBANG_DOWNLOAD_RETRY", "0");
-		env.remove("JBANG_DOWNLOAD_URL");
-		return env;
-	}
 
 	// -------------------------------------------------------------------------
 	// Bash
@@ -92,55 +84,4 @@ class TestScriptDownloadVersion extends AbstractScriptTest {
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// PowerShell
-	// -------------------------------------------------------------------------
-
-	@Nested
-	class PowerShell {
-
-		@BeforeEach
-		void checkPowerShell() {
-			requirePowerShell();
-		}
-
-		@Test
-		void numericVersionGetsVPrefix() throws Exception {
-			byte[] zip = createJbangZip();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/v0.120.0/jbang.zip"))
-				.willReturn(WireMock.aResponse().withStatus(200).withBody(zip)));
-
-			RunResult result = runProcess(psCmd("version"), psEnv("0.120.0"));
-
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/v0.120.0/jbang.zip")));
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded, stderr: " + result.stderr);
-		}
-
-		@Test
-		void earlyAccessTagIsUsedAsIs() throws Exception {
-			byte[] zip = createJbangZip();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/early-access/jbang.zip"))
-				.willReturn(WireMock.aResponse().withStatus(200).withBody(zip)));
-
-			RunResult result = runProcess(psCmd("version"), psEnv("early-access"));
-
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/early-access/jbang.zip")));
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded, stderr: " + result.stderr);
-		}
-
-		@Test
-		void prereleaseTagIsUsedAsIs() throws Exception {
-			byte[] zip = createJbangZip();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/1.0.0-rc1/jbang.zip"))
-				.willReturn(WireMock.aResponse().withStatus(200).withBody(zip)));
-
-			RunResult result = runProcess(psCmd("version"), psEnv("1.0.0-rc1"));
-
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/1.0.0-rc1/jbang.zip")));
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded, stderr: " + result.stderr);
-		}
-	}
 }

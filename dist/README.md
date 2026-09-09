@@ -26,7 +26,7 @@ Nothing is written outside `jbangw/.jbang` and `~/.jbang` (`JBANG_DIR`).
 
 | File | |
 | --- | --- |
-| `jbang`, `jbang.cmd`, `jbang.ps1` | the launchers |
+| `jbang`, `jbang.cmd` | the launchers (POSIX shells and Windows) |
 | `jbanglite.properties` | the repository, revision and jar checksum to use |
 | `install.sh`, `install.cmd` | install and update this directory |
 | `.gitignore` | keeps the downloaded jar out of the project |

@@ -15,7 +15,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-copied="src/main/scripts/jbang src/main/scripts/jbang.cmd src/main/scripts/jbang.ps1 LICENSE"
+copied="src/main/scripts/jbang src/main/scripts/jbang.cmd LICENSE"
 
 if [ "${1:-}" = "--check" ]; then
   stale=

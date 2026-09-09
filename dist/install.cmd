@@ -40,7 +40,6 @@ mkdir "%staging%" || exit /b 1
 echo Installing the JBangLite wrapper from %repo% (%ref%) into %dir% 1>&2
 call :fetch jbang           "%staging%\jbang"        || goto :failed
 call :fetch jbang.cmd       "%staging%\jbang.cmd"    || goto :failed
-call :fetch jbang.ps1       "%staging%\jbang.ps1"    || goto :failed
 call :fetch install.sh      "%staging%\install.sh"   || goto :failed
 call :fetch install.cmd     "%staging%\install.cmd"  || goto :failed
 call :fetch README.md       "%staging%\README.md"    || goto :failed

@@ -14,7 +14,7 @@ import com.github.tomakehurst.wiremock.stubbing.Scenario;
 
 /**
  * Functional tests for download retry support in JBang startup scripts. Runs
- * the real jbang/jbang.ps1 scripts against a WireMock server that simulates
+ * the real jbang script against a WireMock server that simulates
  * transient download failures, using JBANG_DOWNLOAD_URL to redirect downloads
  * to WireMock.
  *
@@ -52,13 +52,6 @@ class TestScriptRetry extends AbstractScriptTest {
 		return env;
 	}
 
-	private Map<String, String> psEnv(int retryCount) {
-		Map<String, String> env = basePsEnv("retry-" + retryCount);
-		env.put("JBANG_DOWNLOAD_URL", wm.url("/jbang.zip"));
-		env.put("JBANG_DOWNLOAD_RETRY", String.valueOf(retryCount));
-		env.put("JBANG_DOWNLOAD_RETRY_DELAY", "0");
-		return env;
-	}
 
 	// -------------------------------------------------------------------------
 	// Bash tests — runs src/main/scripts/jbang with JBANG_DOWNLOAD_URL
@@ -110,52 +103,4 @@ class TestScriptRetry extends AbstractScriptTest {
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// PowerShell tests — runs src/main/scripts/jbang.ps1 with
-	// JBANG_DOWNLOAD_URL pointing at WireMock
-	// -------------------------------------------------------------------------
-
-	@Nested
-	class PowerShellDownloadRetry {
-
-		@BeforeEach
-		void checkPowerShell() {
-			requirePowerShell();
-		}
-
-		@Test
-		void downloadSucceedsAfterTransientFailures() throws Exception {
-			byte[] zip = createJbangZip();
-			stubFlakyEndpoint("/jbang.zip", 3, zip);
-
-			RunResult result = runProcess(psCmd("version"), psEnv(5));
-
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded after retries, stderr: " + result.stderr);
-		}
-
-		@Test
-		void downloadFailsWhenRetriesExhausted() throws Exception {
-			byte[] zip = createJbangZip();
-			stubFlakyEndpoint("/jbang.zip", 10, zip);
-
-			RunResult result = runProcess(psCmd("version"), psEnv(2));
-
-			assertNotEquals(0, result.exitCode, "script should have failed");
-			assertTrue(result.stderr.contains("Error downloading JBang"),
-					"stderr should mention download error, was: " + result.stderr);
-		}
-
-		@Test
-		void downloadFailsWithZeroRetries() throws Exception {
-			byte[] zip = createJbangZip();
-			stubFlakyEndpoint("/jbang.zip", 1, zip);
-
-			RunResult result = runProcess(psCmd("version"), psEnv(0));
-
-			assertNotEquals(0, result.exitCode, "script should have failed");
-			assertTrue(result.stderr.contains("Error downloading JBang"),
-					"stderr should mention download error, was: " + result.stderr);
-		}
-	}
 }

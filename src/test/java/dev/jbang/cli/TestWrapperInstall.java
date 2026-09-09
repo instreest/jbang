@@ -37,7 +37,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 	void serveRepository() throws Exception {
 		requireBash();
 		project = Files.createDirectories(tempDir.resolve("project"));
-		for (String name : Arrays.asList("jbang", "jbang.cmd", "jbang.ps1", "install.sh", "install.cmd",
+		for (String name : Arrays.asList("jbang", "jbang.cmd", "install.sh", "install.cmd",
 				"README.md", "gitignore", "LICENSE")) {
 			stubFile("/instreest/jbang/main/dist/" + name, Files.readAllBytes(DIST.resolve(name)));
 		}
@@ -52,7 +52,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 		assertEquals(0, result.exitCode, result.stderr);
 
 		Path wrapper = project.resolve("jbangw");
-		for (String name : Arrays.asList("jbang", "jbang.cmd", "jbang.ps1", "install.sh", "install.cmd",
+		for (String name : Arrays.asList("jbang", "jbang.cmd", "install.sh", "install.cmd",
 				"README.md", ".gitignore", "LICENSE", "jbanglite.properties")) {
 			assertTrue(Files.isRegularFile(wrapper.resolve(name)), name + " was not installed");
 		}
@@ -128,7 +128,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 	 */
 	@Test
 	void distHoldsTheCurrentLaunchers() throws Exception {
-		for (String name : Arrays.asList("jbang", "jbang.cmd", "jbang.ps1")) {
+		for (String name : Arrays.asList("jbang", "jbang.cmd")) {
 			assertArrayEquals(Files.readAllBytes(BASH_SCRIPT.resolveSibling(name)),
 					Files.readAllBytes(DIST.resolve(name)),
 					"dist/" + name + " is out of date, run misc/update-dist.sh");

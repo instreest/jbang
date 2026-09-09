@@ -67,23 +67,7 @@ class TestScriptNativeDownload extends AbstractScriptTest {
 		return env;
 	}
 
-	private Map<String, String> psEnv(boolean useNative) {
-		Map<String, String> env = basePsEnv("ps-native-" + useNative);
-		env.put("JBANG_DOWNLOAD_BASEURL", wm.baseUrl());
-		env.put("JBANG_DOWNLOAD_RETRY", "0");
-		env.put("JBANG_USE_NATIVE", useNative ? "true" : "false");
-		env.remove("JBANG_DOWNLOAD_URL");
-		env.remove("JBANG_DOWNLOAD_VERSION");
-		return env;
-	}
 
-	private Map<String, String> psEnvWithVersion(boolean useNative, String version) {
-		Map<String, String> env = psEnv(useNative);
-		env.put("JBANG_DIR", tempSubDir("jbdir-ps-native-" + useNative + "-" + version).toString());
-		env.put("JBANG_CACHE_DIR", tempSubDir("cache-ps-native-" + useNative + "-" + version).toString());
-		env.put("JBANG_DOWNLOAD_VERSION", version);
-		return env;
-	}
 
 	// -------------------------------------------------------------------------
 	// Bash tests
@@ -193,105 +177,4 @@ class TestScriptNativeDownload extends AbstractScriptTest {
 		}
 	}
 
-	// -------------------------------------------------------------------------
-	// PowerShell tests
-	// -------------------------------------------------------------------------
-
-	@Nested
-	class PowerShellNativeDownload {
-
-		@BeforeEach
-		void checkPowerShell() {
-			requirePowerShell();
-		}
-
-		/**
-		 * Returns the arch identifier used by the jbang.ps1 script. The PS1 script uses
-		 * RuntimeInformation to detect Arm64 vs x64.
-		 */
-		private String psArch() {
-			String arch = System.getProperty("os.arch", "").toLowerCase();
-			if (arch.equals("aarch64") || arch.equals("arm64")) {
-				return "aarch64";
-			}
-			return "x64";
-		}
-
-		@Test
-		void latestDownloadUsesGenericBundleByDefault() throws Exception {
-			byte[] zip = createJbangZip();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/latest/download/jbang.zip"))
-				.willReturn(WireMock.aResponse().withStatus(200).withBody(zip)));
-
-			RunResult result = runProcess(psCmd("version"), psEnv(false));
-
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/latest/download/jbang.zip")));
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded, stderr: " + result.stderr);
-		}
-
-		@Test
-		void latestDownloadUsesPlatformBundleWhenNativeEnabled() throws Exception {
-			String arch = psArch();
-			String expectedPath = "/latest/download/jbang-windows-" + arch + ".zip";
-
-			byte[] zip = createJbangZip();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo(expectedPath))
-				.willReturn(WireMock.aResponse().withStatus(200).withBody(zip)));
-
-			RunResult result = runProcess(psCmd("version"), psEnv(true));
-
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo(expectedPath)));
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded, stderr: " + result.stderr);
-		}
-
-		@Test
-		void versionedDownloadUsesPlatformBundleWhenNativeEnabled() throws Exception {
-			String arch = psArch();
-			String expectedPath = "/download/v0.120.0/jbang-windows-" + arch + ".zip";
-
-			byte[] zip = createJbangZip();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo(expectedPath))
-				.willReturn(WireMock.aResponse().withStatus(200).withBody(zip)));
-
-			RunResult result = runProcess(psCmd("version"), psEnvWithVersion(true, "0.120.0"));
-
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo(expectedPath)));
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded, stderr: " + result.stderr);
-		}
-
-		@Test
-		void namedTagDownloadUsesPlatformBundleWhenNativeEnabled() throws Exception {
-			String arch = psArch();
-			String expectedPath = "/download/early-access/jbang-windows-" + arch + ".zip";
-
-			byte[] zip = createJbangZip();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo(expectedPath))
-				.willReturn(WireMock.aResponse().withStatus(200).withBody(zip)));
-
-			RunResult result = runProcess(psCmd("version"), psEnvWithVersion(true, "early-access"));
-
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo(expectedPath)));
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded, stderr: " + result.stderr);
-		}
-
-		@Test
-		void downloadUrlOverrideIgnoresNativeFlag() throws Exception {
-			byte[] zip = createJbangZip();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/custom/my-jbang.zip"))
-				.willReturn(WireMock.aResponse().withStatus(200).withBody(zip)));
-
-			Map<String, String> env = psEnv(true);
-			env.put("JBANG_DOWNLOAD_URL", wm.url("/custom/my-jbang.zip"));
-
-			RunResult result = runProcess(psCmd("version"), env);
-
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/custom/my-jbang.zip")));
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded, stderr: " + result.stderr);
-		}
-	}
 }
