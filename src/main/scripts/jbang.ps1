@@ -182,9 +182,9 @@ function Find-JavaExec {
         $env:JAVA_HOME=""
         return "java.exe"
     }
-    if (Test-Path "$JBDIR\currentjdk\bin\javac") {
+    if (Test-Path "$JBDIR\currentjdk\bin\javac.exe") {
         $env:JAVA_HOME="$JBDIR\currentjdk"
-        return "$JBDIR\currentjdk\bin\java"
+        return "$JBDIR\currentjdk\bin\java.exe"
     }
     $env:JAVA_HOME="$TDIR\jdks\$javaVersion"
     $javaExec="$env:JAVA_HOME\bin\java.exe"
