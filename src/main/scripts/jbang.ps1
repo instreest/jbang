@@ -167,15 +167,34 @@ function Install-Jdk {
     Rename-Item -Path "$tmpdir" -NewName "$javaVersion" >$null 2>&1
 }
 
+# Returns the major version (e.g. 8, 11, 17) of the JDK in the given directory as
+# read from its 'release' file, or $null when it cannot be determined.
+function Get-JavaMajorVersion {
+    param([string]$jdkHome)
+    if (-not (Test-Path "$jdkHome\release")) { return $null }
+    $m = Select-String -Path "$jdkHome\release" -Pattern '^JAVA_VERSION="?(\d+)(\.(\d+))?' | Select-Object -First 1
+    if (-not $m) { return $null }
+    $major = [int]$m.Matches[0].Groups[1].Value
+    if ($major -eq 1) { $major = [int]$m.Matches[0].Groups[3].Value }
+    return $major
+}
+
 # Determines the java executable to use for running the JAR, downloading a JDK if needed.
 # Sets $env:JAVA_HOME to match.
 function Find-JavaExec {
     if ($env:JAVA_HOME) {
         # Determine if a (working) JDK is available in JAVA_HOME
         if (Test-Path "$env:JAVA_HOME\bin\javac.exe") {
-            return "$env:JAVA_HOME\bin\java.exe"
+            # Ignore a JDK that is older than the version JBang would install itself
+            $major = Get-JavaMajorVersion $env:JAVA_HOME
+            if ($major -and $major -lt [int]$javaVersion) {
+                [Console]::Error.WriteLine("JAVA_HOME points to Java $major which is older than Java $javaVersion, ignoring it")
+            } else {
+                return "$env:JAVA_HOME\bin\java.exe"
+            }
+        } else {
+            [Console]::Error.WriteLine("JAVA_HOME is set but does not seem to point to a valid Java JDK")
         }
-        [Console]::Error.WriteLine("JAVA_HOME is set but does not seem to point to a valid Java JDK")
     }
     # Determine if a (working) JDK is available on the PATH
     if (Get-Command "javac" -ErrorAction Ignore) {

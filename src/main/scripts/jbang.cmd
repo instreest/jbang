@@ -73,13 +73,20 @@ exit /b %ERRORLEVEL%
 rem Finds an installed JDK (same order as jbang.ps1) and sets JAVA_EXEC and JAVA_HOME.
 rem Fails when none is found, in which case jbang.ps1 will download one.
 :find_java
-if not "%JAVA_HOME%"=="" (
-  if exist "%JAVA_HOME%\bin\javac.exe" (
-    set "JAVA_EXEC=%JAVA_HOME%\bin\java.exe"
-    exit /b 0
-  )
+if "%JAVA_HOME%"=="" goto :find_java_path
+if not exist "%JAVA_HOME%\bin\javac.exe" (
   echo JAVA_HOME is set but does not seem to point to a valid Java JDK 1>&2
+  goto :find_java_path
 )
+rem Ignore a JDK in JAVA_HOME that is older than the version JBang would install itself
+call :java_major "%JAVA_HOME%"
+if not "%javaMajor%"=="" if %javaMajor% LSS %javaVersion% (
+  echo JAVA_HOME points to Java %javaMajor% which is older than Java %javaVersion%, ignoring it 1>&2
+  goto :find_java_path
+)
+set "JAVA_EXEC=%JAVA_HOME%\bin\java.exe"
+exit /b 0
+:find_java_path
 where javac >nul 2>&1 && (
   set "JAVA_HOME="
   set "JAVA_EXEC=java.exe"
@@ -96,3 +103,15 @@ if exist "%TDIR%\jdks\%javaVersion%\bin\javac.exe" (
   exit /b 0
 )
 exit /b 1
+
+rem Sets javaMajor to the major version of the JDK in %1 as read from its
+rem 'release' file (e.g. 8, 11, 17); leaves it empty when it cannot be determined.
+:java_major
+set "javaMajor="
+if not exist "%~1\release" exit /b 0
+for /f "usebackq tokens=1* delims==" %%A in ("%~1\release") do if "%%A"=="JAVA_VERSION" set "javaMajor=%%~B"
+if "%javaMajor%"=="" exit /b 0
+for /f "tokens=1,2 delims=." %%A in ("%javaMajor%") do (
+  if "%%A"=="1" (set "javaMajor=%%B") else (set "javaMajor=%%A")
+)
+exit /b 0

@@ -96,6 +96,20 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	}
 
 	@Test
+	void cmdIgnoresOldJavaHome() throws Exception {
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
+	}
+
+	@Test
+	void ps1IgnoresOldJavaHome() throws Exception {
+		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
+	}
+
+	@Test
 	void ps1PropagatesExitCodeAndOutput() throws Exception {
 		RunResult result = runLauncher(ps1Launcher(), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
@@ -123,7 +137,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		Map<String, String> env = new HashMap<>(System.getenv());
 		int i = 0;
 		// leading "NAME", "value" pairs are environment variables
-		while (args.length - i > 2 && args[i].startsWith("JBANG_")) {
+		while (args.length - i > 2 && (args[i].startsWith("JBANG_") || args[i].equals("JAVA_HOME"))) {
 			env.put(args[i], args[i + 1]);
 			i += 2;
 		}
@@ -134,6 +148,20 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		env.put("JBANG_NO_VERSION_CHECK", "true");
 		env.put("JBANG_TEST_ENV_FILE", envFile.toString());
 		return runProcess(command, env);
+	}
+
+	/**
+	 * Creates a directory that looks like a JDK of the given version but whose
+	 * java.exe would fail: the launchers must not pick it.
+	 */
+	private String createFakeJdk(String version) throws IOException {
+		Path jdk = Files.createDirectories(tempDir.resolve("oldjdk"));
+		Files.createDirectories(jdk.resolve("bin"));
+		Files.write(jdk.resolve("bin/javac.exe"), new byte[0]);
+		Files.write(jdk.resolve("bin/java.exe"), new byte[0]);
+		Files.write(jdk.resolve("release"), Arrays.asList("JAVA_VERSION=\"" + version + "\"", "OS_NAME=\"Windows\""),
+				StandardCharsets.UTF_8);
+		return jdk.toString();
 	}
 
 	private static void createFakeJar(Path jar) throws IOException {
