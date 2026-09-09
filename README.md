@@ -44,7 +44,7 @@ applied the same way:
 
 | Kept | Removed |
 | --- | --- |
-| `run` (the default), `build`, `info classpath`, `info jar`, `jdk default/install/list`, `version` | `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `info tools/docs` |
+| `run` (the default), `info classpath`, `info jar`, `jdk default/install/list`, `version` | `build`, `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `info tools/docs` |
 | `.java` sources | `.jsh`, `.kt`, `.groovy`, `.md`, jars and GAVs as scripts |
 | local files | remote scripts, gists, catalogs and aliases |
 | plain jars | native images, integrations (Quarkus and friends) |
@@ -59,6 +59,20 @@ The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<
 `~/.jbang/cache/jdks/<version>`, `~/.jbang/currentjdk`), and `run` still prints the
 `java` command line and exits with status 255 so the launcher scripts
 (`jbang`, `jbang.cmd`, `jbang.ps1`) can exec it.
+
+### What the launcher scripts need
+
+The scripts (`jbang`, `jbang.cmd`, `jbang.ps1`) find or install a JDK on their
+own and then run `jbang.jar` with it. The only subcommand they ask the jar for
+is `jdk default <version>`, right after they installed a JDK themselves:
+
+| Script | Call | Purpose |
+| --- | --- | --- |
+| `jbang` (bash) | `jdk default <version>` | register the JDK it just downloaded |
+| `jbang.ps1` | `jdk default <version>` | same |
+| `jbang.cmd` | none | finds a JDK itself, otherwise delegates to `jbang.ps1` |
+
+`jdk install` and `jdk list` are for people, not for the scripts.
 
 ## Staying in sync with JBang
 

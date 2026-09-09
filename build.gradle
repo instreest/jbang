@@ -31,6 +31,9 @@ dependencies {
 	testImplementation "org.junit.jupiter:junit-jupiter"
 	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 	testImplementation "org.hamcrest:hamcrest:3.0"
+	// only for the launcher script tests, never shipped
+	testImplementation "org.wiremock:wiremock:3.13.2"
+	testImplementation "org.apache.commons:commons-compress:1.27.1"
 }
 
 test {

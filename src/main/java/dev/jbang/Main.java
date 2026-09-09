@@ -40,7 +40,7 @@ import dev.jbang.util.Util;
  * launcher scripts (jbang, jbang.cmd, jbang.ps1) turn into an exec.
  */
 public final class Main {
-	private static final List<String> COMMANDS = Arrays.asList("run", "build", "info", "jdk", "version", "help");
+	private static final List<String> COMMANDS = Arrays.asList("run", "info", "jdk", "version", "help");
 
 	/** Always the real stdout, even if something redirected System.out. */
 	private static final PrintStream realOut = new PrintStream(new FileOutputStream(FileDescriptor.out), true);
@@ -98,7 +98,7 @@ public final class Main {
 			default:
 				// not a global option: it belongs to the implicit "run" command
 				args.add(0, opt);
-				return runScript(args, true);
+				return runScript(args);
 			}
 		}
 		Util.verboseMsg("jbang version " + Util.getJBangVersion());
@@ -109,14 +109,12 @@ public final class Main {
 		String cmd = args.get(0);
 		if (!COMMANDS.contains(cmd)) {
 			// implicit run
-			return runScript(args, true);
+			return runScript(args);
 		}
 		args.remove(0);
 		switch (cmd) {
 		case "run":
-			return runScript(args, true);
-		case "build":
-			return runScript(args, false);
+			return runScript(args);
 		case "info":
 			return info(args);
 		case "jdk":
@@ -273,13 +271,10 @@ public final class Main {
 		}
 	}
 
-	private static int runScript(List<String> args, boolean execute) throws IOException {
+	private static int runScript(List<String> args) throws IOException {
 		ScriptOptions opts = ScriptOptions.parse(args);
 		Project prj = opts.project();
 		Path jar = new AppBuilder(prj).build();
-		if (!execute) {
-			return ExitException.EXIT_OK;
-		}
 		String cmdline = new CmdGenerator(prj, jar)
 			.arguments(opts.userArgs)
 			.runtimeOptions(opts.runtimeOptions)
@@ -387,7 +382,6 @@ public final class Main {
 		realOut.println();
 		realOut.println("Usage:");
 		realOut.println("  jbang [<global options>] [run] [<options>] <script.java> [<args>...]");
-		realOut.println("  jbang [<global options>] build [<options>] <script.java>");
 		realOut.println("  jbang [<global options>] info classpath [--deps-only] <script.java>");
 		realOut.println("  jbang [<global options>] info jar <script.java>");
 		realOut.println("  jbang [<global options>] jdk default [<version>]");
