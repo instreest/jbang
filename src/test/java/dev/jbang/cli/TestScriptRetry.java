@@ -63,8 +63,8 @@ class TestScriptRetry extends AbstractScriptTest {
 		env.put("JBANG_DOWNLOAD_RETRY", String.valueOf(retryCount));
 		env.put("JBANG_DOWNLOAD_RETRY_DELAY", "0");
 		// neither JAVA_HOME nor the PATH offers a usable Java, so the launcher
-		// has to download one (a shell profile may set JAVA_HOME, so it is
-		// pointed at a JDK that is too old rather than removed)
+		// has to download one; JAVA_HOME points at a JDK that is too old so the
+		// launcher's rejection of it is exercised as well
 		env.put("JAVA_HOME", tooOldJdk());
 		env.put("PATH", pathWithoutJava());
 		env.put("no_proxy", "localhost,127.0.0.1");
