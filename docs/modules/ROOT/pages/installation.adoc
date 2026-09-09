@@ -437,7 +437,7 @@ This setting works consistently across all platforms:
 
 - **Linux/macOS (bash)**: Applies to both `curl` (`--retry`) and `wget` (`--tries`)
 - **Windows (PowerShell)**: Applies to `Invoke-WebRequest` via a retry loop
-- **Windows (CMD)**: Delegates to PowerShell, so the same retry logic applies
+- **Windows (CMD)**: `jbang.cmd` delegates to `jbang.ps1`, so the same retry logic applies
 
 You can also control the delay between retries with `JBANG_DOWNLOAD_RETRY_DELAY`.
 The default is `0`, which uses progressive backoff — the delay increases between each retry attempt (e.g., 1s, 2s, 4s, 8s, ...).
