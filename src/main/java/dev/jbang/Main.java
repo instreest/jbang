@@ -12,8 +12,6 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import dev.jbang.jdk.Jdk;
-import dev.jbang.jdk.JdkManager;
 import dev.jbang.source.AppBuilder;
 import dev.jbang.source.CmdGenerator;
 import dev.jbang.source.Project;
@@ -25,9 +23,7 @@ import dev.jbang.util.Util;
  *
  * <pre>
  * jbang [global options] [run] [run options] &lt;script.java&gt; [args...]
- * jbang [global options] build [run options] &lt;script.java&gt;
  * jbang [global options] info classpath [--deps-only] &lt;script.java&gt;
- * jbang [global options] jdk default [version]
  * jbang version
  * </pre>
  *
@@ -36,7 +32,7 @@ import dev.jbang.util.Util;
  * launcher scripts (jbang, jbang.cmd, jbang.ps1) turn into an exec.
  */
 public final class Main {
-	private static final List<String> COMMANDS = Arrays.asList("run", "info", "jdk", "version", "help");
+	private static final List<String> COMMANDS = Arrays.asList("run", "info", "version", "help");
 
 	/** Always the real stdout, even if something redirected System.out. */
 	private static final PrintStream realOut = new PrintStream(new FileOutputStream(FileDescriptor.out), true);
@@ -113,8 +109,6 @@ public final class Main {
 			return runScript(args);
 		case "info":
 			return info(args);
-		case "jdk":
-			return jdk(args);
 		case "version":
 			realOut.println(Util.getJBangVersion());
 			return ExitException.EXIT_OK;
@@ -306,28 +300,6 @@ public final class Main {
 		}
 	}
 
-	private static int jdk(List<String> args) {
-		if (args.isEmpty()) {
-			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-					"Missing required subcommand for 'jdk' (default)");
-		}
-		String sub = args.remove(0);
-		JdkManager jdkMan = new JdkManager();
-		switch (sub) {
-		case "default": {
-			if (args.isEmpty()) {
-				Jdk def = jdkMan.getDefaultJdk();
-				realOut.println(def != null ? "Default JDK: " + def : "No default JDK set");
-			} else {
-				jdkMan.setDefaultJdk(jdkMan.getOrInstallJdk(args.get(0)));
-			}
-			return ExitException.EXIT_OK;
-		}
-		default:
-			throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Unknown jdk subcommand: " + sub);
-		}
-	}
-
 	private static void printHelp() {
 		realOut.println("jbang (JBangLite) " + Util.getJBangVersion());
 		realOut.println();
@@ -337,7 +309,6 @@ public final class Main {
 		realOut.println("Usage:");
 		realOut.println("  jbang [<global options>] [run] [<options>] <script.java> [<args>...]");
 		realOut.println("  jbang [<global options>] info classpath [--deps-only] <script.java>");
-		realOut.println("  jbang [<global options>] jdk default [<version>]");
 		realOut.println("  jbang version");
 		realOut.println();
 		realOut.println("Global options:");

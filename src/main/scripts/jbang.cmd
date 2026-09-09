@@ -8,8 +8,9 @@ rem Either way, when JBang asks for a command to be executed (exit code 255)
 rem that command is run in this shell.
 setlocal
 
-rem The Java version to install when it's not installed on the system yet
-if "%JBANG_DEFAULT_JAVA_VERSION%"=="" (set "javaVersion=17") else (set "javaVersion=%JBANG_DEFAULT_JAVA_VERSION%")
+rem The oldest Java that can run jbang.jar; anything newer is fine, and the JDK
+rem a script asks for with //JAVA is chosen by jbang.jar itself
+set "minJavaVersion=11"
 if "%JBANG_DIR%"=="" (set "JBDIR=%userprofile%\.jbang") else (set "JBDIR=%JBANG_DIR%")
 if "%JBANG_CACHE_DIR%"=="" (set "TDIR=%JBDIR%\cache") else (set "TDIR=%JBANG_CACHE_DIR%")
 
@@ -73,22 +74,22 @@ exit /b %ERRORLEVEL%
 rem Finds an installed JDK (same order as jbang.ps1) and sets JAVA_EXEC and JAVA_HOME.
 rem Fails when none is found, in which case jbang.ps1 will download one.
 :find_java
-rem The JDK selected with 'jbang jdk default' takes precedence
-if exist "%JBDIR%\currentjdk\bin\javac.exe" (
+rem The JDK JBang picked as the default
+call :usable_java "%JBDIR%\currentjdk" && (
   set "JAVA_HOME=%JBDIR%\currentjdk"
   set "JAVA_EXEC=%JBDIR%\currentjdk\bin\java.exe"
   exit /b 0
 )
-rem Then the default JDK that JBang downloaded itself
-if exist "%TDIR%\jdks\%javaVersion%\bin\javac.exe" (
-  set "JAVA_HOME=%TDIR%\jdks\%javaVersion%"
-  set "JAVA_EXEC=%TDIR%\jdks\%javaVersion%\bin\java.exe"
+rem Then the JDK jbang.ps1 downloaded on an earlier run
+call :usable_java "%TDIR%\jdks\bootstrap" && (
+  set "JAVA_HOME=%TDIR%\jdks\bootstrap"
+  set "JAVA_EXEC=%TDIR%\jdks\bootstrap\bin\java.exe"
   exit /b 0
 )
-rem Finally JAVA_HOME, but only when it points to a JDK that is recent enough
+rem Finally JAVA_HOME, but only when it points to a Java that is recent enough
 if "%JAVA_HOME%"=="" exit /b 1
-if not exist "%JAVA_HOME%\bin\javac.exe" (
-  echo JAVA_HOME is set but does not seem to point to a valid Java JDK 1>&2
+if not exist "%JAVA_HOME%\bin\java.exe" (
+  echo JAVA_HOME is set but does not seem to point to a Java runtime 1>&2
   exit /b 1
 )
 call :java_major "%JAVA_HOME%"
@@ -96,11 +97,19 @@ if "%javaMajor%"=="" (
   echo JAVA_HOME is set but the Java version could not be determined, ignoring it 1>&2
   exit /b 1
 )
-if %javaMajor% LSS %javaVersion% (
-  echo JAVA_HOME points to Java %javaMajor% which is older than Java %javaVersion%, ignoring it 1>&2
+if %javaMajor% LSS %minJavaVersion% (
+  echo JAVA_HOME points to Java %javaMajor% which is older than Java %minJavaVersion%, ignoring it 1>&2
   exit /b 1
 )
 set "JAVA_EXEC=%JAVA_HOME%\bin\java.exe"
+exit /b 0
+
+rem Succeeds when %1 holds a Java new enough to run jbang.jar
+:usable_java
+if not exist "%~1\bin\java.exe" exit /b 1
+call :java_major "%~1"
+if "%javaMajor%"=="" exit /b 1
+if %javaMajor% LSS %minJavaVersion% exit /b 1
 exit /b 0
 
 rem Sets javaMajor to the major version of the JDK in %1 as read from its

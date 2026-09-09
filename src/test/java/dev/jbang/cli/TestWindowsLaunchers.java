@@ -99,24 +99,24 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	@Test
 	void cmdIgnoresOldJavaHome() throws Exception {
 		stubPs1();
-		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
 		assertEquals(42, result.exitCode, result.stderr);
-		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
+		assertTrue(result.stderr.contains("older than Java 11"), result.stderr);
 		assertTrue(result.stdout.contains("delegated to jbang.ps1"), result.stdout);
 	}
 
 	@Test
-	void cmdPrefersCachedDefaultJdkOverJavaHome() throws Exception {
+	void cmdPrefersBootstrapJdkOverJavaHome() throws Exception {
 		linkCachedJdk();
-		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
 	}
 
 	@Test
-	void ps1PrefersCachedDefaultJdkOverJavaHome() throws Exception {
+	void ps1PrefersBootstrapJdkOverJavaHome() throws Exception {
 		linkCachedJdk();
-		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
 	}
@@ -124,7 +124,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	@Test
 	void cmdPrefersCurrentJdkOverJavaHome() throws Exception {
 		linkCurrentJdk();
-		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
 	}
@@ -132,7 +132,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	@Test
 	void ps1PrefersCurrentJdkOverJavaHome() throws Exception {
 		linkCurrentJdk();
-		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
 	}
@@ -148,13 +148,12 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	@Test
 	void ps1IgnoresOldJavaHome() throws Exception {
 		// With JAVA_HOME rejected and no JDK of its own, jbang.ps1 tries to download
-		// one; an impossible version makes that fail quickly.
+		// one; an unreachable JVM index makes that fail quickly.
 		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"),
-				"JBANG_DEFAULT_JAVA_VERSION", "999", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
+				"JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
 		assertEquals(1, result.exitCode, result.stderr);
-		assertTrue(result.stderr.contains("older than Java 999"), result.stderr);
-		assertTrue(result.stderr.contains("Error downloading JDK") || result.stderr.contains("Error installing JDK"),
-				result.stderr);
+		assertTrue(result.stderr.contains("older than Java 11"), result.stderr);
+		assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
 	}
 
 	@Test
@@ -173,13 +172,13 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	}
 
 	/**
-	 * Makes the running JDK available as JBANG_CACHE_DIR\jdks\17 (as if JBang
-	 * had downloaded it) so the launchers have a JDK to fall back to when
-	 * JAVA_HOME is rejected, without downloading one.
+	 * Makes the running JDK available as JBANG_CACHE_DIR\jdks\bootstrap (as if
+	 * the launcher had downloaded it) so the launchers have a JDK to fall back
+	 * to when JAVA_HOME is rejected, without downloading one.
 	 */
 	private void linkCachedJdk() throws Exception {
 		Path jdks = Files.createDirectories(tempDir.resolve("cache/jdks"));
-		link(jdks.resolve("17"), Paths.get(System.getProperty("java.home")));
+		link(jdks.resolve("bootstrap"), Paths.get(System.getProperty("java.home")));
 	}
 
 	/**

@@ -44,7 +44,7 @@ applied the same way:
 
 | Kept | Removed |
 | --- | --- |
-| `run` (the default), `info classpath`, `jdk default`, `version` | `build`, `info jar`, `jdk install/list`, `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `info tools/docs` |
+| `run` (the default), `info classpath`, `version` | `build`, `info jar`, `jdk default/install/list`, `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `info tools/docs` |
 | `.java` sources | `.jsh`, `.kt`, `.groovy`, `.md`, jars and GAVs as scripts |
 | local files | remote scripts, gists, catalogs and aliases |
 | plain jars | native images, integrations (Quarkus and friends) |
@@ -63,17 +63,27 @@ The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<
 ### What the launcher scripts need
 
 The scripts (`jbang`, `jbang.cmd`, `jbang.ps1`) find or install a JDK on their
-own and then run `jbang.jar` with it. The only subcommand they ask the jar for
-is `jdk default <version>`, right after they installed a JDK themselves:
+own and then run `jbang.jar` with it; they never call a subcommand of the jar.
+Which JVM runs `jbang.jar` hardly matters, so the search is deliberately short:
 
-| Script | Call | Purpose |
-| --- | --- | --- |
-| `jbang` (bash) | `jdk default <version>` | register the JDK it just downloaded |
-| `jbang.ps1` | `jdk default <version>` | same |
-| `jbang.cmd` | none | finds a JDK itself, otherwise delegates to `jbang.ps1` |
+1. `$JBANG_DIR/currentjdk` (the JDK the jar installed for a script)
+2. `$JBANG_CACHE_DIR/jdks/bootstrap`
+3. `JAVA_HOME`
+4. `java` on the `PATH`
 
-`jdk install` and `jdk list` were removed: nothing but people used them, and
-JDKs for scripts are provisioned by the jar itself.
+Anything Java 11 or newer is accepted. If nothing is found, the scripts download
+the newest Temurin 25 into `$JBANG_CACHE_DIR/jdks/bootstrap`, verify its
+published SHA-256 and use that. `jbang.cmd` does not download: it delegates to
+`jbang.ps1` when it finds no usable JDK.
+
+The download uses the very same JVM index the jar uses for `//JAVA`, the
+Coursier index published on Maven Central
+(`io.get-coursier.jvm.indices:index-<platform>`), so no JDK discovery service is
+involved, and `JBANG_JVM_INDEX_BASEURL` points both of them at a corporate mirror.
+
+The JDK a script asks for with `//JAVA` is still provisioned by the jar; the
+bootstrap JDK only exists to get `jbang.jar` started. `jdk default`, `jdk
+install` and `jdk list` were therefore removed.
 
 ## Staying in sync with JBang
 
@@ -147,6 +157,7 @@ like `25` or `25+` accepts any matching patch release.
 | `JBANG_CACHE_DIR` | cache directory (default `$JBANG_DIR/cache`) |
 | `JBANG_REPO` | local Maven repository to use instead of `~/.m2/repository` |
 | `JBANG_DEFAULT_JAVA_VERSION` | JDK version to install when the script does not specify one (default 17) |
+| `JBANG_JVM_INDEX_BASEURL` | Maven repository to read the JVM index from (default `https://repo1.maven.org/maven2`) |
 | `JBANG_JDK_DISTRO` | distributions to install from, most preferred first (default `temurin`) |
 | `JBANG_JDK_INDEX` | path to a JDK index JSON file, or a Maven coordinate, replacing the default index |
 | `JBANG_DOWNLOAD_RETRY` | extra download attempts (default 5, `0` disables retries) |

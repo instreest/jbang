@@ -57,20 +57,16 @@ if ([System.Enum]::GetNames([System.Net.SecurityProtocolType]) -notcontains 'Tls
           "see: https://www.microsoft.com/net/download")
 }
 
-# The Java version to install when it's not installed on the system yet
-$javaVersion = if ($env:JBANG_DEFAULT_JAVA_VERSION) { $env:JBANG_DEFAULT_JAVA_VERSION } else { '17' }
+# JBang itself only needs a JVM to run; which one hardly matters, so when the
+# machine has none we simply fetch the newest Temurin of this feature version.
+$bootstrapJavaVersion = 25
+# The oldest Java that can run jbang.jar
+$minJavaVersion = 11
+# Where the JVM index lives. It is the same index jbang.jar uses to install the
+# JDKs that scripts ask for with //JAVA, published on Maven Central, so no JDK
+# discovery service is involved. Override for a corporate mirror.
+$jvmIndexBaseUrl = if ($env:JBANG_JVM_INDEX_BASEURL) { $env:JBANG_JVM_INDEX_BASEURL } else { 'https://repo1.maven.org/maven2' }
 
-$os='windows'
-$arch='x64'
-$libc_type='c_std_lib'
-
-if ($env:JBANG_JDK_VENDOR) {
-    $distro=$env:JBANG_JDK_VENDOR
-} elseif (($javaVersion -eq 8) -or ($javaVersion -eq 11) -or ($javaVersion -ge 17)) {
-    $distro='temurin'
-} else {
-    $distro='aoj'
-}
 
 $JBDIR = if ($env:JBANG_DIR) { $env:JBANG_DIR } else { "$env:userprofile\.jbang" }
 $TDIR = if ($env:JBANG_CACHE_DIR) { $env:JBANG_CACHE_DIR } else { "$JBDIR\cache" }
@@ -147,24 +143,93 @@ function Install-JBang {
     Copy-Item -Path "$TDIR\urls\jbang\bin\*" -Destination "$JBDIR\bin" -Force >$null 2>&1
 }
 
-# Downloads and installs a JDK into $TDIR\jdks\$javaVersion
-function Install-Jdk {
+# The name of the JVM index for this platform
+function Get-JvmIndexPlatform {
+    $indexArch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { 'arm64' } else { 'amd64' }
+    return "windows-$indexArch"
+}
+
+# Returns @{ Version; Type; Url } of the newest Temurin $bootstrapJavaVersion in
+# the JVM index, the same index jbang.jar uses for the JDKs that //JAVA asks for
+function Get-JvmIndexEntry {
+    param([string]$platform)
+    New-Item -ItemType Directory -Force -Path "$TDIR" >$null 2>&1
+    $base = "$jvmIndexBaseUrl/io/get-coursier/jvm/indices/index-$platform"
+    if (-not (Invoke-Download "$base/maven-metadata.xml" "$TDIR\jvm-index.xml")) {
+        Fail "Could not read the JVM index from $base"
+    }
+    $metaVersion = ([xml](Get-Content -LiteralPath "$TDIR\jvm-index.xml")).metadata.versioning.release
+    if (-not $metaVersion) { Fail "Could not determine the newest JVM index version" }
+    if (-not (Invoke-Download "$base/$metaVersion/index-$platform-$metaVersion.jar" "$TDIR\jvm-index.jar")) {
+        Fail "Could not download the JVM index"
+    }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead("$TDIR\jvm-index.jar")
+    try {
+        $entry = $zip.GetEntry("coursier/jvm/indices/v1/$platform.json")
+        if (-not $entry) { Fail "The JVM index has no data for $platform" }
+        $reader = New-Object System.IO.StreamReader($entry.Open())
+        try { $json = $reader.ReadToEnd() | ConvertFrom-Json } finally { $reader.Dispose() }
+    } finally { $zip.Dispose() }
+
+    $best = $null
+    foreach ($p in $json.temurin.PSObject.Properties) {
+        if ($p.Name -ne "$bootstrapJavaVersion" -and -not $p.Name.StartsWith("$bootstrapJavaVersion.")) { continue }
+        $plus = $p.Value.IndexOf('+')
+        $candidate = @{ Version = $p.Name; Type = $p.Value.Substring(0, $plus); Url = $p.Value.Substring($plus + 1) }
+        if (-not $best -or (Compare-JavaVersion $candidate.Version $best.Version) -gt 0) { $best = $candidate }
+    }
+    return $best
+}
+
+# Compares two dotted versions numerically, returning -1, 0 or 1
+function Compare-JavaVersion {
+    param([string]$a, [string]$b)
+    $x = $a -split '[^0-9]+' | Where-Object { $_ -ne '' }
+    $y = $b -split '[^0-9]+' | Where-Object { $_ -ne '' }
+    for ($i = 0; $i -lt [Math]::Max($x.Count, $y.Count); $i++) {
+        $xi = if ($i -lt $x.Count) { [int]$x[$i] } else { 0 }
+        $yi = if ($i -lt $y.Count) { [int]$y[$i] } else { 0 }
+        if ($xi -ne $yi) { return $(if ($xi -lt $yi) { -1 } else { 1 }) }
+    }
+    return 0
+}
+
+# Downloads the newest Temurin $bootstrapJavaVersion into $TDIR\jdks\bootstrap
+function Install-BootstrapJdk {
     New-Item -ItemType Directory -Force -Path "$TDIR\jdks" >$null 2>&1
-    [Console]::Error.WriteLine("Downloading JDK $javaVersion. Be patient, this can take several minutes...")
-    $jdkurl="https://api.foojay.io/disco/v3.0/directuris?distro=$distro&javafx_bundled=false&libc_type=$libc_type&archive_type=zip&operating_system=$os&package_type=jdk&version=$javaVersion&architecture=$arch&latest=available"
-    if (-not (Invoke-Download "$jdkurl" "$TDIR\bootstrap-jdk.zip")) { Fail "Error downloading JDK" }
-    [Console]::Error.WriteLine("Installing JDK $javaVersion...")
-    $tmpdir="$TDIR\jdks\$javaVersion.tmp"
+    $entry = Get-JvmIndexEntry (Get-JvmIndexPlatform)
+    if (-not $entry) { Fail "No Temurin $bootstrapJavaVersion found in the JVM index" }
+    $archive = "$TDIR\bootstrap-jdk.zip"
+
+    [Console]::Error.WriteLine("No Java found. Downloading Temurin $($entry.Version). Be patient, this can take several minutes...")
+    if (-not (Invoke-Download $entry.Url $archive)) { Fail "Error downloading JDK from $($entry.Url)" }
+
+    if (Invoke-Download "$($entry.Url).sha256.txt" "$TDIR\bootstrap-jdk.sha256") {
+        $expected = (Get-Content -LiteralPath "$TDIR\bootstrap-jdk.sha256" -Raw).Trim().Split()[0]
+        $actual = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLower()
+        if ($expected.ToLower() -ne $actual) {
+            Remove-Item -LiteralPath $archive -Force -ErrorAction Ignore
+            Fail "SHA-256 mismatch for $($entry.Url): expected $expected but got $actual"
+        }
+    } else {
+        [Console]::Error.WriteLine("No published SHA-256 found for $($entry.Url), skipping verification")
+    }
+
+    [Console]::Error.WriteLine("Installing Temurin $($entry.Version)...")
+    $tmpdir = "$TDIR\jdks\bootstrap.tmp"
     Remove-Item -LiteralPath "$tmpdir" -Force -Recurse -ErrorAction Ignore >$null 2>&1
-    try { Expand-Archive -Path "$TDIR\bootstrap-jdk.zip" -DestinationPath "$tmpdir" } catch { Fail "Error installing JDK" }
+    try { Expand-Archive -Path $archive -DestinationPath "$tmpdir" } catch { Fail "Error installing JDK" }
     foreach ($d in Get-ChildItem -Directory -Path "$tmpdir") {
         Move-Item -Path "$($d.FullName)\*" -Destination "$tmpdir" -Force
     }
-    # Check if the JDK was installed properly
-    $ok=$false; try { & "$tmpdir\bin\javac" -version >$null 2>&1; $ok=$true } catch {}
-    if (-not $ok) { Fail "Error installing JDK" }
-    # Activate the downloaded JDK giving it its proper name
-    Rename-Item -Path "$tmpdir" -NewName "$javaVersion" >$null 2>&1
+    if (-not (Test-Path "$tmpdir\bin\java.exe")) {
+        Remove-Item -LiteralPath "$tmpdir" -Force -Recurse -ErrorAction Ignore >$null 2>&1
+        Fail "Error installing JDK"
+    }
+    Remove-Item -LiteralPath "$TDIR\jdks\bootstrap" -Force -Recurse -ErrorAction Ignore >$null 2>&1
+    Rename-Item -Path "$tmpdir" -NewName "bootstrap" >$null 2>&1
+    Remove-Item -LiteralPath $archive -Force -ErrorAction Ignore >$null 2>&1
 }
 
 # Returns the major version (e.g. 8, 11, 17) of the JDK in the given directory as
@@ -179,41 +244,48 @@ function Get-JavaMajorVersion {
     return $major
 }
 
-# Determines the java executable to use for running the JAR, downloading a JDK if needed.
-# Sets $env:JAVA_HOME to match.
+# Determines the java to run the JAR with, fetching one when the machine has
+# none. Any Java $minJavaVersion or newer will do; the JDK a script asks for
+# with //JAVA is chosen by jbang.jar itself.
 function Find-JavaExec {
-    # The JDK selected with 'jbang jdk default' takes precedence
-    if (Test-Path "$JBDIR\currentjdk\bin\javac.exe") {
+    # The JDK JBang picked as the default
+    if (Test-Java "$JBDIR\currentjdk") {
         $env:JAVA_HOME="$JBDIR\currentjdk"
         return "$JBDIR\currentjdk\bin\java.exe"
     }
-    # Then the default JDK that JBang downloaded itself
-    $defaultJdk="$TDIR\jdks\$javaVersion"
-    if (Test-Path "$defaultJdk\bin\javac.exe") {
-        $env:JAVA_HOME=$defaultJdk
-        return "$defaultJdk\bin\java.exe"
+    # The JDK this script downloaded on an earlier run
+    $bootstrap = "$TDIR\jdks\bootstrap"
+    if (Test-Java $bootstrap) {
+        $env:JAVA_HOME=$bootstrap
+        return "$bootstrap\bin\java.exe"
     }
-    # Then JAVA_HOME, but only when it points to a JDK that is recent enough
+    # Then JAVA_HOME, but only when it points to a Java that is recent enough
     if ($env:JAVA_HOME) {
-        if (Test-Path "$env:JAVA_HOME\bin\javac.exe") {
+        if (Test-Path "$env:JAVA_HOME\bin\java.exe") {
             $major = Get-JavaMajorVersion $env:JAVA_HOME
             if (-not $major) {
                 [Console]::Error.WriteLine("JAVA_HOME is set but the Java version could not be determined, ignoring it")
-            } elseif ($major -lt [int]$javaVersion) {
-                [Console]::Error.WriteLine("JAVA_HOME points to Java $major which is older than Java $javaVersion, ignoring it")
+            } elseif ($major -lt $minJavaVersion) {
+                [Console]::Error.WriteLine("JAVA_HOME points to Java $major which is older than Java $minJavaVersion, ignoring it")
             } else {
                 return "$env:JAVA_HOME\bin\java.exe"
             }
         } else {
-            [Console]::Error.WriteLine("JAVA_HOME is set but does not seem to point to a valid Java JDK")
+            [Console]::Error.WriteLine("JAVA_HOME is set but does not seem to point to a Java runtime")
         }
     }
-    # Nothing usable found: download and install the default JDK
-    $env:JAVA_HOME=$defaultJdk
-    Install-Jdk
-    # Set the current JDK
-    & "$defaultJdk\bin\java.exe" -jar "$jarPath" jdk default $javaVersion
-    return "$defaultJdk\bin\java.exe"
+    # Nothing usable found, so fetch a JVM of our own
+    Install-BootstrapJdk
+    $env:JAVA_HOME=$bootstrap
+    return "$bootstrap\bin\java.exe"
+}
+
+# True when $1 holds a Java new enough to run jbang.jar
+function Test-Java {
+    param([string]$jdkHome)
+    if (-not (Test-Path "$jdkHome\bin\java.exe")) { return $false }
+    $major = Get-JavaMajorVersion $jdkHome
+    return ($major -and $major -ge $minJavaVersion)
 }
 
 # detect architecture for platform-specific binary lookup

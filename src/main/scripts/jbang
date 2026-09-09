@@ -6,8 +6,16 @@
 #   curl -Ls https://sh.jbang.dev | bash -s - <args>...
 #
 
-# The Java version to install when it's not installed on the system yet
-javaVersion=${JBANG_DEFAULT_JAVA_VERSION:-17}
+# JBang itself only needs a JVM to run; which one hardly matters, so when the
+# machine has none we simply fetch the newest Temurin of this feature version.
+bootstrapJavaVersion=25
+# The oldest Java that can run jbang.jar
+minJavaVersion=11
+
+# Where the JVM index lives. It is the same index jbang.jar uses to install the
+# JDKs that scripts ask for with //JAVA, published on Maven Central, so no JDK
+# discovery service is involved. Override for a corporate mirror.
+jvmIndexBaseUrl=${JBANG_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
 
 # Base URL for downloading JBang releases.
 # Override for testing or corporate mirrors.
@@ -61,82 +69,196 @@ download() {
   done
 }
 
-unpack() {
-  if [[ "$1" == *.tar.gz ]]; then
+unpack() {   # $1 = archive, $2 = target dir; the archive's single root folder is stripped
+  if [[ "$1" == *.tar.gz || "$1" == *.tgz ]]; then
     gzip -cd "$1" | tar xf - -C "$2"
     retval=$?
-    if [[ $os == mac && $retval -eq 0 ]]; then
-      mv "$TDIR/jdks/$javaVersion.tmp/"*/Contents/Home/* "$TDIR/jdks/$javaVersion.tmp/"
-      retval=$?
-    else
-      mv "$TDIR/jdks/$javaVersion.tmp/"*/* "$TDIR/jdks/$javaVersion.tmp/"
-    fi
   else
     unzip -qq -o "$1" -d "$2"
     retval=$?
-    mv "$TDIR/jdks/$javaVersion.tmp/"*/* "$TDIR/jdks/$javaVersion.tmp/"
+  fi
+  if [ $retval -ne 0 ]; then return; fi
+  local root
+  root=$(find "$2" -mindepth 1 -maxdepth 1 -type d | head -1)
+  if [[ -z "$root" ]]; then retval=1; return; fi
+  if [[ $os == mac && -d "$root/Contents/Home" ]]; then root="$root/Contents/Home"; fi
+  mv "$root"/* "$2"/
+  retval=$?
+}
+
+sha256_of() {
+  if [ -x "$(command -v sha256sum)" ]; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif [ -x "$(command -v shasum)" ]; then
+    shasum -a 256 "$1" | cut -d' ' -f1
   fi
 }
 
-javacInPath() {
-  [[ -x "$(command -v javac)" ]] && ( [[ $os != "mac" ]] || /usr/libexec/java_home &> /dev/null )
+# The major version of the JDK or JRE in $1, read from its 'release' file
+java_major() {
+  local v
+  [ -f "$1/release" ] || return 1
+  v=$(grep -m1 '^JAVA_VERSION=' "$1/release" | cut -d'"' -f2)
+  [ -n "$v" ] || return 1
+  case "$v" in
+    1.*) v=${v#1.} ;;
+  esac
+  echo "${v%%[.+_-]*}"
 }
 
-# Determines the JDK/JAVA_EXEC to use
+# True when $1 holds a Java new enough to run jbang.jar
+usable_java() {
+  local major
+  [ -x "$1/bin/java" ] || return 1
+  major=$(java_major "$1") || return 1
+  [ "$major" -ge "$minJavaVersion" ] 2>/dev/null
+}
+
+# The name of the JVM index for this platform, e.g. linux-amd64
+jvm_index_platform() {
+  local idxOs idxArch
+  case "$os" in
+    linux)   idxOs=linux;;
+    mac)     idxOs=darwin;;
+    windows) idxOs=windows;;
+    alpine-linux)
+      echo "No Java found and the JVM index has no musl builds for Alpine." 1>&2
+      echo "Install a JDK $minJavaVersion or newer, or set JAVA_HOME." 1>&2
+      return 1;;
+    *)
+      echo "No Java found and none can be downloaded for this OS: $(uname -s)" 1>&2
+      return 1;;
+  esac
+  case "$arch" in
+    x64)      idxArch=amd64;;
+    aarch64)  idxArch=arm64;;
+    x32)      idxArch=x86;;
+    "")
+      echo "No Java found and none can be downloaded for this architecture: $(uname -m)" 1>&2
+      return 1;;
+    *)        idxArch=$arch;;
+  esac
+  echo "$idxOs-$idxArch"
+}
+
+# Prints "<version> <archive type> <url>" of the newest Temurin
+# $bootstrapJavaVersion in the JVM index of platform $1
+jvm_index_entry() {
+  local base metaVersion
+  mkdir -p "$TDIR"
+  base="$jvmIndexBaseUrl/io/get-coursier/jvm/indices/index-$1"
+  download "$base/maven-metadata.xml" "$TDIR/jvm-index.xml"
+  if [ $retval -ne 0 ]; then echo "Could not read the JVM index from $base" 1>&2; return 1; fi
+  metaVersion=$(grep -o '<release>[^<]*' "$TDIR/jvm-index.xml" | head -1 | cut -d'>' -f2)
+  if [ -z "$metaVersion" ]; then echo "Could not determine the newest JVM index version" 1>&2; return 1; fi
+  download "$base/$metaVersion/index-$1-$metaVersion.jar" "$TDIR/jvm-index.jar"
+  if [ $retval -ne 0 ]; then echo "Could not download the JVM index" 1>&2; return 1; fi
+  if [ ! -x "$(command -v unzip)" ]; then
+    echo "unzip is needed to read the JVM index; install unzip or a Java $minJavaVersion or newer" 1>&2
+    return 1
+  fi
+  unzip -p "$TDIR/jvm-index.jar" "coursier/jvm/indices/v1/$1.json" > "$TDIR/jvm-index.json" 2>/dev/null
+  # The index lists, per distribution, a version and a "<type>+<url>" value
+  awk -v want="$bootstrapJavaVersion" '
+    /^[[:space:]]*"temurin"[[:space:]]*:[[:space:]]*\{/ { inside = 1; next }
+    inside && /^[[:space:]]*\}/ { exit }
+    inside && match($0, /"[0-9][^"]*"[[:space:]]*:[[:space:]]*"[a-z]+\+[^"]+"/) {
+      split(substr($0, RSTART, RLENGTH), field, "\"")
+      version = field[2]
+      value = field[4]
+      if (version == want || index(version, want ".") == 1) {
+        plus = index(value, "+")
+        print version " " substr(value, 1, plus - 1) " " substr(value, plus + 1)
+      }
+    }
+  ' "$TDIR/jvm-index.json" | sort -V | tail -1
+}
+
+# Downloads the newest Temurin $bootstrapJavaVersion into $TDIR/jdks/bootstrap
+install_bootstrap_jdk() {
+  local plat entry version type url archive expected actual
+  mkdir -p "$TDIR/jdks"
+  plat=$(jvm_index_platform) || exit 1
+  entry=$(jvm_index_entry "$plat")
+  if [ -z "$entry" ]; then
+    echo "No Temurin $bootstrapJavaVersion found in the JVM index for $plat" 1>&2
+    exit 1
+  fi
+  version=$(echo "$entry" | cut -d' ' -f1)
+  type=$(echo "$entry" | cut -d' ' -f2)
+  url=$(echo "$entry" | cut -d' ' -f3)
+  if [ "$type" = "tgz" ]; then type=tar.gz; fi
+  archive="$TDIR/bootstrap-jdk.$type"
+
+  echo "No Java found. Downloading Temurin $version. Be patient, this can take several minutes..." 1>&2
+  download "$url" "$archive"
+  if [ $retval -ne 0 ]; then echo "Error downloading JDK from $url" 1>&2; exit $retval; fi
+
+  download "$url.sha256.txt" "$TDIR/bootstrap-jdk.sha256"
+  if [ $retval -eq 0 ]; then
+    expected=$(cut -d' ' -f1 < "$TDIR/bootstrap-jdk.sha256")
+    actual=$(sha256_of "$archive")
+    if [ -n "$actual" ] && [ "$expected" != "$actual" ]; then
+      rm -f "$archive"
+      echo "SHA-256 mismatch for $url: expected $expected but got $actual" 1>&2
+      exit 1
+    fi
+  else
+    echo "No published SHA-256 found for $url, skipping verification" 1>&2
+  fi
+
+  echo "Installing Temurin $version..." 1>&2
+  rm -rf "$TDIR/jdks/bootstrap.tmp"
+  mkdir -p "$TDIR/jdks/bootstrap.tmp"
+  unpack "$archive" "$TDIR/jdks/bootstrap.tmp"
+  if [ $retval -ne 0 ] || [ ! -x "$TDIR/jdks/bootstrap.tmp/bin/java" ]; then
+    rm -rf "$TDIR/jdks/bootstrap.tmp"
+    echo "Error installing JDK" 1>&2
+    exit 1
+  fi
+  rm -rf "$TDIR/jdks/bootstrap"
+  mv "$TDIR/jdks/bootstrap.tmp" "$TDIR/jdks/bootstrap"
+  rm -f "$archive" "$TDIR/bootstrap-jdk.sha256"
+}
+
+# Determines the java to run jbang.jar with. Any Java $minJavaVersion or newer
+# will do; the JDK a script asks for with //JAVA is chosen by jbang.jar itself.
 setup_java_exec() {
   unset JAVA_EXEC
-  if [[ -n "$JAVA_HOME" ]]; then
-    # Determine if a (working) JDK is available in JAVA_HOME
-    if [ -x "$(command -v "$JAVA_HOME"/bin/javac)" ]; then
-      JAVA_EXEC="$JAVA_HOME/bin/java"
-    else
-      echo "JAVA_HOME is set but does not seem to point to a valid Java JDK" 1>&2
-    fi
+  # The JDK JBang picked as the default
+  if usable_java "$JBDIR/currentjdk"; then
+    export JAVA_HOME="$JBDIR/currentjdk"
+    JAVA_EXEC="$JAVA_HOME/bin/java"
+    return
   fi
-  if [[ -z "$JAVA_EXEC" ]]; then
-    # Determine if a (working) JDK is available on the PATH
-    if javacInPath; then
+  # The JDK this script downloaded on an earlier run
+  if usable_java "$TDIR/jdks/bootstrap"; then
+    export JAVA_HOME="$TDIR/jdks/bootstrap"
+    JAVA_EXEC="$JAVA_HOME/bin/java"
+    return
+  fi
+  if [[ -n "$JAVA_HOME" ]]; then
+    if usable_java "$JAVA_HOME"; then
+      JAVA_EXEC="$JAVA_HOME/bin/java"
+      return
+    fi
+    echo "JAVA_HOME is set but does not point to a Java $minJavaVersion or newer runtime, ignoring it" 1>&2
+  fi
+  # java on the PATH
+  local pathJava pathHome
+  pathJava=$(command -v java 2>/dev/null)
+  if [[ -n "$pathJava" ]]; then
+    pathHome=$(cd "$(dirname "$(readlink -f "$pathJava" 2>/dev/null || echo "$pathJava")")/.." && pwd)
+    if usable_java "$pathHome"; then
       unset JAVA_HOME
       JAVA_EXEC="java"
-    elif [ -x "$JBDIR/currentjdk/bin/javac" ]; then
-      export JAVA_HOME="$JBDIR/currentjdk"
-      JAVA_EXEC="$JBDIR/currentjdk/bin/java"
-    else
-      export JAVA_HOME="$TDIR/jdks/$javaVersion"
-      JAVA_EXEC="$JAVA_HOME/bin/java"
-      # Check if we installed a JDK before
-      if [ ! -d "$TDIR/jdks/$javaVersion" ]; then
-        # If not, download and install it
-        if [[ $os == "" ]]; then
-          echo "Unable to download JDK, unsupported Operating System: $(uname -s)" 1>&2
-          exit 1
-        fi
-        if [[ $arch == "" ]]; then
-          echo "Unable to download JDK, unsupported Architecture: $(uname -m)" 1>&2
-          exit 1
-        fi
-        mkdir -p "$TDIR/jdks"
-        echo "Downloading JDK $javaVersion. Be patient, this can take several minutes..." 1>&2
-        jdkurl="https://api.foojay.io/disco/v3.0/directuris?distro=$distro&javafx_bundled=false&libc_type=$libc_type&archive_type=$file_type&operating_system=$os&package_type=jdk&version=$javaVersion&architecture=$arch&latest=available"
-        download "$jdkurl" "$TDIR/bootstrap-jdk.$file_type"
-        if [ $retval -ne 0 ]; then echo "Error downloading JDK" 1>&2; exit $retval; fi
-        echo "Installing JDK $javaVersion..." 1>&2
-        rm -rf "$TDIR/jdks/$javaVersion.tmp/"
-        mkdir -p "$TDIR/jdks/$javaVersion.tmp"
-        unpack "$TDIR/bootstrap-jdk.$file_type" "$TDIR/jdks/$javaVersion.tmp"
-        if [ $retval -ne 0 ]; then
-          # Check if the JDK was installed properly
-          javac -version > /dev/null 2>&1
-          retval=$?
-        fi
-        if [ $retval -ne 0 ]; then echo "Error installing JDK" 1>&2; exit $retval; fi
-        # Activate the downloaded JDK giving it its proper name
-        mv "$TDIR/jdks/$javaVersion.tmp" "$TDIR/jdks/$javaVersion"
-        # Set the current JDK
-        "${JAVA_EXEC}" -jar "${jarPath}" jdk default "$javaVersion"
-      fi
+      return
     fi
   fi
+  # Nothing usable found, so fetch a JVM of our own
+  install_bootstrap_jdk
+  export JAVA_HOME="$TDIR/jdks/bootstrap"
+  JAVA_EXEC="$JAVA_HOME/bin/java"
 }
 
 # Executes jbang (either native binary or JAR) and handles the output
@@ -173,29 +295,18 @@ execute_jbang() {
 abs_jbang_dir=$(script_dir)
 
 # todo might vary by os so can be overwritten below
-libc_type=glibc
-file_type=tar.gz
 
 case "$(uname -s)" in
   Linux*)
     os=linux
     if [ -f /etc/alpine-release ]; then
-      os=alpine-linux 
-      libc_type=musl
-      # alpine linux does not work below java 16 (or not available at time of writing)
-      # Thus we set javaVersion to 17 if it's unset or less than 16
-      if [[ -z "${javaVersion}" || "${javaVersion}" -lt 16 ]]; then
-        javaVersion=17
-      fi
+      os=alpine-linux
     fi
     ;;
   Darwin*)
-    os=mac
-    libc_type=libc;;
+    os=mac;;
   CYGWIN*|MINGW*|MSYS*)
-    os=windows
-    libc_type=c_std_lib
-    file_type=zip;;
+    os=windows;;
   AIX)
     os=aix;;
   *)
@@ -234,14 +345,6 @@ if [[ $os == windows && -f "$abs_jbang_dir/jbang.cmd" && "$(uname -s)" == CYGWIN
   exit $?
 fi
 
-if [[ -z "$JBANG_JDK_VENDOR" ]]; then
-  if [[ "$javaVersion" -eq 8 || "$javaVersion" -eq 11 || "$javaVersion" -ge 17 ]]; then
-    distro="temurin";
-  else
-    distro="aoj"; fi
-else
-  distro=$JBANG_JDK_VENDOR
-fi
 
 if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
 if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
