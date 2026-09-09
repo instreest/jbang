@@ -13,6 +13,34 @@ installer machinery. It was reduced for use by
 //SOURCES jche/**/*.java
 ```
 
+## Installing into a project
+
+JBangLite is not released as a package: a project installs the wrapper into its
+own repository and commits it, so anyone who checks the project out can run its
+scripts without installing JBangLite — or a JDK — first.
+
+```bash
+curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/src/main/wrapper/install.sh | bash
+git add jbangw && git commit -m "Add the JBangLite wrapper"
+jbangw/jbang src/Hello.java
+```
+
+`install.cmd` does the same on Windows. The installer writes the launchers,
+itself, `LICENSE`, a `.gitignore` and `jbanglite.properties` — the repository,
+revision and jar checksum the launchers use — into `jbangw/`. On the first run
+the launcher downloads `dist/jbang.jar` from that revision, checks it against
+the recorded SHA-256 and caches it in `jbangw/.jbang/`, which the `.gitignore`
+keeps out of the project.
+
+Re-running the installer updates an installation in place: it refreshes the
+launchers, itself and the pinned revision, and drops the cached jar so the next
+run fetches the matching one. `JBANGLITE_REF=<tag|commit>` pins another
+revision, `JBANGLITE_REPO` another fork.
+
+The jar the wrapper downloads is committed at [`dist/jbang.jar`](dist); run
+`misc/update-dist.sh` to rebuild it and commit the result whenever a change
+should reach the projects that installed the wrapper.
+
 ## Directives
 
 All directives JBang understands are parsed by the mirrored parser and are
@@ -174,7 +202,10 @@ and `jbang.zip` (root folder `jbang/` with `bin/jbang*`, as expected by the laun
 scripts) plus versioned `jbang-<version>.tar/.zip`. Pass `-PjbangVersion=x.y.z`
 to set the version.
 
-There is no test suite, release pipeline, or CI configuration in this fork.
+`./gradlew test` runs the test suite: the mirrored `TestDirectives` from JBang
+and functional tests for the launcher scripts and the wrapper installer. There
+is no release pipeline or CI configuration in this fork; `misc/update-dist.sh`
+takes the place of a release.
 
 ## License
 

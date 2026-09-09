@@ -22,6 +22,12 @@ jvmIndexBaseUrl=${JBANG_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
 # Example: JBANG_DOWNLOAD_BASEURL=http://localhost:18080
 jbangDownloadBaseUrl=${JBANG_DOWNLOAD_BASEURL:-https://github.com/instreest/jbang/releases}
 
+# Base URL the wrapper (jbangw) downloads jbang.jar from. The wrapper is
+# installed into a project with install.sh/install.cmd, which records the
+# repository and revision to take the jar from in jbanglite.properties next to
+# this script. Override for testing or a corporate mirror.
+jbangRawBaseUrl=${JBANGLITE_RAW_BASEURL:-https://raw.githubusercontent.com}
+
 # Number of retry attempts for downloads (curl/wget)
 downloadRetry=${JBANG_DOWNLOAD_RETRY:-5}
 downloadRetryDelay=${JBANG_DOWNLOAD_RETRY_DELAY:-0}
@@ -382,6 +388,45 @@ if [[ -z "$binaryPath" ]]; then
     jarPath=$abs_jbang_dir/.jbang/jbang.jar
   fi
 fi
+# Downloads jbang.jar into <wrapper dir>/.jbang as told by jbanglite.properties
+install_wrapper_jar() {
+  local props repo ref sha url target actual
+  props="$abs_jbang_dir/jbanglite.properties"
+  repo=$(sed -n 's/^repo=//p' "$props" | head -1)
+  ref=$(sed -n 's/^ref=//p' "$props" | head -1)
+  sha=$(sed -n 's/^jarSha256=//p' "$props" | head -1)
+  if [ -z "$repo" ] || [ -z "$ref" ]; then
+    echo "$props does not name a repo and a ref to get jbang.jar from" 1>&2
+    exit 1
+  fi
+  url="$jbangRawBaseUrl/$repo/$ref/dist/jbang.jar"
+  target="$abs_jbang_dir/.jbang/jbang.jar"
+  mkdir -p "$abs_jbang_dir/.jbang"
+  echo "Downloading JBangLite from $url..." 1>&2
+  download "$url" "$target.tmp"
+  if [ $retval -ne 0 ]; then
+    rm -f "$target.tmp"
+    echo "Error downloading JBangLite from $url" 1>&2
+    exit $retval
+  fi
+  if [ -n "$sha" ]; then
+    actual=$(sha256_of "$target.tmp")
+    if [ -n "$actual" ] && [ "$sha" != "$actual" ]; then
+      rm -f "$target.tmp"
+      echo "SHA-256 mismatch for $url: expected $sha but got $actual" 1>&2
+      exit 1
+    fi
+  fi
+  mv "$target.tmp" "$target"
+}
+
+# A wrapper installed in a project takes its jar from the repository it was
+# installed from, so there are no releases to look for
+if [[ -z "$binaryPath" && -z "$jarPath" && -f "$abs_jbang_dir/jbanglite.properties" ]]; then
+  install_wrapper_jar
+  jarPath="$abs_jbang_dir/.jbang/jbang.jar"
+fi
+
 if [[ -z "$binaryPath" && -z "$jarPath" ]]; then
   if [[ ! -f "$JBDIR/bin/jbang.jar" || ! -f "$JBDIR/bin/jbang" ]]; then
     if [[ "$JBANG_USE_NATIVE" == "true" ]]; then

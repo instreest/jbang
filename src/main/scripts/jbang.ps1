@@ -77,6 +77,12 @@ $useNative = ($env:JBANG_USE_NATIVE -eq 'true')
 # Example: $env:JBANG_DOWNLOAD_BASEURL='http://localhost:18080'
 $jbangDownloadBaseUrl = if ($env:JBANG_DOWNLOAD_BASEURL) { $env:JBANG_DOWNLOAD_BASEURL } else { 'https://github.com/instreest/jbang/releases' }
 
+# Base URL the wrapper (jbangw) downloads jbang.jar from. The wrapper is
+# installed into a project with install.sh/install.cmd, which records the
+# repository and revision to take the jar from in jbanglite.properties next to
+# this script. Override for testing or a corporate mirror.
+$jbangRawBaseUrl = if ($env:JBANGLITE_RAW_BASEURL) { $env:JBANGLITE_RAW_BASEURL } else { 'https://raw.githubusercontent.com' }
+
 # Number of retry attempts for downloads
 $downloadRetry = if ($env:JBANG_DOWNLOAD_RETRY) { [int]$env:JBANG_DOWNLOAD_RETRY } else { 5 }
 $downloadRetryDelay = if ($env:JBANG_DOWNLOAD_RETRY_DELAY) { [int]$env:JBANG_DOWNLOAD_RETRY_DELAY } else { 0 }
@@ -300,6 +306,33 @@ function Test-Java {
     return ($major -and $major -ge $minJavaVersion)
 }
 
+# Downloads jbang.jar into <wrapper dir>\.jbang as told by jbanglite.properties
+function Install-WrapperJar {
+    $props = @{}
+    foreach ($line in Get-Content -LiteralPath "$PSScriptRoot\jbanglite.properties") {
+        if ($line -match '^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$') { $props[$Matches[1]] = $Matches[2] }
+    }
+    if (-not $props['repo'] -or -not $props['ref']) {
+        Fail "$PSScriptRoot\jbanglite.properties does not name a repo and a ref to get jbang.jar from"
+    }
+    $url = "$jbangRawBaseUrl/$($props['repo'])/$($props['ref'])/dist/jbang.jar"
+    $target = "$PSScriptRoot\.jbang\jbang.jar"
+    New-Item -ItemType Directory -Force -Path "$PSScriptRoot\.jbang" >$null 2>&1
+    [Console]::Error.WriteLine("Downloading JBangLite from $url...")
+    if (-not (Invoke-Download $url "$target.tmp")) {
+        Remove-Item -LiteralPath "$target.tmp" -Force -ErrorAction Ignore
+        Fail "Error downloading JBangLite from $url"
+    }
+    if ($props['jarSha256']) {
+        $actual = (Get-FileHash -LiteralPath "$target.tmp" -Algorithm SHA256).Hash.ToLower()
+        if ($props['jarSha256'].ToLower() -ne $actual) {
+            Remove-Item -LiteralPath "$target.tmp" -Force -ErrorAction Ignore
+            Fail "SHA-256 mismatch for ${url}: expected $($props['jarSha256']) but got $actual"
+        }
+    }
+    Move-Item -Path "$target.tmp" -Destination "$target" -Force
+}
+
 # detect architecture for platform-specific binary lookup
 $jbang_arch = if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [System.Runtime.InteropServices.Architecture]::Arm64) { "aarch64" } else { "x64" }
 
@@ -324,6 +357,13 @@ if (-not $binaryPath) {
         $jarPath="$PSScriptRoot\.jbang\jbang.jar"
     }
 }
+# A wrapper installed in a project takes its jar from the repository it was
+# installed from, so there are no releases to look for
+if (-not $binaryPath -and -not $jarPath -and (Test-Path "$PSScriptRoot\jbanglite.properties")) {
+    Install-WrapperJar
+    $jarPath="$PSScriptRoot\.jbang\jbang.jar"
+}
+
 if (-not $binaryPath -and -not $jarPath) {
     # Nothing to run next to this script: use (and if needed install) the JBang in $JBDIR\bin
     if (-not (Test-Path "$JBDIR\bin\jbang.jar") -or -not (Test-Path "$JBDIR\bin\jbang.ps1")) {
