@@ -1,0 +1,476 @@
+#!/usr/bin/env bash
+
+#
+# To run this script remotely type this in your shell
+# (where <args>... are the arguments you want to pass to JBang):
+#   curl -Ls https://sh.jbang.dev | bash -s - <args>...
+#
+
+# JBang itself only needs a JVM to run; which one hardly matters, so when the
+# machine has none we simply fetch the newest Temurin of this feature version.
+bootstrapJavaVersion=25
+# The oldest Java that can run jbang.jar
+minJavaVersion=11
+
+# Where the JVM index lives. It is the same index jbang.jar uses to install the
+# JDKs that scripts ask for with //JAVA, published on Maven Central, so no JDK
+# discovery service is involved. Override for a corporate mirror.
+jvmIndexBaseUrl=${JBANG_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
+
+# Base URL for downloading JBang releases.
+# Override for testing or corporate mirrors.
+# Example: JBANG_DOWNLOAD_BASEURL=http://localhost:18080
+jbangDownloadBaseUrl=${JBANG_DOWNLOAD_BASEURL:-https://github.com/instreest/jbang/releases}
+
+# Base URL the wrapper (jbangw) downloads jbang.jar from. The wrapper is
+# installed into a project with install.sh/install.cmd, which records the
+# repository and revision to take the jar from in jbanglite.properties next to
+# this script. Override for testing or a corporate mirror.
+jbangRawBaseUrl=${JBANGLITE_RAW_BASEURL:-https://raw.githubusercontent.com}
+
+# Number of retry attempts for downloads (curl/wget)
+downloadRetry=${JBANG_DOWNLOAD_RETRY:-5}
+downloadRetryDelay=${JBANG_DOWNLOAD_RETRY_DELAY:-0}
+
+script_dir() {
+  script=${BASH_SOURCE[0]}
+  while [ -L "$script" ]; do
+    dir=$( cd -P "$( dirname "$script" )" >/dev/null 2>&1 && pwd )
+    script=$(readlink "$script")
+    [[ $script != /* ]] && script=$dir/$script
+  done
+  dir=$( cd -P "$( dirname "$script" )" >/dev/null 2>&1 && pwd )
+  echo "$dir"
+}
+
+download() {
+  local attempt=0
+  local maxAttempts=$((downloadRetry + 1))
+  while true; do
+    attempt=$((attempt + 1))
+    if [ -x "$(command -v curl)" ]; then
+      curl -sLf -o "$2" "$1"
+      retval=$?
+    elif [ -x "$(command -v wget)" ]; then
+      wget -q -O "$2" "$1"
+      retval=$?
+    else
+      echo "Error: curl or wget not found, please make sure one of them is installed" 1>&2
+      exit 1
+    fi
+    if [ $retval -eq 0 ] || [ $attempt -ge $maxAttempts ]; then
+      break
+    fi
+    if [ "$downloadRetryDelay" -gt 0 ] 2>/dev/null; then
+      sleepSeconds=$downloadRetryDelay
+    else
+      # Exponential backoff: 1, 2, 4, 8, ...
+      sleepSeconds=$((1 << (attempt - 1)))
+    fi
+    echo "Download $attempt/$maxAttempts failed. Retry in $sleepSeconds second(s)..." 1>&2
+    if [ $attempt -eq 1 ]; then
+      echo "(Set JBANG_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
+    fi
+    sleep $sleepSeconds
+  done
+}
+
+unpack() {   # $1 = archive, $2 = target dir; the archive's single root folder is stripped
+  if [[ "$1" == *.tar.gz || "$1" == *.tgz ]]; then
+    gzip -cd "$1" | tar xf - -C "$2"
+    retval=$?
+  else
+    unzip -qq -o "$1" -d "$2"
+    retval=$?
+  fi
+  if [ $retval -ne 0 ]; then return; fi
+  local root
+  root=$(find "$2" -mindepth 1 -maxdepth 1 -type d | head -1)
+  if [[ -z "$root" ]]; then retval=1; return; fi
+  if [[ $os == mac && -d "$root/Contents/Home" ]]; then root="$root/Contents/Home"; fi
+  mv "$root"/* "$2"/
+  retval=$?
+}
+
+sha256_of() {
+  if [ -x "$(command -v sha256sum)" ]; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif [ -x "$(command -v shasum)" ]; then
+    shasum -a 256 "$1" | cut -d' ' -f1
+  fi
+}
+
+# The major version of the JDK or JRE in $1, read from its 'release' file
+java_major() {
+  local v
+  [ -f "$1/release" ] || return 1
+  v=$(grep -m1 '^JAVA_VERSION=' "$1/release" | cut -d'"' -f2)
+  [ -n "$v" ] || return 1
+  case "$v" in
+    1.*) v=${v#1.} ;;
+  esac
+  echo "${v%%[.+_-]*}"
+}
+
+# True when $1 holds a Java new enough to run jbang.jar
+usable_java() {
+  local major
+  [ -x "$1/bin/java" ] || return 1
+  major=$(java_major "$1") || return 1
+  [ "$major" -ge "$minJavaVersion" ] 2>/dev/null
+}
+
+# The name of the JVM index for this platform, e.g. linux-amd64
+jvm_index_platform() {
+  local idxOs idxArch
+  case "$os" in
+    linux)   idxOs=linux;;
+    mac)     idxOs=darwin;;
+    windows) idxOs=windows;;
+    alpine-linux)
+      echo "No Java found and the JVM index has no musl builds for Alpine." 1>&2
+      echo "Install a JDK $minJavaVersion or newer, or set JAVA_HOME." 1>&2
+      return 1;;
+    *)
+      echo "No Java found and none can be downloaded for this OS: $(uname -s)" 1>&2
+      return 1;;
+  esac
+  case "$arch" in
+    x64)      idxArch=amd64;;
+    aarch64)  idxArch=arm64;;
+    x32)      idxArch=x86;;
+    "")
+      echo "No Java found and none can be downloaded for this architecture: $(uname -m)" 1>&2
+      return 1;;
+    *)        idxArch=$arch;;
+  esac
+  echo "$idxOs-$idxArch"
+}
+
+# Prints "<version> <archive type> <url>" of the newest Temurin
+# $bootstrapJavaVersion in the JVM index of platform $1
+jvm_index_entry() {
+  local base metaVersion
+  mkdir -p "$TDIR"
+  base="$jvmIndexBaseUrl/io/get-coursier/jvm/indices/index-$1"
+  download "$base/maven-metadata.xml" "$TDIR/jvm-index.xml"
+  if [ $retval -ne 0 ]; then echo "Could not read the JVM index from $base" 1>&2; return 1; fi
+  metaVersion=$(grep -o '<release>[^<]*' "$TDIR/jvm-index.xml" | head -1 | cut -d'>' -f2)
+  if [ -z "$metaVersion" ]; then echo "Could not determine the newest JVM index version" 1>&2; return 1; fi
+  download "$base/$metaVersion/index-$1-$metaVersion.jar" "$TDIR/jvm-index.jar"
+  if [ $retval -ne 0 ]; then echo "Could not download the JVM index" 1>&2; return 1; fi
+  if [ ! -x "$(command -v unzip)" ]; then
+    echo "unzip is needed to read the JVM index; install unzip or a Java $minJavaVersion or newer" 1>&2
+    return 1
+  fi
+  unzip -p "$TDIR/jvm-index.jar" "coursier/jvm/indices/v1/$1.json" > "$TDIR/jvm-index.json" 2>/dev/null
+  # The index lists, per distribution, a version and a "<type>+<url>" value
+  awk -v want="$bootstrapJavaVersion" '
+    /^[[:space:]]*"temurin"[[:space:]]*:[[:space:]]*\{/ { inside = 1; next }
+    inside && /^[[:space:]]*\}/ { exit }
+    inside && match($0, /"[0-9][^"]*"[[:space:]]*:[[:space:]]*"[a-z]+\+[^"]+"/) {
+      split(substr($0, RSTART, RLENGTH), field, "\"")
+      version = field[2]
+      value = field[4]
+      if (version == want || index(version, want ".") == 1) {
+        plus = index(value, "+")
+        print version " " substr(value, 1, plus - 1) " " substr(value, plus + 1)
+      }
+    }
+  ' "$TDIR/jvm-index.json" | sort -V | tail -1
+}
+
+# Downloads the newest Temurin $bootstrapJavaVersion into $TDIR/jdks/bootstrap
+install_bootstrap_jdk() {
+  local plat entry version type url archive expected actual
+  mkdir -p "$TDIR/jdks"
+  plat=$(jvm_index_platform) || exit 1
+  entry=$(jvm_index_entry "$plat")
+  if [ -z "$entry" ]; then
+    echo "No Temurin $bootstrapJavaVersion found in the JVM index for $plat" 1>&2
+    exit 1
+  fi
+  version=$(echo "$entry" | cut -d' ' -f1)
+  type=$(echo "$entry" | cut -d' ' -f2)
+  url=$(echo "$entry" | cut -d' ' -f3)
+  if [ "$type" = "tgz" ]; then type=tar.gz; fi
+  archive="$TDIR/bootstrap-jdk.$type"
+
+  echo "No Java found. Downloading Temurin $version. Be patient, this can take several minutes..." 1>&2
+  download "$url" "$archive"
+  if [ $retval -ne 0 ]; then echo "Error downloading JDK from $url" 1>&2; exit $retval; fi
+
+  download "$url.sha256.txt" "$TDIR/bootstrap-jdk.sha256"
+  if [ $retval -eq 0 ]; then
+    expected=$(cut -d' ' -f1 < "$TDIR/bootstrap-jdk.sha256")
+    actual=$(sha256_of "$archive")
+    if [ -n "$actual" ] && [ "$expected" != "$actual" ]; then
+      rm -f "$archive"
+      echo "SHA-256 mismatch for $url: expected $expected but got $actual" 1>&2
+      exit 1
+    fi
+  else
+    echo "No published SHA-256 found for $url, skipping verification" 1>&2
+  fi
+
+  echo "Installing Temurin $version..." 1>&2
+  rm -rf "$TDIR/jdks/bootstrap.tmp"
+  mkdir -p "$TDIR/jdks/bootstrap.tmp"
+  unpack "$archive" "$TDIR/jdks/bootstrap.tmp"
+  if [ $retval -ne 0 ] || [ ! -x "$TDIR/jdks/bootstrap.tmp/bin/java" ]; then
+    rm -rf "$TDIR/jdks/bootstrap.tmp"
+    echo "Error installing JDK" 1>&2
+    exit 1
+  fi
+  rm -rf "$TDIR/jdks/bootstrap"
+  mv "$TDIR/jdks/bootstrap.tmp" "$TDIR/jdks/bootstrap"
+  rm -f "$archive" "$TDIR/bootstrap-jdk.sha256"
+}
+
+# Determines the java to run jbang.jar with. Any Java $minJavaVersion or newer
+# will do; the JDK a script asks for with //JAVA is chosen by jbang.jar itself.
+setup_java_exec() {
+  unset JAVA_EXEC
+  # The JDK JBang picked as the default
+  if usable_java "$JBDIR/currentjdk"; then
+    export JAVA_HOME="$JBDIR/currentjdk"
+    JAVA_EXEC="$JAVA_HOME/bin/java"
+    return
+  fi
+  # The JDK this script downloaded on an earlier run
+  if usable_java "$TDIR/jdks/bootstrap"; then
+    export JAVA_HOME="$TDIR/jdks/bootstrap"
+    JAVA_EXEC="$JAVA_HOME/bin/java"
+    return
+  fi
+  if [[ -n "$JAVA_HOME" ]]; then
+    if usable_java "$JAVA_HOME"; then
+      JAVA_EXEC="$JAVA_HOME/bin/java"
+      return
+    fi
+    echo "JAVA_HOME is set but does not point to a Java $minJavaVersion or newer runtime, ignoring it" 1>&2
+  fi
+  # java on the PATH
+  local pathJava pathHome
+  pathJava=$(command -v java 2>/dev/null)
+  if [[ -n "$pathJava" ]]; then
+    pathHome=$(cd "$(dirname "$(readlink -f "$pathJava" 2>/dev/null || echo "$pathJava")")/.." && pwd)
+    if usable_java "$pathHome"; then
+      unset JAVA_HOME
+      JAVA_EXEC="java"
+      return
+    fi
+  fi
+  # Nothing usable found, so fetch a JVM of our own
+  install_bootstrap_jdk
+  export JAVA_HOME="$TDIR/jdks/bootstrap"
+  JAVA_EXEC="$JAVA_HOME/bin/java"
+}
+
+# Executes jbang (either native binary or JAR) and handles the output
+execute_jbang() {
+## https://stackoverflow.com/questions/1668649/how-to-keep-quotes-in-bash-arguments
+## attempt to ensure each argument keeps its original quoting
+
+  export JBANG_RUNTIME_SHELL=bash
+  JBANG_STDIN_NOTTY=$([ -t 0 ] && echo "false" || echo "true")
+  export JBANG_STDIN_NOTTY
+  export JBANG_LAUNCH_CMD=$0
+  
+  ## run it using command substitution to have just the user process once jbang is done
+  if [[ -n "$binaryPath" ]]; then
+    # Run native binary
+    output=$(CLICOLOR_FORCE=1 "$binaryPath" "$@")
+    err=$?
+  else
+    # Run JAR
+    output=$(CLICOLOR_FORCE=1 "${JAVA_EXEC}" ${JBANG_JAVA_OPTIONS} -jar "${jarPath}" "$@")
+    err=$?
+  fi
+  
+  if [ $err -eq 255 ]; then
+    eval "exec $output"
+  elif [ -n "$output" ]; then
+    echo "$output"
+    exit $err
+  else
+    exit $err
+  fi
+}
+
+abs_jbang_dir=$(script_dir)
+
+# todo might vary by os so can be overwritten below
+
+case "$(uname -s)" in
+  Linux*)
+    os=linux
+    if [ -f /etc/alpine-release ]; then
+      os=alpine-linux
+    fi
+    ;;
+  Darwin*)
+    os=mac;;
+  CYGWIN*|MINGW*|MSYS*)
+    os=windows;;
+  AIX)
+    os=aix;;
+  *)
+    os=
+esac
+
+case "$(uname -m)" in
+  i?86)
+    arch=x32;;
+  x86_64|amd64)
+    arch=x64;;
+  aarch64|arm64)
+    arch=aarch64;;
+  armv7l)
+    arch=arm;;
+  ppc64le)
+    arch=ppc64le;;
+  s390x)
+    arch=s390x;;
+  riscv64)
+    arch=riscv64
+    ;;
+  *)
+    ## AIX gives a machine ID for `uname -m` but it only supports ppc64
+    if [ "$os" = "aix" ]; then
+      arch=ppc64
+    else
+      arch=
+    fi
+    ;;
+esac
+
+## when using cygwin fall out to just running the bat file.
+if [[ $os == windows && -f "$abs_jbang_dir/jbang.cmd" && "$(uname -s)" == CYGWIN* ]]; then
+  cmd /c "$(cygpath -m "$abs_jbang_dir"/jbang.cmd)" "$@"
+  exit $?
+fi
+
+
+if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
+if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
+if [[ -z "$JBANG_USE_NATIVE" ]]; then JBANG_USE_NATIVE="false"; fi
+
+## resolve native binary or jar path from script location
+binaryPath=""
+jarPath=""
+if [[ "$JBANG_USE_NATIVE" == "true" ]]; then
+  # Look for platform-specific native binary first (e.g. jbang.bin-linux-x64),
+  # then fall back to generic jbang.bin for manually placed binaries
+  if [[ "$os" == "windows" ]]; then
+    if [ -f "$abs_jbang_dir/jbang.bin-${os}-${arch}.exe" ] && [ -x "$abs_jbang_dir/jbang.bin-${os}-${arch}.exe" ]; then
+      binaryPath="$abs_jbang_dir/jbang.bin-${os}-${arch}.exe"
+    elif [ -f "$abs_jbang_dir/jbang.bin.exe" ] && [ -x "$abs_jbang_dir/jbang.bin.exe" ]; then
+      binaryPath="$abs_jbang_dir/jbang.bin.exe"
+    else
+      echo "WARNING: JBang native binary (jbang.bin-${os}-${arch}.exe or jbang.bin.exe) not found in $abs_jbang_dir" 1>&2
+    fi
+  else
+    if [ -f "$abs_jbang_dir/jbang.bin-${os}-${arch}" ] && [ -x "$abs_jbang_dir/jbang.bin-${os}-${arch}" ]; then
+      binaryPath="$abs_jbang_dir/jbang.bin-${os}-${arch}"
+    elif [ -f "$abs_jbang_dir/jbang.bin" ] && [ -x "$abs_jbang_dir/jbang.bin" ]; then
+      binaryPath="$abs_jbang_dir/jbang.bin"
+    else
+      echo "WARNING: JBang native binary (jbang.bin-${os}-${arch} or jbang.bin) not found or not executable in $abs_jbang_dir" 1>&2
+    fi
+  fi
+fi
+if [[ -z "$binaryPath" ]]; then
+  # Fall back to JAR if no native binary found or native binary disabled
+  if [ -f "$abs_jbang_dir/jbang.jar" ]; then
+    jarPath=$abs_jbang_dir/jbang.jar
+  elif [ -f "$abs_jbang_dir/.jbang/jbang.jar" ]; then
+    jarPath=$abs_jbang_dir/.jbang/jbang.jar
+  fi
+fi
+# Downloads jbang.jar into <wrapper dir>/.jbang as told by jbanglite.properties
+install_wrapper_jar() {
+  local props repo ref sha url target actual
+  props="$abs_jbang_dir/jbanglite.properties"
+  repo=$(sed -n 's/^repo=//p' "$props" | head -1)
+  ref=$(sed -n 's/^ref=//p' "$props" | head -1)
+  sha=$(sed -n 's/^jarSha256=//p' "$props" | head -1)
+  if [ -z "$repo" ] || [ -z "$ref" ]; then
+    echo "$props does not name a repo and a ref to get jbang.jar from" 1>&2
+    exit 1
+  fi
+  url="$jbangRawBaseUrl/$repo/$ref/dist/jbang.jar"
+  target="$abs_jbang_dir/.jbang/jbang.jar"
+  mkdir -p "$abs_jbang_dir/.jbang"
+  echo "Downloading JBangLite from $url..." 1>&2
+  download "$url" "$target.tmp"
+  if [ $retval -ne 0 ]; then
+    rm -f "$target.tmp"
+    echo "Error downloading JBangLite from $url" 1>&2
+    exit $retval
+  fi
+  if [ -n "$sha" ]; then
+    actual=$(sha256_of "$target.tmp")
+    if [ -n "$actual" ] && [ "$sha" != "$actual" ]; then
+      rm -f "$target.tmp"
+      echo "SHA-256 mismatch for $url: expected $sha but got $actual" 1>&2
+      exit 1
+    fi
+  fi
+  mv "$target.tmp" "$target"
+}
+
+# A wrapper installed in a project takes its jar from the repository it was
+# installed from, so there are no releases to look for
+if [[ -z "$binaryPath" && -z "$jarPath" && -f "$abs_jbang_dir/jbanglite.properties" ]]; then
+  install_wrapper_jar
+  jarPath="$abs_jbang_dir/.jbang/jbang.jar"
+fi
+
+if [[ -z "$binaryPath" && -z "$jarPath" ]]; then
+  if [[ ! -f "$JBDIR/bin/jbang.jar" || ! -f "$JBDIR/bin/jbang" ]]; then
+    if [[ "$JBANG_USE_NATIVE" == "true" ]]; then
+      bundleName="jbang-${os}-${arch}.tar"
+    else
+      bundleName="jbang.tar"
+    fi
+    mkdir -p "$TDIR/urls"
+    if [ -n "$JBANG_DOWNLOAD_URL" ]; then
+      jburl="$JBANG_DOWNLOAD_URL";
+    elif [ -z "$JBANG_DOWNLOAD_VERSION" ]; then
+      jburl="${jbangDownloadBaseUrl}/latest/download/$bundleName";
+    else
+      # Numeric versions get a 'v' prefix (e.g. 0.120.0 -> v0.120.0); named
+      # release tags (e.g. 'early-access', '1.0.0-rc1') are used as-is.
+      case "$JBANG_DOWNLOAD_VERSION" in
+        *[!0-9.]*) jbtag="$JBANG_DOWNLOAD_VERSION" ;;
+        *)         jbtag="v$JBANG_DOWNLOAD_VERSION" ;;
+      esac
+      jburl="${jbangDownloadBaseUrl}/download/$jbtag/$bundleName";
+    fi
+    echo "Downloading JBang ${JBANG_DOWNLOAD_VERSION:-latest} from $jburl..." 1>&2
+    download "$jburl" "$TDIR/urls/jbang.tar"
+    if [ $retval -ne 0 ]; then echo "Error downloading JBang from $jburl" 1>&2; exit $retval; fi
+    echo "Installing JBang..." 1>&2
+    rm -rf "$TDIR/urls/jbang"
+    tar xf "$TDIR/urls/jbang.tar" -C "$TDIR/urls"
+    if [ $retval -ne 0 ]; then echo "Error installing JBang" 1>&2; exit $retval; fi
+    mkdir -p "$JBDIR/bin"
+    rm -f "$JBDIR/bin/jbang" "$JBDIR/bin"/jbang.*
+    cp -f "$TDIR/urls/jbang/bin"/* "$JBDIR/bin"
+  fi
+  "$JBDIR"/bin/jbang "$@"
+  exit $?
+fi
+
+if [ -f "$jarPath.new" ]; then
+  # a new jbang version was found, we replace the old one with it
+  mv "$jarPath.new" "$jarPath"
+fi
+
+# Only setup Java if we're running the JAR version
+if [[ -z "$binaryPath" ]]; then
+  setup_java_exec
+fi
+
+execute_jbang "$@"

@@ -21,14 +21,14 @@ import org.junit.jupiter.api.Test;
 import com.github.tomakehurst.wiremock.client.WireMock;
 
 /**
- * Functional tests for the wrapper installer (src/main/wrapper/install.sh) and
+ * Functional tests for the wrapper installer (dist/install.sh) and
  * for the jbang.jar download it sets up: a project only commits the launchers
  * and jbanglite.properties, and the launcher fetches the jar recorded there on
  * first use.
  */
 class TestWrapperInstall extends AbstractScriptTest {
 
-	private static final Path INSTALL_SCRIPT = Paths.get("src/main/wrapper/install.sh").toAbsolutePath();
+	private static final Path DIST = Paths.get("dist").toAbsolutePath();
 	private static final byte[] JAR = "not really a jar\n".getBytes(StandardCharsets.UTF_8);
 
 	private Path project;
@@ -37,15 +37,10 @@ class TestWrapperInstall extends AbstractScriptTest {
 	void serveRepository() throws Exception {
 		requireBash();
 		project = Files.createDirectories(tempDir.resolve("project"));
-		for (String name : Arrays.asList("jbang", "jbang.cmd", "jbang.ps1")) {
-			stubFile("/instreest/jbang/main/src/main/scripts/" + name,
-					Files.readAllBytes(BASH_SCRIPT.resolveSibling(name)));
+		for (String name : Arrays.asList("jbang", "jbang.cmd", "jbang.ps1", "install.sh", "install.cmd",
+				"README.md", "gitignore", "LICENSE")) {
+			stubFile("/instreest/jbang/main/dist/" + name, Files.readAllBytes(DIST.resolve(name)));
 		}
-		for (String name : Arrays.asList("install.sh", "install.cmd", "README.md", "gitignore")) {
-			stubFile("/instreest/jbang/main/src/main/wrapper/" + name,
-					Files.readAllBytes(INSTALL_SCRIPT.resolveSibling(name)));
-		}
-		stubFile("/instreest/jbang/main/LICENSE", Files.readAllBytes(Paths.get("LICENSE")));
 		stubFile("/instreest/jbang/main/dist/jbang.jar", JAR);
 		stubFile("/instreest/jbang/main/dist/jbang.jar.sha256",
 				(sha256(JAR) + "  jbang.jar\n").getBytes(StandardCharsets.UTF_8));
@@ -127,13 +122,29 @@ class TestWrapperInstall extends AbstractScriptTest {
 		assertArrayEquals(before, Files.readAllBytes(wrapper.resolve("jbang")));
 	}
 
+	/**
+	 * dist/ holds the files the wrapper installs, so the launchers copied there
+	 * must be the ones in src/main/scripts (misc/update-dist.sh refreshes them).
+	 */
+	@Test
+	void distHoldsTheCurrentLaunchers() throws Exception {
+		for (String name : Arrays.asList("jbang", "jbang.cmd", "jbang.ps1")) {
+			assertArrayEquals(Files.readAllBytes(BASH_SCRIPT.resolveSibling(name)),
+					Files.readAllBytes(DIST.resolve(name)),
+					"dist/" + name + " is out of date, run misc/update-dist.sh");
+		}
+		assertArrayEquals(Files.readAllBytes(Paths.get("LICENSE")), Files.readAllBytes(DIST.resolve("LICENSE")),
+				"dist/LICENSE is out of date, run misc/update-dist.sh");
+	}
+
 	private void stubFile(String url, byte[] body) {
 		wm.stubFor(WireMock.get(WireMock.urlEqualTo(url))
 			.willReturn(WireMock.aResponse().withStatus(200).withBody(body)));
 	}
 
 	private RunResult install(Path where) throws Exception {
-		return runProcess(Arrays.asList("bash", INSTALL_SCRIPT.toString(), where.resolve("jbangw").toString()), env());
+		return runProcess(Arrays.asList("bash", DIST.resolve("install.sh").toString(),
+				where.resolve("jbangw").toString()), env());
 	}
 
 	/**

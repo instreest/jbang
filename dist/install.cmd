@@ -21,7 +21,7 @@ setlocal enabledelayedexpansion
 if "%JBANGLITE_REPO%"=="" (set "repo=instreest/jbang") else (set "repo=%JBANGLITE_REPO%")
 if "%JBANGLITE_REF%"=="" (set "ref=main") else (set "ref=%JBANGLITE_REF%")
 if "%JBANGLITE_RAW_BASEURL%"=="" (set "rawBaseUrl=https://raw.githubusercontent.com") else (set "rawBaseUrl=%JBANGLITE_RAW_BASEURL%")
-set "base=%rawBaseUrl%/%repo%/%ref%"
+set "base=%rawBaseUrl%/%repo%/%ref%/dist"
 
 if not "%~1"=="" (
   set "dir=%~f1"
@@ -38,15 +38,15 @@ set "staging=%TEMP%\jbanglite-%RANDOM%%RANDOM%"
 mkdir "%staging%" || exit /b 1
 
 echo Installing the JBangLite wrapper from %repo% (%ref%) into %dir% 1>&2
-call :fetch src/main/scripts/jbang           "%staging%\jbang"        || goto :failed
-call :fetch src/main/scripts/jbang.cmd       "%staging%\jbang.cmd"    || goto :failed
-call :fetch src/main/scripts/jbang.ps1       "%staging%\jbang.ps1"    || goto :failed
-call :fetch src/main/wrapper/install.sh      "%staging%\install.sh"   || goto :failed
-call :fetch src/main/wrapper/install.cmd     "%staging%\install.cmd"  || goto :failed
-call :fetch src/main/wrapper/README.md       "%staging%\README.md"    || goto :failed
-call :fetch src/main/wrapper/gitignore       "%staging%\.gitignore"   || goto :failed
-call :fetch LICENSE                          "%staging%\LICENSE"      || goto :failed
-call :fetch dist/jbang.jar.sha256            "%staging%\jar.sha256"   || goto :failed
+call :fetch jbang           "%staging%\jbang"        || goto :failed
+call :fetch jbang.cmd       "%staging%\jbang.cmd"    || goto :failed
+call :fetch jbang.ps1       "%staging%\jbang.ps1"    || goto :failed
+call :fetch install.sh      "%staging%\install.sh"   || goto :failed
+call :fetch install.cmd     "%staging%\install.cmd"  || goto :failed
+call :fetch README.md       "%staging%\README.md"    || goto :failed
+call :fetch gitignore       "%staging%\.gitignore"   || goto :failed
+call :fetch LICENSE         "%staging%\LICENSE"     || goto :failed
+call :fetch jbang.jar.sha256 "%staging%\jar.sha256" || goto :failed
 
 set "jarSha256="
 for /f "usebackq tokens=1" %%A in ("%staging%\jar.sha256") do if not defined jarSha256 set "jarSha256=%%A"

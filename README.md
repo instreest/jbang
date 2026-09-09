@@ -20,7 +20,7 @@ own repository and commits it, so anyone who checks the project out can run its
 scripts without installing JBangLite — or a JDK — first.
 
 ```bash
-curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/src/main/wrapper/install.sh | bash
+curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/dist/install.sh | bash
 git add jbangw && git commit -m "Add the JBangLite wrapper"
 jbangw/jbang src/Hello.java
 ```
@@ -37,9 +37,12 @@ launchers, itself and the pinned revision, and drops the cached jar so the next
 run fetches the matching one. `JBANGLITE_REF=<tag|commit>` pins another
 revision, `JBANGLITE_REPO` another fork.
 
-The jar the wrapper downloads is committed at [`dist/jbang.jar`](dist); run
-`misc/update-dist.sh` to rebuild it and commit the result whenever a change
-should reach the projects that installed the wrapper.
+Everything a project installs lives in [`dist/`](dist) — the launchers, the
+installers, `LICENSE`, `gitignore`, `README.md` and the built `jbang.jar` with
+its checksum. Run `misc/update-dist.sh` to refresh it (it rebuilds the jar and
+copies the launchers and `LICENSE` there) and commit the result whenever a
+change should reach the projects that installed the wrapper;
+`misc/update-dist.sh --check` reports whether it is up to date.
 
 ## Directives
 

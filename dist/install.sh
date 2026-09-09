@@ -5,7 +5,7 @@
 # only the small launcher scripts are committed, and they fetch jbang.jar - and
 # a JDK, if needed - on first use.
 #
-#   curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/src/main/wrapper/install.sh | bash
+#   curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/dist/install.sh | bash
 #
 # Running it again updates an existing installation: the launchers, this script
 # and the pinned jar revision are refreshed and the cached jar is dropped, so
@@ -24,17 +24,18 @@ set -eu
 repo=${JBANGLITE_REPO:-instreest/jbang}
 ref=${JBANGLITE_REF:-main}
 rawBaseUrl=${JBANGLITE_RAW_BASEURL:-https://raw.githubusercontent.com}
-base="$rawBaseUrl/$repo/$ref"
+base="$rawBaseUrl/$repo/$ref/dist"
 
-# The files to install, as "<path in the repository> <name in the wrapper>"
+# Everything that is installed lives in dist/, as "<file in dist> <name in the
+# wrapper>"; jbang.jar is not copied but downloaded on first use
 files="
-src/main/scripts/jbang jbang
-src/main/scripts/jbang.cmd jbang.cmd
-src/main/scripts/jbang.ps1 jbang.ps1
-src/main/wrapper/install.sh install.sh
-src/main/wrapper/install.cmd install.cmd
-src/main/wrapper/README.md README.md
-src/main/wrapper/gitignore .gitignore
+jbang jbang
+jbang.cmd jbang.cmd
+jbang.ps1 jbang.ps1
+install.sh install.sh
+install.cmd install.cmd
+README.md README.md
+gitignore .gitignore
 LICENSE LICENSE
 "
 
@@ -68,7 +69,7 @@ echo "$files" | while read -r from to; do
   [ -n "$from" ] || continue
   fetch "$from" "$staging/$to"
 done
-fetch dist/jbang.jar.sha256 "$staging/jar.sha256"
+fetch jbang.jar.sha256 "$staging/jar.sha256"
 
 cat > "$staging/jbanglite.properties" <<PROPS
 # Written by install.sh - where the launchers get jbang.jar from.
