@@ -7,15 +7,21 @@ rem tar, certutil). What it does, in order:
 rem
 rem   1. Settings          - constants and the JBANG_* / JBANGLITE_* overrides
 rem   2. Launch environment- what jbanglite.jar expects to find in the environment
-rem   3. What to run       - a native binary, or the jar: next to this script, in
-rem                          .jbanglite next to it, downloaded from the
-rem                          repository jbanglite.properties names (that is how
-rem                          a wrapper committed to a project gets its jar), or
-rem                          an installed release in %%JBANG_DIR%%\bin
+rem   3. Which jar to run  - next to this script, in .jbanglite next to it,
+rem                          downloaded from the repository jbanglite.properties
+rem                          names (that is how a wrapper committed to a project
+rem                          gets its jar), or an installed release in
+rem                          %%JBANG_DIR%%\bin
 rem   4. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, or a
 rem                          Temurin downloaded from the Maven Central JVM index
 rem   5. Launch            - run it, and when it exits with 255 run the command
 rem                          line it printed (that is how a script is started)
+rem
+rem Several JBangLite runs can be started at the same time (a build matrix, a
+rem multi-module build). They share ~/.jbang, so every download either takes a
+rem directory lock (mkdir is atomic: :acquire_lock / :release_lock) or writes to
+rem a file of its own and renames it into place, and no run ever fails because
+rem another one got there first.
 rem
 rem Two CMD rules shape the code below and are easy to trip over:
 rem   - a variable set inside a parenthesized block cannot be read in that same
@@ -29,13 +35,7 @@ setlocal
 call :init_settings
 call :init_launch_environment
 
-rem --- 3. What to run -------------------------------------------------------
-if "%JBANG_USE_NATIVE%"=="true" call :find_native_binary
-if defined native_binary (
-  set launch_cmd="%native_binary%"
-  goto :launch
-)
-
+rem --- 3. Which jar to run ---------------------------------------------------
 call :find_jar || exit /b 1
 if not defined jar_path goto :run_installed_release
 
@@ -46,10 +46,11 @@ set launch_cmd="%java_exec%" %JBANG_JAVA_OPTIONS% -jar "%jar_path%"
 rem --- 5. Launch ------------------------------------------------------------
 :launch
 rem The output is captured because exit code 255 means "run this command line
-rem for me" (see :run_printed_command).
-rem WARNING running jbanglite in parallel in quick succession will cause temp
-rem name collisions!
-set "output_file=%TEMP%\%RANDOM%.jbanglite.tmp"
+rem for me" (see :run_printed_command). The name is this run's own, so several
+rem JBangLite runs at once cannot read each other's output.
+:pick_output_file
+set "output_file=%TEMP%\jbanglite-%run_id%-%RANDOM%.tmp"
+if exist "%output_file%" goto :pick_output_file
 %launch_cmd% %* > "%output_file%"
 set "exit_code=%ERRORLEVEL%"
 if %exit_code% EQU 255 goto :run_printed_command
@@ -123,13 +124,18 @@ if not "%JBANG_CACHE_DIR%"=="" set "cache_dir=%JBANG_CACHE_DIR%"
 rem %~dp0 in a subroutine is the label, not this file, so remember where we are
 set "script_dir=%~dp0"
 
-rem The architecture, named the way the release bundles and the JVM index do
-set "release_arch=x64"
+rem The architecture, named the way the JVM index does
 set "index_arch=amd64"
-if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" (
-  set "release_arch=aarch64"
-  set "index_arch=arm64"
-)
+if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "index_arch=arm64"
+
+rem Tells this run's temporary files apart from those of a JBangLite running at
+rem the same time
+set "run_id=%RANDOM%%RANDOM%"
+
+rem How long to wait (in seconds) for another JBangLite that is downloading
+rem into the same directory
+set "lock_timeout=600"
+if not "%JBANGLITE_LOCK_TIMEOUT%"=="" set "lock_timeout=%JBANGLITE_LOCK_TIMEOUT%"
 exit /b 0
 
 rem ===========================================================================
@@ -146,22 +152,8 @@ set "JBANG_LAUNCH_CMD=%~f0"
 exit /b 0
 
 rem ===========================================================================
-rem 3. What to run
+rem 3. Which jar to run
 rem ===========================================================================
-
-rem Sets native_binary to the native image next to this script, if there is one
-:find_native_binary
-set "native_binary="
-if exist "%script_dir%jbanglite.bin-windows-%release_arch%.exe" (
-  set "native_binary=%script_dir%jbanglite.bin-windows-%release_arch%.exe"
-  exit /b 0
-)
-if exist "%script_dir%jbanglite.bin.exe" (
-  set "native_binary=%script_dir%jbanglite.bin.exe"
-  exit /b 0
-)
-echo WARNING: JBangLite native binary (jbanglite.bin-windows-%release_arch%.exe or jbanglite.bin.exe^) not found in %script_dir% 1>&2
-exit /b 0
 
 rem Sets jar_path to the jar to run, downloading it when this is a wrapper.
 rem Leaves jar_path empty when there is no jar to be found next to this script,
@@ -200,62 +192,91 @@ if "%wrapper_repo%"=="" goto :download_wrapper_jar_unusable
 if "%wrapper_ref%"=="" goto :download_wrapper_jar_unusable
 set "wrapper_jar_url=%raw_base_url%/%wrapper_repo%/%wrapper_ref%/dist/jbanglite.jar"
 set "wrapper_jar=%script_dir%.jbanglite\jbanglite.jar"
-if not exist "%script_dir%.jbanglite" mkdir "%script_dir%.jbanglite"
+rem this run's own download, so runs at the same time cannot truncate each
+rem other's file; the finished jar is then renamed into place
+set "wrapper_jar_tmp=%wrapper_jar%.%run_id%.tmp"
+if not exist "%script_dir%.jbanglite" mkdir "%script_dir%.jbanglite" 2>nul
 
 echo Downloading JBangLite from %wrapper_jar_url%... 1>&2
 set "dl_url=%wrapper_jar_url%"
-set "dl_out=%wrapper_jar%.tmp"
+set "dl_out=%wrapper_jar_tmp%"
 call :download
 if errorlevel 1 (
-  del /f /q "%wrapper_jar%.tmp" 2>nul
+  del /f /q "%wrapper_jar_tmp%" 2>nul
   echo Error downloading JBangLite from %wrapper_jar_url% 1>&2
   exit /b 1
 )
 if "%wrapper_sha%"=="" goto :download_wrapper_jar_keep
-call :sha256 "%wrapper_jar%.tmp"
+call :sha256 "%wrapper_jar_tmp%"
 if /i "%wrapper_sha%"=="%sha256_result%" goto :download_wrapper_jar_keep
-del /f /q "%wrapper_jar%.tmp" 2>nul
+del /f /q "%wrapper_jar_tmp%" 2>nul
 echo SHA-256 mismatch for %wrapper_jar_url%: expected %wrapper_sha% but got %sha256_result% 1>&2
 exit /b 1
 
 :download_wrapper_jar_keep
-move /y "%wrapper_jar%.tmp" "%wrapper_jar%" >nul
+rem another run may have put the same jar in place while we were downloading;
+rem its copy is as good as ours, so just keep whichever is there
+if exist "%wrapper_jar%" goto :download_wrapper_jar_done
+move /y "%wrapper_jar_tmp%" "%wrapper_jar%" >nul 2>&1
+if exist "%wrapper_jar%" goto :download_wrapper_jar_done
+echo Error installing JBangLite into %script_dir%.jbanglite 1>&2
+exit /b 1
+:download_wrapper_jar_done
+del /f /q "%wrapper_jar_tmp%" 2>nul
 exit /b 0
 
 :download_wrapper_jar_unusable
 echo %script_dir%jbanglite.properties does not name a repo and a ref to get jbanglite.jar from 1>&2
 exit /b 1
 
-rem Downloads and installs a release into %jbang_dir%\bin
+rem Downloads and installs a release into %jbang_dir%\bin, one run at a time
 :install_release
-if "%JBANG_USE_NATIVE%"=="true" (
-  set "bundle_name=jbanglite-windows-%release_arch%.zip"
-) else (
-  set "bundle_name=jbanglite.zip"
-)
+set "lock_dir=%jbang_dir%\bin.lock"
+set "lock_done=%jbang_dir%\bin\jbanglite.jar"
+call :acquire_lock
+if errorlevel 2 exit /b 0
+if errorlevel 1 exit /b 1
+call :install_release_locked
+set "install_result=%ERRORLEVEL%"
+call :release_lock
+exit /b %install_result%
+
+:install_release_locked
+rem another run may have installed it while we waited for the lock
+if exist "%jbang_dir%\bin\jbanglite.jar" if exist "%jbang_dir%\bin\jbanglite.cmd" exit /b 0
+set "bundle_name=jbanglite.zip"
 call :release_url
 set "release_version=latest"
 if not "%JBANG_DOWNLOAD_VERSION%"=="" set "release_version=%JBANG_DOWNLOAD_VERSION%"
-if not exist "%cache_dir%\urls" mkdir "%cache_dir%\urls"
+if not exist "%cache_dir%\urls" mkdir "%cache_dir%\urls" 2>nul
+rem this run's own archive and unpack directory, so nothing is shared even when
+rem another JBangLite is installing at the same time
+set "release_archive=%cache_dir%\urls\jbanglite-%run_id%.zip"
+set "release_unpack_dir=%cache_dir%\urls\jbanglite-%run_id%"
 
 echo Downloading JBangLite %release_version% from %release_url%... 1>&2
 set "dl_url=%release_url%"
-set "dl_out=%cache_dir%\urls\jbanglite.zip"
+set "dl_out=%release_archive%"
 call :download
 if errorlevel 1 (
-  echo Error downloading JBangLite from %release_url% to %cache_dir%\urls\jbanglite.zip 1>&2
+  del /f /q "%release_archive%" 2>nul
+  echo Error downloading JBangLite from %release_url% to %release_archive% 1>&2
   exit /b 1
 )
 echo Installing JBangLite... 1>&2
-if exist "%cache_dir%\urls\jbanglite" rmdir /s /q "%cache_dir%\urls\jbanglite"
-tar -xf "%cache_dir%\urls\jbanglite.zip" -C "%cache_dir%\urls"
+if exist "%release_unpack_dir%" rmdir /s /q "%release_unpack_dir%"
+mkdir "%release_unpack_dir%"
+tar -xf "%release_archive%" -C "%release_unpack_dir%"
 if errorlevel 1 (
-  echo Error unzipping JBangLite from %cache_dir%\urls\jbanglite.zip to %cache_dir%\urls 1>&2
+  rmdir /s /q "%release_unpack_dir%" 2>nul
+  echo Error unzipping JBangLite from %release_archive% to %release_unpack_dir% 1>&2
   exit /b 1
 )
 if not exist "%jbang_dir%\bin" mkdir "%jbang_dir%\bin"
 del /f /q "%jbang_dir%\bin\jbanglite" "%jbang_dir%\bin\jbanglite.*" 2>nul
-copy /y "%cache_dir%\urls\jbanglite\bin\*" "%jbang_dir%\bin" >nul
+copy /y "%release_unpack_dir%\jbanglite\bin\*" "%jbang_dir%\bin" >nul
+rmdir /s /q "%release_unpack_dir%" 2>nul
+del /f /q "%release_archive%" 2>nul
 exit /b 0
 
 rem Sets release_url from the JBANG_DOWNLOAD_* settings and %bundle_name%
@@ -351,9 +372,23 @@ for /f "tokens=1,2 delims=." %%A in ("%java_major%") do (
 exit /b 0
 
 rem Downloads the newest Temurin %bootstrap_java_version% from the JVM index
-rem into %cache_dir%\jdks\bootstrap
+rem into %cache_dir%\jdks\bootstrap. Only one run does this at a time; the
+rem others wait and then use what it installed.
 :download_bootstrap_jdk
-if not exist "%cache_dir%\jdks" mkdir "%cache_dir%\jdks"
+if not exist "%cache_dir%\jdks" mkdir "%cache_dir%\jdks" 2>nul
+set "lock_dir=%cache_dir%\jdks\bootstrap.lock"
+set "lock_done=%cache_dir%\jdks\bootstrap\bin\java.exe"
+call :acquire_lock
+if errorlevel 2 exit /b 0
+if errorlevel 1 exit /b 1
+call :download_bootstrap_jdk_locked
+set "jdk_result=%ERRORLEVEL%"
+call :release_lock
+exit /b %jdk_result%
+
+:download_bootstrap_jdk_locked
+rem another run may have installed it while we waited for the lock
+if exist "%cache_dir%\jdks\bootstrap\bin\java.exe" exit /b 0
 call :jvm_index_entry "windows-%index_arch%" || exit /b 1
 if "%index_url%"=="" (
   echo No Temurin %bootstrap_java_version% found in the JVM index for windows-%index_arch% 1>&2
@@ -362,7 +397,9 @@ if "%index_url%"=="" (
 rem The index says how the archive is packed; keep its extension so the file on
 rem disk matches what was downloaded, as jbanglite.jar does
 if "%index_type%"=="tgz" (set "archive_ext=tar.gz") else (set "archive_ext=%index_type%")
-set "jdk_archive=%cache_dir%\bootstrap-jdk.%archive_ext%"
+set "jdk_archive=%cache_dir%\bootstrap-jdk-%run_id%.%archive_ext%"
+set "jdk_sha_file=%cache_dir%\bootstrap-jdk-%run_id%.sha256"
+set "jdk_unpack_dir=%cache_dir%\jdks\bootstrap-%run_id%.tmp"
 
 echo No Java found. Downloading Temurin %index_version%. Be patient, this can take several minutes... 1>&2
 set "dl_url=%index_url%"
@@ -375,22 +412,23 @@ if errorlevel 1 (
 call :verify_jdk_archive || exit /b 1
 
 echo Installing Temurin %index_version%... 1>&2
-if exist "%cache_dir%\jdks\bootstrap.tmp" rmdir /s /q "%cache_dir%\jdks\bootstrap.tmp"
-mkdir "%cache_dir%\jdks\bootstrap.tmp"
-tar -xf "%jdk_archive%" -C "%cache_dir%\jdks\bootstrap.tmp"
+if exist "%jdk_unpack_dir%" rmdir /s /q "%jdk_unpack_dir%"
+mkdir "%jdk_unpack_dir%"
+tar -xf "%jdk_archive%" -C "%jdk_unpack_dir%"
 if errorlevel 1 goto :bootstrap_jdk_broken
 rem the archive holds a single root folder, which becomes the JDK directory
-set "jdk_root=%cache_dir%\jdks\bootstrap.tmp"
-for /d %%D in ("%cache_dir%\jdks\bootstrap.tmp\*") do if exist "%%D\bin\java.exe" set "jdk_root=%%D"
+set "jdk_root=%jdk_unpack_dir%"
+for /d %%D in ("%jdk_unpack_dir%\*") do if exist "%%D\bin\java.exe" set "jdk_root=%%D"
 if not exist "%jdk_root%\bin\java.exe" goto :bootstrap_jdk_broken
 if exist "%cache_dir%\jdks\bootstrap" rmdir /s /q "%cache_dir%\jdks\bootstrap"
 move "%jdk_root%" "%cache_dir%\jdks\bootstrap" >nul
-if exist "%cache_dir%\jdks\bootstrap.tmp" rmdir /s /q "%cache_dir%\jdks\bootstrap.tmp"
-del /f /q "%jdk_archive%" "%cache_dir%\bootstrap-jdk.sha256" 2>nul
+if exist "%jdk_unpack_dir%" rmdir /s /q "%jdk_unpack_dir%"
+del /f /q "%jdk_archive%" "%jdk_sha_file%" 2>nul
 exit /b 0
 
 :bootstrap_jdk_broken
-if exist "%cache_dir%\jdks\bootstrap.tmp" rmdir /s /q "%cache_dir%\jdks\bootstrap.tmp"
+if exist "%jdk_unpack_dir%" rmdir /s /q "%jdk_unpack_dir%"
+del /f /q "%jdk_archive%" "%jdk_sha_file%" 2>nul
 echo Error installing JDK 1>&2
 exit /b 1
 
@@ -398,14 +436,14 @@ rem Checks %jdk_archive% against the SHA-256 Temurin publishes next to it. A
 rem missing checksum only warns; a wrong one deletes the archive and fails.
 :verify_jdk_archive
 set "dl_url=%index_url%.sha256.txt"
-set "dl_out=%cache_dir%\bootstrap-jdk.sha256"
+set "dl_out=%jdk_sha_file%"
 call :download
 if errorlevel 1 (
   echo No published SHA-256 found for %index_url%, skipping verification 1>&2
   exit /b 0
 )
 set "expected_sha="
-for /f "usebackq tokens=1" %%S in ("%cache_dir%\bootstrap-jdk.sha256") do if not defined expected_sha set "expected_sha=%%S"
+for /f "usebackq tokens=1" %%S in ("%jdk_sha_file%") do if not defined expected_sha set "expected_sha=%%S"
 call :sha256 "%jdk_archive%"
 if /i "%expected_sha%"=="%sha256_result%" exit /b 0
 del /f /q "%jdk_archive%" 2>nul
@@ -422,13 +460,13 @@ set "index_base=%jvm_index_base_url%/io/get-coursier/jvm/indices/index-%platform
 
 rem the newest published index, from the Maven metadata
 set "dl_url=!index_base!/maven-metadata.xml"
-set "dl_out=%cache_dir%\jvm-index.xml"
+set "dl_out=%cache_dir%\jvm-index-%run_id%.xml"
 call :download || (
   echo Could not read the JVM index from !index_base! 1>&2
   endlocal & exit /b 1
 )
 set "index_release="
-for /f "usebackq delims=" %%L in (`findstr "<release>" "%cache_dir%\jvm-index.xml"`) do (
+for /f "usebackq delims=" %%L in (`findstr "<release>" "%cache_dir%\jvm-index-%run_id%.xml"`) do (
   set "line=%%L"
   set "line=!line:*<release>=!"
   for /f "delims=<" %%V in ("!line!") do set "index_release=%%V"
@@ -440,15 +478,15 @@ if "!index_release!"=="" (
 
 rem the index itself, a jar holding one JSON file per platform
 set "dl_url=!index_base!/!index_release!/index-%platform%-!index_release!.jar"
-set "dl_out=%cache_dir%\jvm-index.jar"
+set "dl_out=%cache_dir%\jvm-index-%run_id%.jar"
 call :download || (
   echo Could not download the JVM index 1>&2
   endlocal & exit /b 1
 )
-if exist "%cache_dir%\jvm-index" rmdir /s /q "%cache_dir%\jvm-index"
-mkdir "%cache_dir%\jvm-index"
-tar -xf "%cache_dir%\jvm-index.jar" -C "%cache_dir%\jvm-index" "coursier/jvm/indices/v1/%platform%.json" >nul 2>&1
-set "index_json=%cache_dir%\jvm-index\coursier\jvm\indices\v1\%platform%.json"
+if exist "%cache_dir%\jvm-index-%run_id%" rmdir /s /q "%cache_dir%\jvm-index-%run_id%"
+mkdir "%cache_dir%\jvm-index-%run_id%"
+tar -xf "%cache_dir%\jvm-index-%run_id%.jar" -C "%cache_dir%\jvm-index-%run_id%" "coursier/jvm/indices/v1/%platform%.json" >nul 2>&1
+set "index_json=%cache_dir%\jvm-index-%run_id%\coursier\jvm\indices\v1\%platform%.json"
 if not exist "!index_json!" (
   echo The JVM index has no data for %platform% 1>&2
   endlocal & exit /b 1
@@ -480,6 +518,9 @@ for /f "usebackq delims=" %%L in ("!index_json!") do (
     )
   )
 )
+rem the index was only needed to pick an entry
+del /f /q "%cache_dir%\jvm-index-%run_id%.xml" "%cache_dir%\jvm-index-%run_id%.jar" 2>nul
+rmdir /s /q "%cache_dir%\jvm-index-%run_id%" 2>nul
 endlocal & (
   set "index_version=%best_version%"
   set "index_type=%best_type%"
@@ -522,6 +563,38 @@ for /f "tokens=1-4 delims=." %%A in ("%~1") do (
 set "pad1=00000%part1%" & set "pad2=00000%part2%"
 set "pad3=00000%part3%" & set "pad4=00000%part4%"
 endlocal & set "version_key=%pad1:~-5%%pad2:~-5%%pad3:~-5%%pad4:~-5%"
+exit /b 0
+
+rem ===========================================================================
+rem Locking
+rem ===========================================================================
+
+rem Takes the lock %lock_dir% for the calling run. MKDIR is atomic, so exactly
+rem one run gets it; the others wait, and give up as soon as %lock_done% shows
+rem that the work they were waiting for is done.
+rem   exit 0 - the lock is ours, do the work and call :release_lock afterwards
+rem   exit 1 - gave up (another run is stuck, or its lock directory is stale)
+rem   exit 2 - no need to do anything, another run already did the work
+:acquire_lock
+rem the lock sits next to what it protects, which may not exist yet
+for %%P in ("%lock_dir%\..") do if not exist "%%~fP" mkdir "%%~fP" 2>nul
+set /a lock_waited=0
+:acquire_lock_try
+mkdir "%lock_dir%" 2>nul && exit /b 0
+if exist "%lock_done%" exit /b 2
+if %lock_waited% GEQ %lock_timeout% (
+  echo Gave up after %lock_timeout% seconds waiting for another JBangLite to finish. 1>&2
+  echo If no other JBangLite is running, remove %lock_dir% and try again. 1>&2
+  exit /b 1
+)
+if %lock_waited% EQU 0 echo Waiting for another JBangLite to finish downloading... 1>&2
+call :sleep 1
+set /a lock_waited+=1
+goto :acquire_lock_try
+
+rem Gives up the lock %lock_dir% again
+:release_lock
+rmdir /s /q "%lock_dir%" 2>nul
 exit /b 0
 
 rem ===========================================================================

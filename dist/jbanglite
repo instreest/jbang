@@ -24,6 +24,14 @@ jbangDownloadBaseUrl=${JBANG_DOWNLOAD_BASEURL:-https://github.com/instreest/jban
 # this script. Override for testing or a corporate mirror.
 jbangRawBaseUrl=${JBANGLITE_RAW_BASEURL:-https://raw.githubusercontent.com}
 
+# Tells this run's temporary files apart from those of a JBangLite running at
+# the same time
+runId=$$
+
+# How long to wait (in seconds) for another JBangLite that is downloading into
+# the same directory
+lockTimeout=${JBANGLITE_LOCK_TIMEOUT:-600}
+
 # Number of retry attempts for downloads (curl/wget)
 downloadRetry=${JBANG_DOWNLOAD_RETRY:-5}
 downloadRetryDelay=${JBANG_DOWNLOAD_RETRY_DELAY:-0}
@@ -149,17 +157,17 @@ jvm_index_entry() {
   local base metaVersion
   mkdir -p "$TDIR"
   base="$jvmIndexBaseUrl/io/get-coursier/jvm/indices/index-$1"
-  download "$base/maven-metadata.xml" "$TDIR/jvm-index.xml"
+  download "$base/maven-metadata.xml" "$TDIR/jvm-index-$runId.xml"
   if [ $retval -ne 0 ]; then echo "Could not read the JVM index from $base" 1>&2; return 1; fi
-  metaVersion=$(grep -o '<release>[^<]*' "$TDIR/jvm-index.xml" | head -1 | cut -d'>' -f2)
+  metaVersion=$(grep -o '<release>[^<]*' "$TDIR/jvm-index-$runId.xml" | head -1 | cut -d'>' -f2)
   if [ -z "$metaVersion" ]; then echo "Could not determine the newest JVM index version" 1>&2; return 1; fi
-  download "$base/$metaVersion/index-$1-$metaVersion.jar" "$TDIR/jvm-index.jar"
+  download "$base/$metaVersion/index-$1-$metaVersion.jar" "$TDIR/jvm-index-$runId.jar"
   if [ $retval -ne 0 ]; then echo "Could not download the JVM index" 1>&2; return 1; fi
   if [ ! -x "$(command -v unzip)" ]; then
     echo "unzip is needed to read the JVM index; install unzip or a Java $minJavaVersion or newer" 1>&2
     return 1
   fi
-  unzip -p "$TDIR/jvm-index.jar" "coursier/jvm/indices/v1/$1.json" > "$TDIR/jvm-index.json" 2>/dev/null
+  unzip -p "$TDIR/jvm-index-$runId.jar" "coursier/jvm/indices/v1/$1.json" > "$TDIR/jvm-index-$runId.json" 2>/dev/null
   # The index lists, per distribution, a version and a "<type>+<url>" value
   awk -v want="$bootstrapJavaVersion" '
     /^[[:space:]]*"temurin"[[:space:]]*:[[:space:]]*\{/ { inside = 1; next }
@@ -173,54 +181,111 @@ jvm_index_entry() {
         print version " " substr(value, 1, plus - 1) " " substr(value, plus + 1)
       }
     }
-  ' "$TDIR/jvm-index.json" | sort -V | tail -1
+  ' "$TDIR/jvm-index-$runId.json" | sort -V | tail -1
+  rm -f "$TDIR/jvm-index-$runId.xml" "$TDIR/jvm-index-$runId.jar" "$TDIR/jvm-index-$runId.json"
 }
 
-# Downloads the newest Temurin $bootstrapJavaVersion into $TDIR/jdks/bootstrap
+# Several JBangLite runs can share $JBANG_DIR, so a download either takes a
+# directory lock or writes to a file of its own and renames it into place.
+# mkdir is atomic, so exactly one run gets the lock; the others wait, and stop
+# waiting as soon as $2 shows the work they waited for is done.
+#   0 - the lock is ours, do the work and release_lock afterwards
+#   1 - gave up (another run is stuck, or its lock directory is stale)
+#   2 - no need to do anything, another run already did the work
+acquire_lock() {  # $1 = lock directory, $2 = path that exists once the work is done
+  local waited=0
+  # the lock sits next to what it protects, which may not exist yet
+  mkdir -p "$(dirname "$1")"
+  while ! mkdir "$1" 2> /dev/null; do
+    if [ -e "$2" ]; then return 2; fi
+    if [ "$waited" -ge "$lockTimeout" ]; then
+      echo "Gave up after $lockTimeout seconds waiting for another JBangLite to finish." 1>&2
+      echo "If no other JBangLite is running, remove $1 and try again." 1>&2
+      return 1
+    fi
+    if [ "$waited" -eq 0 ]; then
+      echo "Waiting for another JBangLite to finish downloading..." 1>&2
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  return 0
+}
+
+release_lock() {
+  rm -rf "$1"
+}
+
+# Downloads the newest Temurin $bootstrapJavaVersion into $TDIR/jdks/bootstrap,
+# one run at a time; the others wait and then use what it installed.
 install_bootstrap_jdk() {
-  local plat entry version type url archive expected actual
   mkdir -p "$TDIR/jdks"
-  plat=$(jvm_index_platform) || exit 1
+  acquire_lock "$TDIR/jdks/bootstrap.lock" "$TDIR/jdks/bootstrap/bin/java"
+  case $? in
+    2) return 0 ;;
+    1) exit 1 ;;
+  esac
+  install_bootstrap_jdk_locked
+  retval=$?
+  release_lock "$TDIR/jdks/bootstrap.lock"
+  if [ $retval -ne 0 ]; then exit $retval; fi
+}
+
+install_bootstrap_jdk_locked() {
+  local plat entry version type url archive shafile unpackdir expected actual
+  # another run may have installed it while we waited for the lock
+  if [ -x "$TDIR/jdks/bootstrap/bin/java" ]; then return 0; fi
+  plat=$(jvm_index_platform) || return 1
   entry=$(jvm_index_entry "$plat")
   if [ -z "$entry" ]; then
     echo "No Temurin $bootstrapJavaVersion found in the JVM index for $plat" 1>&2
-    exit 1
+    return 1
   fi
   version=$(echo "$entry" | cut -d' ' -f1)
   type=$(echo "$entry" | cut -d' ' -f2)
   url=$(echo "$entry" | cut -d' ' -f3)
   if [ "$type" = "tgz" ]; then type=tar.gz; fi
-  archive="$TDIR/bootstrap-jdk.$type"
+  # this run's own files, so nothing is shared with a JBangLite running at the
+  # same time
+  archive="$TDIR/bootstrap-jdk-$runId.$type"
+  shafile="$TDIR/bootstrap-jdk-$runId.sha256"
+  unpackdir="$TDIR/jdks/bootstrap-$runId.tmp"
 
   echo "No Java found. Downloading Temurin $version. Be patient, this can take several minutes..." 1>&2
   download "$url" "$archive"
-  if [ $retval -ne 0 ]; then echo "Error downloading JDK from $url" 1>&2; exit $retval; fi
+  if [ $retval -ne 0 ]; then
+    rm -f "$archive"
+    echo "Error downloading JDK from $url" 1>&2
+    return 1
+  fi
 
-  download "$url.sha256.txt" "$TDIR/bootstrap-jdk.sha256"
+  download "$url.sha256.txt" "$shafile"
   if [ $retval -eq 0 ]; then
-    expected=$(cut -d' ' -f1 < "$TDIR/bootstrap-jdk.sha256")
+    expected=$(cut -d' ' -f1 < "$shafile")
     actual=$(sha256_of "$archive")
     if [ -n "$actual" ] && [ "$expected" != "$actual" ]; then
-      rm -f "$archive"
+      rm -f "$archive" "$shafile"
       echo "SHA-256 mismatch for $url: expected $expected but got $actual" 1>&2
-      exit 1
+      return 1
     fi
   else
     echo "No published SHA-256 found for $url, skipping verification" 1>&2
   fi
 
   echo "Installing Temurin $version..." 1>&2
-  rm -rf "$TDIR/jdks/bootstrap.tmp"
-  mkdir -p "$TDIR/jdks/bootstrap.tmp"
-  unpack "$archive" "$TDIR/jdks/bootstrap.tmp"
-  if [ $retval -ne 0 ] || [ ! -x "$TDIR/jdks/bootstrap.tmp/bin/java" ]; then
-    rm -rf "$TDIR/jdks/bootstrap.tmp"
+  rm -rf "$unpackdir"
+  mkdir -p "$unpackdir"
+  unpack "$archive" "$unpackdir"
+  if [ $retval -ne 0 ] || [ ! -x "$unpackdir/bin/java" ]; then
+    rm -rf "$unpackdir"
+    rm -f "$archive" "$shafile"
     echo "Error installing JDK" 1>&2
-    exit 1
+    return 1
   fi
   rm -rf "$TDIR/jdks/bootstrap"
-  mv "$TDIR/jdks/bootstrap.tmp" "$TDIR/jdks/bootstrap"
-  rm -f "$archive" "$TDIR/bootstrap-jdk.sha256"
+  mv "$unpackdir" "$TDIR/jdks/bootstrap"
+  rm -f "$archive" "$shafile"
+  return 0
 }
 
 # Determines the java to run jbanglite.jar with. Any Java $minJavaVersion or newer
@@ -263,7 +328,7 @@ setup_java_exec() {
   JAVA_EXEC="$JAVA_HOME/bin/java"
 }
 
-# Executes JBangLite (either native binary or JAR) and handles the output
+# Executes JBangLite and handles the output
 execute_jbanglite() {
 ## https://stackoverflow.com/questions/1668649/how-to-keep-quotes-in-bash-arguments
 ## attempt to ensure each argument keeps its original quoting
@@ -274,15 +339,8 @@ execute_jbanglite() {
   export JBANG_LAUNCH_CMD=$0
   
   ## run it using command substitution to have just the user process once JBangLite is done
-  if [[ -n "$binaryPath" ]]; then
-    # Run native binary
-    output=$(CLICOLOR_FORCE=1 "$binaryPath" "$@")
-    err=$?
-  else
-    # Run JAR
-    output=$(CLICOLOR_FORCE=1 "${JAVA_EXEC}" ${JBANG_JAVA_OPTIONS} -jar "${jarPath}" "$@")
-    err=$?
-  fi
+  output=$(CLICOLOR_FORCE=1 "${JAVA_EXEC}" ${JBANG_JAVA_OPTIONS} -jar "${jarPath}" "$@")
+  err=$?
   
   if [ $err -eq 255 ]; then
     eval "exec $output"
@@ -350,43 +408,17 @@ fi
 
 if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
 if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
-if [[ -z "$JBANG_USE_NATIVE" ]]; then JBANG_USE_NATIVE="false"; fi
-
-## resolve native binary or jar path from script location
-binaryPath=""
+## resolve the jar to run from this script's location
 jarPath=""
-if [[ "$JBANG_USE_NATIVE" == "true" ]]; then
-  # Look for platform-specific native binary first (e.g. jbanglite.bin-linux-x64),
-  # then fall back to generic jbanglite.bin for manually placed binaries
-  if [[ "$os" == "windows" ]]; then
-    if [ -f "$abs_jbang_dir/jbanglite.bin-${os}-${arch}.exe" ] && [ -x "$abs_jbang_dir/jbanglite.bin-${os}-${arch}.exe" ]; then
-      binaryPath="$abs_jbang_dir/jbanglite.bin-${os}-${arch}.exe"
-    elif [ -f "$abs_jbang_dir/jbanglite.bin.exe" ] && [ -x "$abs_jbang_dir/jbanglite.bin.exe" ]; then
-      binaryPath="$abs_jbang_dir/jbanglite.bin.exe"
-    else
-      echo "WARNING: JBangLite native binary (jbanglite.bin-${os}-${arch}.exe or jbanglite.bin.exe) not found in $abs_jbang_dir" 1>&2
-    fi
-  else
-    if [ -f "$abs_jbang_dir/jbanglite.bin-${os}-${arch}" ] && [ -x "$abs_jbang_dir/jbanglite.bin-${os}-${arch}" ]; then
-      binaryPath="$abs_jbang_dir/jbanglite.bin-${os}-${arch}"
-    elif [ -f "$abs_jbang_dir/jbanglite.bin" ] && [ -x "$abs_jbang_dir/jbanglite.bin" ]; then
-      binaryPath="$abs_jbang_dir/jbanglite.bin"
-    else
-      echo "WARNING: JBangLite native binary (jbanglite.bin-${os}-${arch} or jbanglite.bin) not found or not executable in $abs_jbang_dir" 1>&2
-    fi
-  fi
+if [ -f "$abs_jbang_dir/jbanglite.jar" ]; then
+  jarPath=$abs_jbang_dir/jbanglite.jar
+elif [ -f "$abs_jbang_dir/.jbanglite/jbanglite.jar" ]; then
+  jarPath=$abs_jbang_dir/.jbanglite/jbanglite.jar
 fi
-if [[ -z "$binaryPath" ]]; then
-  # Fall back to JAR if no native binary found or native binary disabled
-  if [ -f "$abs_jbang_dir/jbanglite.jar" ]; then
-    jarPath=$abs_jbang_dir/jbanglite.jar
-  elif [ -f "$abs_jbang_dir/.jbanglite/jbanglite.jar" ]; then
-    jarPath=$abs_jbang_dir/.jbanglite/jbanglite.jar
-  fi
-fi
+
 # Downloads jbanglite.jar into <wrapper dir>/.jbang as told by jbanglite.properties
 install_wrapper_jar() {
-  local props repo ref sha url target actual
+  local props repo ref sha url target tmp actual
   props="$abs_jbang_dir/jbanglite.properties"
   repo=$(sed -n 's/^repo=//p' "$props" | head -1)
   ref=$(sed -n 's/^ref=//p' "$props" | head -1)
@@ -397,63 +429,104 @@ install_wrapper_jar() {
   fi
   url="$jbangRawBaseUrl/$repo/$ref/dist/jbanglite.jar"
   target="$abs_jbang_dir/.jbanglite/jbanglite.jar"
+  # this run's own download, so runs at the same time cannot truncate each
+  # other's file; the finished jar is then renamed into place
+  tmp="$target.$runId.tmp"
   mkdir -p "$abs_jbang_dir/.jbanglite"
   echo "Downloading JBangLite from $url..." 1>&2
-  download "$url" "$target.tmp"
+  download "$url" "$tmp"
   if [ $retval -ne 0 ]; then
-    rm -f "$target.tmp"
+    rm -f "$tmp"
     echo "Error downloading JBangLite from $url" 1>&2
     exit $retval
   fi
   if [ -n "$sha" ]; then
-    actual=$(sha256_of "$target.tmp")
+    actual=$(sha256_of "$tmp")
     if [ -n "$actual" ] && [ "$sha" != "$actual" ]; then
-      rm -f "$target.tmp"
+      rm -f "$tmp"
       echo "SHA-256 mismatch for $url: expected $sha but got $actual" 1>&2
       exit 1
     fi
   fi
-  mv "$target.tmp" "$target"
+  # another run may have put the same jar in place while we were downloading;
+  # its copy is as good as ours
+  if [ -f "$target" ]; then
+    rm -f "$tmp"
+  else
+    mv "$tmp" "$target"
+  fi
 }
 
 # A wrapper installed in a project takes its jar from the repository it was
 # installed from, so there are no releases to look for
-if [[ -z "$binaryPath" && -z "$jarPath" && -f "$abs_jbang_dir/jbanglite.properties" ]]; then
+if [[ -z "$jarPath" && -f "$abs_jbang_dir/jbanglite.properties" ]]; then
   install_wrapper_jar
   jarPath="$abs_jbang_dir/.jbanglite/jbanglite.jar"
 fi
 
-if [[ -z "$binaryPath" && -z "$jarPath" ]]; then
+# Downloads and installs a release into $JBDIR/bin, one run at a time
+install_release() {
+  local bundleName jburl jbtag archive unpackdir
+  acquire_lock "$JBDIR/bin.lock" "$JBDIR/bin/jbanglite.jar"
+  case $? in
+    2) return 0 ;;
+    1) exit 1 ;;
+  esac
+  install_release_locked
+  retval=$?
+  release_lock "$JBDIR/bin.lock"
+  if [ $retval -ne 0 ]; then exit $retval; fi
+}
+
+install_release_locked() {
+  local bundleName jburl jbtag archive unpackdir
+  # another run may have installed it while we waited for the lock
+  if [ -f "$JBDIR/bin/jbanglite.jar" ] && [ -f "$JBDIR/bin/jbanglite" ]; then return 0; fi
+  bundleName="jbanglite.tar"
+  mkdir -p "$TDIR/urls"
+  if [ -n "$JBANG_DOWNLOAD_URL" ]; then
+    jburl="$JBANG_DOWNLOAD_URL";
+  elif [ -z "$JBANG_DOWNLOAD_VERSION" ]; then
+    jburl="${jbangDownloadBaseUrl}/latest/download/$bundleName";
+  else
+    # Numeric versions get a 'v' prefix (e.g. 0.120.0 -> v0.120.0); named
+    # release tags (e.g. 'early-access', '1.0.0-rc1') are used as-is.
+    case "$JBANG_DOWNLOAD_VERSION" in
+      *[!0-9.]*) jbtag="$JBANG_DOWNLOAD_VERSION" ;;
+      *)         jbtag="v$JBANG_DOWNLOAD_VERSION" ;;
+    esac
+    jburl="${jbangDownloadBaseUrl}/download/$jbtag/$bundleName";
+  fi
+  # this run's own archive and unpack directory
+  archive="$TDIR/urls/jbanglite-$runId.tar"
+  unpackdir="$TDIR/urls/jbanglite-$runId"
+  echo "Downloading JBangLite ${JBANG_DOWNLOAD_VERSION:-latest} from $jburl..." 1>&2
+  download "$jburl" "$archive"
+  if [ $retval -ne 0 ]; then
+    rm -f "$archive"
+    echo "Error downloading JBangLite from $jburl" 1>&2
+    return $retval
+  fi
+  echo "Installing JBangLite..." 1>&2
+  rm -rf "$unpackdir"
+  mkdir -p "$unpackdir"
+  if ! tar xf "$archive" -C "$unpackdir"; then
+    rm -rf "$unpackdir"
+    rm -f "$archive"
+    echo "Error installing JBangLite" 1>&2
+    return 1
+  fi
+  mkdir -p "$JBDIR/bin"
+  rm -f "$JBDIR/bin/jbanglite" "$JBDIR/bin"/jbanglite.*
+  cp -f "$unpackdir/jbanglite/bin"/* "$JBDIR/bin"
+  rm -rf "$unpackdir"
+  rm -f "$archive"
+  return 0
+}
+
+if [[ -z "$jarPath" ]]; then
   if [[ ! -f "$JBDIR/bin/jbanglite.jar" || ! -f "$JBDIR/bin/jbanglite" ]]; then
-    if [[ "$JBANG_USE_NATIVE" == "true" ]]; then
-      bundleName="jbanglite-${os}-${arch}.tar"
-    else
-      bundleName="jbanglite.tar"
-    fi
-    mkdir -p "$TDIR/urls"
-    if [ -n "$JBANG_DOWNLOAD_URL" ]; then
-      jburl="$JBANG_DOWNLOAD_URL";
-    elif [ -z "$JBANG_DOWNLOAD_VERSION" ]; then
-      jburl="${jbangDownloadBaseUrl}/latest/download/$bundleName";
-    else
-      # Numeric versions get a 'v' prefix (e.g. 0.120.0 -> v0.120.0); named
-      # release tags (e.g. 'early-access', '1.0.0-rc1') are used as-is.
-      case "$JBANG_DOWNLOAD_VERSION" in
-        *[!0-9.]*) jbtag="$JBANG_DOWNLOAD_VERSION" ;;
-        *)         jbtag="v$JBANG_DOWNLOAD_VERSION" ;;
-      esac
-      jburl="${jbangDownloadBaseUrl}/download/$jbtag/$bundleName";
-    fi
-    echo "Downloading JBangLite ${JBANG_DOWNLOAD_VERSION:-latest} from $jburl..." 1>&2
-    download "$jburl" "$TDIR/urls/jbanglite.tar"
-    if [ $retval -ne 0 ]; then echo "Error downloading JBangLite from $jburl" 1>&2; exit $retval; fi
-    echo "Installing JBangLite..." 1>&2
-    rm -rf "$TDIR/urls/jbanglite"
-    tar xf "$TDIR/urls/jbanglite.tar" -C "$TDIR/urls"
-    if [ $retval -ne 0 ]; then echo "Error installing JBangLite" 1>&2; exit $retval; fi
-    mkdir -p "$JBDIR/bin"
-    rm -f "$JBDIR/bin/jbanglite" "$JBDIR/bin"/jbanglite.*
-    cp -f "$TDIR/urls/jbanglite/bin"/* "$JBDIR/bin"
+    install_release
   fi
   "$JBDIR"/bin/jbanglite "$@"
   exit $?
@@ -464,9 +537,6 @@ if [ -f "$jarPath.new" ]; then
   mv "$jarPath.new" "$jarPath"
 fi
 
-# Only setup Java if we're running the JAR version
-if [[ -z "$binaryPath" ]]; then
-  setup_java_exec
-fi
+setup_java_exec
 
 execute_jbanglite "$@"

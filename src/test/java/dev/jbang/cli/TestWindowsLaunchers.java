@@ -63,22 +63,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		assertEquals(5, result.exitCode, result.stderr);
 	}
 
-	@Test
-	void cmdWarnsAndFallsBackToJarWithoutNativeBinary() throws Exception {
-		RunResult result = runLauncher(cmdLauncher(), "JBANG_USE_NATIVE", "true", "exit", "3");
-		assertEquals(3, result.exitCode, result.stderr);
-		assertTrue(result.stderr.contains("WARNING: JBang native binary"), result.stderr);
-		assertTrue(result.stdout.contains("some output"), result.stdout);
-	}
 
-	@Test
-	void cmdRunsNativeBinaryDirectly() throws Exception {
-		// A stand-in for jbanglite.bin.exe: a copy of jbanglite.cmd would recurse, so use cmd.exe itself
-		Files.copy(Paths.get(System.getenv("ComSpec")), binDir.resolve("jbanglite.bin.exe"));
-		RunResult result = runLauncher(cmdLauncher(), "JBANG_USE_NATIVE", "true", "/c", "echo native & exit 6");
-		assertEquals(6, result.exitCode, result.stderr);
-		assertTrue(result.stdout.contains("native"), result.stdout);
-	}
 
 
 	@Test

@@ -78,7 +78,7 @@ applied the same way:
 | `run` (the default), `info classpath`, `version` | `build`, `info jar`, `jdk default/install/list`, `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `info tools/docs` |
 | `.java` sources | `.jsh`, `.kt`, `.groovy`, `.md`, jars and GAVs as scripts |
 | local files | remote scripts, gists, catalogs and aliases |
-| plain jars | native images, integrations (Quarkus and friends) |
+| plain jars | native images and the launchers' native mode, integrations (Quarkus and friends) |
 | a `tar`/`zip` distribution | releases, installers, packages, the update mechanism, CI |
 
 Global options are `--verbose`, `--quiet`, `--fresh` and `--offline`. Script
@@ -115,7 +115,22 @@ involved, and `JBANG_JVM_INDEX_BASEURL` points both of them at a corporate mirro
 
 The JDK a script asks for with `//JAVA` is still provisioned by the jar; the
 bootstrap JDK only exists to get `jbanglite.jar` started. `jdk default`, `jdk
-install` and `jdk list` were therefore removed.
+install` and `jdk list` were therefore removed. There is no native-image mode
+either: the launchers only ever run the jar.
+
+### Several runs at once
+
+A build matrix or a multi-module build starts JBangLite many times at once
+against the same `~/.jbang`, so no download may fail just because another run
+got there first:
+
+| | |
+| --- | --- |
+| the bootstrap JDK, an installed release | a directory lock (`mkdir` is atomic) — one run installs, the others wait for it and then use what it installed, giving up after `JBANGLITE_LOCK_TIMEOUT` seconds with a message naming the lock to remove |
+| the wrapper's `jbanglite.jar`, the JVM index, every archive and unpack directory | a file of this run's own, renamed into place when it is complete; whoever gets there first wins and the loser keeps that copy |
+
+The JDKs the jar installs for `//JAVA` are locked by the jar itself, so the two
+mechanisms do not overlap.
 
 ## Staying in sync with JBang
 
@@ -194,6 +209,7 @@ like `25` or `25+` accepts any matching patch release.
 | `JBANG_JDK_INDEX` | path to a JDK index JSON file, or a Maven coordinate, replacing the default index |
 | `JBANG_DOWNLOAD_RETRY` | extra download attempts (default 5, `0` disables retries) |
 | `JBANG_DOWNLOAD_RETRY_DELAY` | seconds between attempts (default `0`, meaning exponential backoff) |
+| `JBANGLITE_LOCK_TIMEOUT` | seconds to wait for another run that is downloading (default 600) |
 
 ## Building
 

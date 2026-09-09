@@ -22,6 +22,10 @@ jbanglitew\jbanglite.cmd src\Hello.java  rem Windows
 
 Nothing is written outside `jbanglitew/.jbanglite` and `~/.jbang` (`JBANG_DIR`).
 
+Several runs at once are fine: the JDK download is taken by one run while the
+others wait for it, and every other download goes to a file of its own that is
+renamed into place, so a parallel build never fails over a half-written file.
+
 ## Files
 
 | File | |
