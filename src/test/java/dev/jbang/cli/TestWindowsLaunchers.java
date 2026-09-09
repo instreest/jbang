@@ -98,10 +98,27 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void cmdIgnoresOldJavaHome() throws Exception {
+		stubPs1();
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		assertEquals(42, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
+		assertTrue(result.stdout.contains("delegated to jbang.ps1"), result.stdout);
+	}
+
+	@Test
+	void cmdPrefersCachedDefaultJdkOverJavaHome() throws Exception {
 		linkCachedJdk();
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
-		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
+		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
+	}
+
+	@Test
+	void ps1PrefersCachedDefaultJdkOverJavaHome() throws Exception {
+		linkCachedJdk();
+		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
 	}
 
 	@Test
@@ -122,26 +139,22 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void cmdIgnoresJavaHomeOfUnknownVersion() throws Exception {
-		linkCachedJdk();
+		stubPs1();
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk(null), "exit", "3");
-		assertEquals(3, result.exitCode, result.stderr);
-		assertTrue(result.stderr.contains("could not be determined"), result.stderr);
-	}
-
-	@Test
-	void ps1IgnoresJavaHomeOfUnknownVersion() throws Exception {
-		linkCachedJdk();
-		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk(null), "exit", "3");
-		assertEquals(3, result.exitCode, result.stderr);
+		assertEquals(42, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("could not be determined"), result.stderr);
 	}
 
 	@Test
 	void ps1IgnoresOldJavaHome() throws Exception {
-		linkCachedJdk();
-		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
-		assertEquals(3, result.exitCode, result.stderr);
-		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
+		// With JAVA_HOME rejected and no JDK of its own, jbang.ps1 tries to download
+		// one; an impossible version makes that fail quickly.
+		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"),
+				"JBANG_DEFAULT_JAVA_VERSION", "999", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
+		assertEquals(1, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("older than Java 999"), result.stderr);
+		assertTrue(result.stderr.contains("Error downloading JDK") || result.stderr.contains("Error installing JDK"),
+				result.stderr);
 	}
 
 	@Test
@@ -182,6 +195,15 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		RunResult result = runProcess(
 				Arrays.asList("cmd.exe", "/c", "mklink", "/j", link.toString(), target.toString()), System.getenv());
 		assertEquals(0, result.exitCode, result.stderr);
+	}
+
+	/**
+	 * Replaces jbang.ps1 with a stub so a test can tell that jbang.cmd handed over
+	 * to it instead of running the jar itself.
+	 */
+	private void stubPs1() throws IOException {
+		Files.write(binDir.resolve("jbang.ps1"), Arrays.asList("Write-Output 'delegated to jbang.ps1'", "exit 42"),
+				StandardCharsets.UTF_8);
 	}
 
 	private List<String> cmdLauncher() {

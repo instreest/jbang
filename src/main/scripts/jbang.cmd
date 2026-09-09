@@ -79,30 +79,29 @@ if exist "%JBDIR%\currentjdk\bin\javac.exe" (
   set "JAVA_EXEC=%JBDIR%\currentjdk\bin\java.exe"
   exit /b 0
 )
-if "%JAVA_HOME%"=="" goto :find_java_cached
-if not exist "%JAVA_HOME%\bin\javac.exe" (
-  echo JAVA_HOME is set but does not seem to point to a valid Java JDK 1>&2
-  goto :find_java_cached
-)
-rem Ignore a JDK in JAVA_HOME that is older than the version JBang would install itself
-call :java_major "%JAVA_HOME%"
-if "%javaMajor%"=="" (
-  echo JAVA_HOME is set but the Java version could not be determined, ignoring it 1>&2
-  goto :find_java_cached
-)
-if %javaMajor% LSS %javaVersion% (
-  echo JAVA_HOME points to Java %javaMajor% which is older than Java %javaVersion%, ignoring it 1>&2
-  goto :find_java_cached
-)
-set "JAVA_EXEC=%JAVA_HOME%\bin\java.exe"
-exit /b 0
-:find_java_cached
+rem Then the default JDK that JBang downloaded itself
 if exist "%TDIR%\jdks\%javaVersion%\bin\javac.exe" (
   set "JAVA_HOME=%TDIR%\jdks\%javaVersion%"
   set "JAVA_EXEC=%TDIR%\jdks\%javaVersion%\bin\java.exe"
   exit /b 0
 )
-exit /b 1
+rem Finally JAVA_HOME, but only when it points to a JDK that is recent enough
+if "%JAVA_HOME%"=="" exit /b 1
+if not exist "%JAVA_HOME%\bin\javac.exe" (
+  echo JAVA_HOME is set but does not seem to point to a valid Java JDK 1>&2
+  exit /b 1
+)
+call :java_major "%JAVA_HOME%"
+if "%javaMajor%"=="" (
+  echo JAVA_HOME is set but the Java version could not be determined, ignoring it 1>&2
+  exit /b 1
+)
+if %javaMajor% LSS %javaVersion% (
+  echo JAVA_HOME points to Java %javaMajor% which is older than Java %javaVersion%, ignoring it 1>&2
+  exit /b 1
+)
+set "JAVA_EXEC=%JAVA_HOME%\bin\java.exe"
+exit /b 0
 
 rem Sets javaMajor to the major version of the JDK in %1 as read from its
 rem 'release' file (e.g. 8, 11, 17); leaves it empty when it cannot be determined.

@@ -187,10 +187,15 @@ function Find-JavaExec {
         $env:JAVA_HOME="$JBDIR\currentjdk"
         return "$JBDIR\currentjdk\bin\java.exe"
     }
+    # Then the default JDK that JBang downloaded itself
+    $defaultJdk="$TDIR\jdks\$javaVersion"
+    if (Test-Path "$defaultJdk\bin\javac.exe") {
+        $env:JAVA_HOME=$defaultJdk
+        return "$defaultJdk\bin\java.exe"
+    }
+    # Then JAVA_HOME, but only when it points to a JDK that is recent enough
     if ($env:JAVA_HOME) {
-        # Determine if a (working) JDK is available in JAVA_HOME
         if (Test-Path "$env:JAVA_HOME\bin\javac.exe") {
-            # Ignore a JDK that is older than the version JBang would install itself
             $major = Get-JavaMajorVersion $env:JAVA_HOME
             if (-not $major) {
                 [Console]::Error.WriteLine("JAVA_HOME is set but the Java version could not be determined, ignoring it")
@@ -203,15 +208,12 @@ function Find-JavaExec {
             [Console]::Error.WriteLine("JAVA_HOME is set but does not seem to point to a valid Java JDK")
         }
     }
-    $env:JAVA_HOME="$TDIR\jdks\$javaVersion"
-    $javaExec="$env:JAVA_HOME\bin\java.exe"
-    # Check if we installed a JDK before, if not download and install it
-    if (-not (Test-Path "$TDIR\jdks\$javaVersion")) {
-        Install-Jdk
-        # Set the current JDK
-        & "$javaExec" -jar "$jarPath" jdk default $javaVersion
-    }
-    return $javaExec
+    # Nothing usable found: download and install the default JDK
+    $env:JAVA_HOME=$defaultJdk
+    Install-Jdk
+    # Set the current JDK
+    & "$defaultJdk\bin\java.exe" -jar "$jarPath" jdk default $javaVersion
+    return "$defaultJdk\bin\java.exe"
 }
 
 # detect architecture for platform-specific binary lookup
