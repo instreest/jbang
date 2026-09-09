@@ -582,7 +582,7 @@ These are read by the scripts themselves before Java or JBang's Java code is inv
 
 | `JBANG_DEFAULT_JAVA_VERSION`
 | `17`
-| Java version to install when no JDK is found on the system. On Windows the launchers also ignore a `JAVA_HOME` pointing to a JDK older than this version.
+| Java version to install when no JDK is found on the system. On Windows the launchers only use `JAVA_HOME` when it points to a JDK of at least this version (as read from its `release` file); JDKs found on the `PATH` are not used, JBang falls back to its own default JDK instead.
 
 | `JBANG_JDK_VENDOR`
 | `temurin` (for 8, 11, 17+) +

@@ -187,7 +187,9 @@ function Find-JavaExec {
         if (Test-Path "$env:JAVA_HOME\bin\javac.exe") {
             # Ignore a JDK that is older than the version JBang would install itself
             $major = Get-JavaMajorVersion $env:JAVA_HOME
-            if ($major -and $major -lt [int]$javaVersion) {
+            if (-not $major) {
+                [Console]::Error.WriteLine("JAVA_HOME is set but the Java version could not be determined, ignoring it")
+            } elseif ($major -lt [int]$javaVersion) {
                 [Console]::Error.WriteLine("JAVA_HOME points to Java $major which is older than Java $javaVersion, ignoring it")
             } else {
                 return "$env:JAVA_HOME\bin\java.exe"
@@ -195,11 +197,6 @@ function Find-JavaExec {
         } else {
             [Console]::Error.WriteLine("JAVA_HOME is set but does not seem to point to a valid Java JDK")
         }
-    }
-    # Determine if a (working) JDK is available on the PATH
-    if (Get-Command "javac" -ErrorAction Ignore) {
-        $env:JAVA_HOME=""
-        return "java.exe"
     }
     if (Test-Path "$JBDIR\currentjdk\bin\javac.exe") {
         $env:JAVA_HOME="$JBDIR\currentjdk"

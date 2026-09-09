@@ -80,18 +80,17 @@ if not exist "%JAVA_HOME%\bin\javac.exe" (
 )
 rem Ignore a JDK in JAVA_HOME that is older than the version JBang would install itself
 call :java_major "%JAVA_HOME%"
-if not "%javaMajor%"=="" if %javaMajor% LSS %javaVersion% (
+if "%javaMajor%"=="" (
+  echo JAVA_HOME is set but the Java version could not be determined, ignoring it 1>&2
+  goto :find_java_path
+)
+if %javaMajor% LSS %javaVersion% (
   echo JAVA_HOME points to Java %javaMajor% which is older than Java %javaVersion%, ignoring it 1>&2
   goto :find_java_path
 )
 set "JAVA_EXEC=%JAVA_HOME%\bin\java.exe"
 exit /b 0
 :find_java_path
-where javac >nul 2>&1 && (
-  set "JAVA_HOME="
-  set "JAVA_EXEC=java.exe"
-  exit /b 0
-)
 if exist "%JBDIR%\currentjdk\bin\javac.exe" (
   set "JAVA_HOME=%JBDIR%\currentjdk"
   set "JAVA_EXEC=%JBDIR%\currentjdk\bin\java.exe"
@@ -106,6 +105,8 @@ exit /b 1
 
 rem Sets javaMajor to the major version of the JDK in %1 as read from its
 rem 'release' file (e.g. 8, 11, 17); leaves it empty when it cannot be determined.
+rem Only the JAVA_VERSION line is used, so a broken or fake 'release' file just
+rem causes the JDK to be ignored.
 :java_major
 set "javaMajor="
 if not exist "%~1\release" exit /b 0

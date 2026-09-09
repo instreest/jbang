@@ -97,13 +97,31 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void cmdIgnoresOldJavaHome() throws Exception {
+		linkCurrentJdk();
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("11.0.2"), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
 	}
 
 	@Test
+	void cmdIgnoresJavaHomeOfUnknownVersion() throws Exception {
+		linkCurrentJdk();
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk(null), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("could not be determined"), result.stderr);
+	}
+
+	@Test
+	void ps1IgnoresJavaHomeOfUnknownVersion() throws Exception {
+		linkCurrentJdk();
+		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk(null), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("could not be determined"), result.stderr);
+	}
+
+	@Test
 	void ps1IgnoresOldJavaHome() throws Exception {
+		linkCurrentJdk();
 		RunResult result = runLauncher(ps1Launcher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("older than Java 17"), result.stderr);
@@ -122,6 +140,18 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	void ps1ExecutesGeneratedCommand() throws Exception {
 		RunResult result = runLauncher(ps1Launcher(), "exec", "cmd /c exit 5");
 		assertEquals(5, result.exitCode, result.stderr);
+	}
+
+	/**
+	 * Makes the running JDK available as JBANG_DIR\currentjdk (as 'jbang jdk
+	 * default' would) so the launchers have a JDK to fall back to when JAVA_HOME
+	 * is rejected, without downloading one.
+	 */
+	private void linkCurrentJdk() throws Exception {
+		Path jbangHome = Files.createDirectories(tempDir.resolve("jbang-home"));
+		RunResult result = runProcess(Arrays.asList("cmd.exe", "/c", "mklink", "/j",
+				jbangHome.resolve("currentjdk").toString(), System.getProperty("java.home")), System.getenv());
+		assertEquals(0, result.exitCode, result.stderr);
 	}
 
 	private List<String> cmdLauncher() {
@@ -151,16 +181,19 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	}
 
 	/**
-	 * Creates a directory that looks like a JDK of the given version but whose
-	 * java.exe would fail: the launchers must not pick it.
+	 * Creates a directory that looks like a JDK of the given version (no
+	 * 'release' file when null) but whose java.exe would fail: the launchers must
+	 * not pick it.
 	 */
 	private String createFakeJdk(String version) throws IOException {
 		Path jdk = Files.createDirectories(tempDir.resolve("oldjdk"));
 		Files.createDirectories(jdk.resolve("bin"));
 		Files.write(jdk.resolve("bin/javac.exe"), new byte[0]);
 		Files.write(jdk.resolve("bin/java.exe"), new byte[0]);
-		Files.write(jdk.resolve("release"), Arrays.asList("JAVA_VERSION=\"" + version + "\"", "OS_NAME=\"Windows\""),
-				StandardCharsets.UTF_8);
+		if (version != null) {
+			Files.write(jdk.resolve("release"),
+					Arrays.asList("JAVA_VERSION=\"" + version + "\"", "OS_NAME=\"Windows\""), StandardCharsets.UTF_8);
+		}
 		return jdk.toString();
 	}
 
