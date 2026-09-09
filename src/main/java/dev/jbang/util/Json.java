@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.util;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -11,7 +11,7 @@ import java.util.Map;
  * {@code String}, numbers {@code Double} and the literals
  * {@code Boolean}/{@code null}.
  */
-final class Json {
+public final class Json {
 	private final String src;
 	private int pos;
 
@@ -19,7 +19,7 @@ final class Json {
 		this.src = src;
 	}
 
-	static Object parse(String text) {
+	public static Object parse(String text) {
 		Json json = new Json(text);
 		json.skipWhitespace();
 		Object value = json.readValue();
@@ -31,7 +31,7 @@ final class Json {
 	}
 
 	@SuppressWarnings("unchecked")
-	static Map<String, Object> parseObject(String text) {
+	public static Map<String, Object> parseObject(String text) {
 		Object value = parse(text);
 		if (!(value instanceof Map)) {
 			throw new IllegalArgumentException("Expected a JSON object");

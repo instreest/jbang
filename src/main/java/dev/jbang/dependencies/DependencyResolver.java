@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.dependencies;
 
 import java.io.Closeable;
 import java.nio.file.Path;
@@ -22,6 +22,7 @@ import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.artifact.DefaultArtifact;
 import org.eclipse.aether.collection.CollectRequest;
 import org.eclipse.aether.graph.Dependency;
+import org.eclipse.aether.repository.RemoteRepository;
 import org.eclipse.aether.resolution.ArtifactDescriptorException;
 import org.eclipse.aether.resolution.ArtifactDescriptorRequest;
 import org.eclipse.aether.resolution.ArtifactDescriptorResult;
@@ -39,6 +40,9 @@ import org.eclipse.aether.util.repository.SimpleArtifactDescriptorPolicy;
 import eu.maveniverse.maven.mima.context.Context;
 import eu.maveniverse.maven.mima.context.ContextOverrides;
 import eu.maveniverse.maven.mima.context.Runtimes;
+import dev.jbang.ExitException;
+import dev.jbang.Settings;
+import dev.jbang.util.Util;
 
 /**
  * Resolves Maven coordinates (including their transitive dependencies) to
@@ -46,31 +50,38 @@ import eu.maveniverse.maven.mima.context.Runtimes;
  * as remote repository (plus mirrors/proxies from ~/.m2/settings.xml); the
  * local repository is the standard ~/.m2/repository unless JBANG_REPO is set.
  */
-public final class DependencyResolver implements Closeable {
-	private final Context context;
+public final class DependencyResolver {
+	private final Set<MavenRepo> repositories = new LinkedHashSet<>();
+	private final Set<String> dependencies = new LinkedHashSet<>();
+	private final Set<String> classPaths = new LinkedHashSet<>();
 
-	private DependencyResolver(boolean offline, boolean updateCache) {
-		Map<String, String> userProperties = new HashMap<>();
-		// avoid being blocked by servers that reject the default "Java" user agent
-		userProperties.put("aether.connector.userAgent", "JBang/" + Util.getJBangVersion());
-
-		ContextOverrides.Builder overrides = ContextOverrides.create()
-			.userProperties(userProperties)
-			.offline(offline)
-			.withUserSettings(true)
-			.withLocalRepositoryOverride(Settings.getLocalMavenRepoOverride())
-			.repositories(Collections.singletonList(ContextOverrides.CENTRAL))
-			.addRepositoriesOp(ContextOverrides.AddRepositoriesOp.REPLACE)
-			.snapshotUpdatePolicy(updateCache ? ContextOverrides.SnapshotUpdatePolicy.ALWAYS : null);
-		if (!Util.isQuiet()) {
-			overrides.repositoryListener(new ProgressListener());
-		}
-		this.context = Runtimes.INSTANCE.getRuntime().create(overrides.build());
+	public DependencyResolver addRepositories(List<MavenRepo> repos) {
+		repositories.addAll(repos);
+		return this;
 	}
 
-	@Override
-	public void close() {
-		context.close();
+	public DependencyResolver addDependencies(List<String> deps) {
+		dependencies.addAll(deps);
+		return this;
+	}
+
+	public DependencyResolver addClassPath(String classPath) {
+		classPaths.add(classPath);
+		return this;
+	}
+
+	/**
+	 * Resolves the collected dependencies and appends any explicit class path
+	 * entries (such as the jars of sub-projects) to the result.
+	 */
+	public List<ArtifactInfo> resolve() {
+		List<ArtifactInfo> artifacts = new ArrayList<>(
+				resolve(new ArrayList<>(dependencies), new ArrayList<>(repositories)));
+		for (String cp : classPaths) {
+			// NB: File is more lenient about odd paths than Path
+			artifacts.add(new ArtifactInfo(null, new java.io.File(cp).toPath()));
+		}
+		return artifacts;
 	}
 
 	/**
@@ -78,13 +89,18 @@ public final class DependencyResolver implements Closeable {
 	 * in dependency order. Results are cached on disk (keyed by the list of
 	 * coordinates) and reused as long as the files are unchanged.
 	 */
-	public static List<ArtifactInfo> resolve(List<String> deps) {
+	public static List<ArtifactInfo> resolve(List<String> deps, List<MavenRepo> repos) {
 		if (deps.isEmpty()) {
 			return Collections.emptyList();
 		}
 		List<String> depIds = new ArrayList<>(new LinkedHashSet<>(deps));
 		Util.verboseMsg("Resolving artifact(s): " + String.join(", ", depIds));
-		String key = String.join(Settings.CP_SEPARATOR, depIds);
+		if (!repos.isEmpty()) {
+			Util.verboseMsg("Repositories: "
+					+ repos.stream().map(MavenRepo::toString).collect(Collectors.joining(", ")));
+		}
+		String key = repos.stream().map(MavenRepo::toString).collect(Collectors.joining(","))
+				+ "|" + String.join(Settings.CP_SEPARATOR, depIds);
 		if (!Util.isFresh()) {
 			List<ArtifactInfo> cached = DependencyCache.find(key);
 			if (cached != null) {
@@ -93,7 +109,7 @@ public final class DependencyResolver implements Closeable {
 			}
 		}
 		Util.infoMsg("Resolving dependencies...");
-		try (DependencyResolver resolver = new DependencyResolver(Util.isOffline(), Util.isFresh())) {
+		try (Session resolver = new Session(Util.isOffline(), Util.isFresh(), repos)) {
 			List<ArtifactInfo> artifacts = resolver.doResolve(depIds);
 			Util.infoMsg("Dependencies resolved");
 			DependencyCache.store(key, artifacts);
@@ -111,10 +127,60 @@ public final class DependencyResolver implements Closeable {
 	 * local repository.
 	 */
 	public static Path resolveArtifact(String coord) {
-		try (DependencyResolver resolver = new DependencyResolver(Util.isOffline(), Util.isFresh())) {
+		try (Session resolver = new Session(Util.isOffline(), Util.isFresh(), Collections.emptyList())) {
 			return resolver.doResolveArtifact(coord);
 		}
 	}
+
+	/** The local Maven repository in use (e.g. ~/.m2/repository). */
+	public static Path getLocalMavenRepo() {
+		try (Session r = new Session(true, false, Collections.emptyList())) {
+			return r.context.repositorySystemSession().getLocalRepository().getBasedir().toPath();
+		}
+	}
+
+	/** A Maven Resolver session, configured the way JBangLite needs it. */
+	private static final class Session implements Closeable {
+	private final Context context;
+
+	private Session(boolean offline, boolean updateCache, List<MavenRepo> repositories) {
+		Map<String, String> userProperties = new HashMap<>();
+		// avoid being blocked by servers that reject the default "Java" user agent
+		userProperties.put("aether.connector.userAgent", "JBang/" + Util.getJBangVersion());
+
+		ContextOverrides.Builder overrides = ContextOverrides.create()
+			.userProperties(userProperties)
+			.offline(offline)
+			.withUserSettings(true)
+			.withLocalRepositoryOverride(Settings.getLocalMavenRepoOverride())
+			.repositories(toRemoteRepositories(repositories))
+			.addRepositoriesOp(ContextOverrides.AddRepositoriesOp.REPLACE)
+			.snapshotUpdatePolicy(updateCache ? ContextOverrides.SnapshotUpdatePolicy.ALWAYS : null);
+		if (!Util.isQuiet()) {
+			overrides.repositoryListener(new ProgressListener());
+		}
+		this.context = Runtimes.INSTANCE.getRuntime().create(overrides.build());
+	}
+
+	@Override
+	public void close() {
+		context.close();
+	}
+
+	/**
+	 * Maven Central plus whatever //REPOS (or --repos) asked for. Mirrors,
+	 * proxies and credentials still come from ~/.m2/settings.xml.
+	 */
+	private static List<RemoteRepository> toRemoteRepositories(List<MavenRepo> repositories) {
+		if (repositories.isEmpty()) {
+			return Collections.singletonList(ContextOverrides.CENTRAL);
+		}
+		return repositories.stream()
+			.map(r -> new RemoteRepository.Builder(r.getId(), "default", r.getUrl()).build())
+			.collect(Collectors.toList());
+	}
+
+
 
 	private Path doResolveArtifact(String coord) {
 		Artifact artifact = toArtifact(coord);
@@ -149,12 +215,6 @@ public final class DependencyResolver implements Closeable {
 		}
 	}
 
-	/** The local Maven repository in use (e.g. ~/.m2/repository). */
-	public static Path getLocalMavenRepo() {
-		try (DependencyResolver r = new DependencyResolver(true, false)) {
-			return r.context.repositorySystemSession().getLocalRepository().getBasedir().toPath();
-		}
-	}
 
 	private List<ArtifactInfo> doResolve(List<String> depIds) {
 		context.repositorySystemSession().getData().set("depIds", depIds);
@@ -194,7 +254,7 @@ public final class DependencyResolver implements Closeable {
 				.getArtifactResults();
 			return artifacts.stream()
 				.map(ArtifactResult::getArtifact)
-				.map(DependencyResolver::toArtifactInfo)
+				.map(Session::toArtifactInfo)
 				.collect(Collectors.toList());
 		} catch (DependencyResolutionException ex) {
 			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
@@ -292,5 +352,6 @@ public final class DependencyResolver implements Closeable {
 				printed.add(id);
 			}
 		}
+	}
 	}
 }

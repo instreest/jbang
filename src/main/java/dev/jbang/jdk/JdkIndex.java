@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.jdk;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,6 +14,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import dev.jbang.ExitException;
+import dev.jbang.Settings;
+import dev.jbang.dependencies.DependencyResolver;
+import dev.jbang.util.Json;
+import dev.jbang.util.RequestedVersion;
+import dev.jbang.util.Util;
 
 /**
  * The list of downloadable JDKs. JBangLite uses the JVM index that the

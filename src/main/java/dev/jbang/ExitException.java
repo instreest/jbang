@@ -1,9 +1,7 @@
 package dev.jbang;
 
 /**
- * Thrown to terminate JBangLite with a specific exit status. A status of
- * {@link #EXIT_EXECUTE} (255) tells the launcher scripts that the text printed
- * on stdout is a command line they must execute.
+ * Used when wanting to exit app from a command.
  */
 public class ExitException extends RuntimeException {
 
@@ -27,16 +25,52 @@ public class ExitException extends RuntimeException {
 		this.status = status;
 	}
 
-	public ExitException(int status, String message) {
-		this(status, message, null);
-	}
-
 	public ExitException(int status, String message, Throwable cause) {
 		super(message, cause);
 		this.status = status;
 	}
 
+	public ExitException(int status, String s) {
+		this(status, s, null);
+	}
+
 	public int getStatus() {
 		return status;
+	}
+
+	public static ExitException invalidInput(String message) {
+		return new ExitException(EXIT_INVALID_INPUT, message);
+	}
+
+	public static ExitException invalidInput(String message, Throwable cause) {
+		return new ExitException(EXIT_INVALID_INPUT, message, cause);
+	}
+
+	public static ExitException unexpectedState(String message) {
+		return new ExitException(EXIT_UNEXPECTED_STATE, message);
+	}
+
+	public static ExitException unexpectedState(String message, Throwable cause) {
+		return new ExitException(EXIT_UNEXPECTED_STATE, message, cause);
+	}
+
+	public static ExitException genericError(String message) {
+		return new ExitException(EXIT_GENERIC_ERROR, message);
+	}
+
+	public static ExitException genericError(String message, Throwable cause) {
+		return new ExitException(EXIT_GENERIC_ERROR, message, cause);
+	}
+
+	public static ExitException genericError(Throwable cause) {
+		return new ExitException(EXIT_GENERIC_ERROR, cause);
+	}
+
+	public static ExitException internalError(String message) {
+		return new ExitException(EXIT_INTERNAL_ERROR, message);
+	}
+
+	public static ExitException internalError(String message, Throwable cause) {
+		return new ExitException(EXIT_INTERNAL_ERROR, message, cause);
 	}
 }

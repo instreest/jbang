@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.jdk;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -15,6 +15,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import dev.jbang.ExitException;
+import dev.jbang.Settings;
+import dev.jbang.util.RequestedVersion;
+import dev.jbang.util.Util;
 
 /**
  * Finds JDKs already present on the machine and installs missing ones from the

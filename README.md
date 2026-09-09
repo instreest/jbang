@@ -1,10 +1,11 @@
 # JBangLite
 
-A stripped-down fork of [JBang](https://github.com/jbangdev/jbang) that keeps
-only what is needed to build and run a single-file Java program together with
-its `//DEPS`, `//JAVA` and `//SOURCES` directives. It was reduced for use by
-[java-call-hierarchy-exporter](https://github.com/instreest/java-call-hierarchy-exporter),
-but works for any script that only relies on those three directives.
+A reduced fork of [JBang](https://github.com/jbangdev/jbang) for running
+single-file Java programs. The `//`-directives behave exactly as in JBang,
+because the code that parses them is mirrored from JBang unchanged; what was
+removed are the subcommands, the other source languages and the release and
+installer machinery. It was reduced for use by
+[java-call-hierarchy-exporter](https://github.com/instreest/java-call-hierarchy-exporter).
 
 ```java
 //DEPS org.eclipse.jdt:org.eclipse.jdt.core:3.46.0
@@ -12,39 +13,85 @@ but works for any script that only relies on those three directives.
 //SOURCES jche/**/*.java
 ```
 
-## What is supported
+## Directives
 
-| Feature | Notes |
+All directives JBang understands are parsed by the mirrored parser and are
+applied the same way:
+
+| Directive | Behaviour |
 | --- | --- |
-| `jbang <script.java> [args]` / `jbang run` | compiles (if needed) and runs the script |
-| `jbang build <script.java>` | compiles only |
-| `jbang info classpath [--deps-only] <script.java>` | prints the class path (jar + dependencies) |
-| `jbang info jar <script.java>` | prints the path of the built jar |
-| `jbang jdk default [<version>]`, `jdk install <version>`, `jdk list` | used by the launcher scripts |
-| `//DEPS g:a:v[:classifier][@type]` | resolved from Maven Central (mirrors/proxies from `~/.m2/settings.xml` are honoured); `@pom` entries act as BOMs |
-| `//JAVA 17`, `//JAVA 17+`, `//JAVA 25.0.3` | the JDK is looked up (running JVM, `currentjdk`, `JAVA_HOME`, `PATH`, `~/.jbang/cache/jdks`) and downloaded when missing; a full version pins an exact JDK |
-| `//SOURCES file-or-glob ...` | relative to the declaring file, recursive |
-| `${property}` in directives | system properties, `-Dkey=value` and `os.detected.*` |
-| Global options | `--verbose`, `--quiet`, `--fresh`, `--offline` |
-| Script options | `--java <v>`, `--main <class>`, `--deps <gav,...>`, `-Dkey=value`, `-R<jvm option>` |
+| `//DEPS <gav>` | resolved from Maven Central; `@pom` entries act as BOMs, URLs become JitPack coordinates, `@Grab` annotations are read too |
+| `//DEPS <file.java>` | built as its own project and put on the class path |
+| `//SOURCES <file-or-glob>` | compiled together with the script, recursively |
+| `//FILES [<target>=]<file-or-glob>` | copied into the jar, optionally under another name or folder |
+| `//JAVA <version>[+]` | selects the JDK, downloading one when needed |
+| `//REPOS [<id>=]<url-or-alias>` | extra Maven repositories, `@GrabResolver` included |
+| `//MAIN <class>` | the class to run |
+| `//MODULE [<name>]` | builds and runs as a module, generating `module-info.java` when there is none |
+| `//MANIFEST <key>=<value>` | added to the jar manifest; `Add-Opens`, `Add-Exports` and `Enable-Native-Access` also reach the `java` command line |
+| `//JAVAAGENT` | records the `premain` and `agentmain` classes in the manifest |
+| `//COMPILE_OPTIONS`, `//JAVAC_OPTIONS` | passed to `javac` |
+| `//RUNTIME_OPTIONS`, `//JAVA_OPTIONS` | passed to `java` |
+| `//PREVIEW` | compiles and runs with `--enable-preview` |
+| `//CDS` | class data sharing, archive next to the jar |
+| `//GAV`, `//DESCRIPTION` | written into the `pom.xml` inside the jar |
+| `//DOCS` | parsed and kept, but JBangLite has no `info docs` command to show it |
+| `//NOINTEGRATIONS`, `//NATIVE_OPTIONS` | inert: JBangLite has no build-time integrations and no native image |
+| `//GROOVY`, `//KOTLIN` | inert: only `.java` sources are accepted |
+| `${property}` in any directive | system properties, `-Dkey=value` and `os.detected.*` |
+
+## What was removed
+
+| Kept | Removed |
+| --- | --- |
+| `run` (the default), `build`, `info classpath`, `info jar`, `jdk default/install/list`, `version` | `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `info tools/docs` |
+| `.java` sources | `.jsh`, `.kt`, `.groovy`, `.md`, jars and GAVs as scripts |
+| local files | remote scripts, gists, catalogs and aliases |
+| plain jars | native images, integrations (Quarkus and friends) |
+| a `tar`/`zip` distribution | releases, installers, packages, the update mechanism, CI |
+
+Global options are `--verbose`, `--quiet`, `--fresh` and `--offline`. Script
+options are `--java`, `--main`, `--module`, `--deps`, `--repos`,
+`-C<compiler option>`, `-R<jvm option>`, `-Dkey=value`, `--enable-preview`,
+`-ea`, `-esa` and `--cds`.
 
 The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<name>.jar`,
 `~/.jbang/cache/jdks/<version>`, `~/.jbang/currentjdk`), and `run` still prints the
 `java` command line and exits with status 255 so the launcher scripts
 (`jbang`, `jbang.cmd`, `jbang.ps1`) can exec it.
 
-Everything else from JBang was removed: catalogs/aliases/templates, `init`, `edit`,
-`export`, `app`, `wrapper`, `trust`, remote/URL scripts, Kotlin/Groovy/JShell/Markdown
-sources, native images, integrations, `//REPOS`, `//FILES`, `//JAVA_OPTIONS`,
-`//JAVAC_OPTIONS`, `//MODULE`, `//MANIFEST`, and so on.
+## Staying in sync with JBang
+
+The tree is split in three, so that fixes JBang makes to the directive handling
+can be taken over without merging:
+
+| | Contents | Maintenance |
+| --- | --- | --- |
+| Mirror | the files in `misc/upstream-mirror.txt`, among them `Directives.java` and its test | copied from JBang unchanged, never edited here |
+| Shims | the files in `misc/upstream-shims.txt` (`Util`, `JavaUtil`, `DependencyUtil`) | upstream's API with a reduced implementation, checked by hand when upstream changes them |
+| JBangLite | everything else | this fork's own code |
+
+```bash
+misc/sync-upstream.sh            # take the mirrored files from upstream/main
+misc/sync-upstream.sh <ref>      # ... or from a specific tag or commit
+./gradlew build
+```
+
+The script reports which commits touched the mirrored files and which touched
+the shims, and records the synced revision in `misc/upstream-ref.txt`. Because
+it only ever copies whole files, an upstream commit that also changes hundreds
+of unrelated files costs nothing here, which is why this is a sync and not a
+`git cherry-pick`.
 
 ## Dependencies
 
 The only third-party runtime dependencies are Maven Resolver (through
-[MIMA](https://github.com/maveniverse/mima)) and the slf4j no-op binding it needs.
+[MIMA](https://github.com/maveniverse/mima)), the slf4j no-op binding it needs
+and the jspecify annotations used by the mirrored files.
 JDK download/unpacking, class-file inspection for the main class, jar creation,
-OS detection and command-line quoting are implemented in the JDK's standard
-library only (`src/main/java/dev/jbang`, 20 small classes).
+OS detection and module-info generation are implemented with the JDK's standard
+library only. `jbang.jar` itself needs Java 11 or later to run (JBang targets
+Java 8); the JDK used for scripts is whatever `//JAVA` asks for.
 
 ## How JDKs are obtained
 

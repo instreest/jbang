@@ -13,21 +13,37 @@ repositories {
 }
 
 java {
-	sourceCompatibility = JavaVersion.VERSION_1_8
-	targetCompatibility = JavaVersion.VERSION_1_8
+	sourceCompatibility = JavaVersion.VERSION_11
+	targetCompatibility = JavaVersion.VERSION_11
 }
 
 dependencies {
+	// nullness annotations, required by the files mirrored from JBang
+	implementation 'org.jspecify:jspecify:1.0.0'
+
 	// Maven dependency resolution (the one thing we really cannot re-implement ourselves)
 	implementation "eu.maveniverse.maven.mima:context:2.4.36"
 	runtimeOnly    "eu.maveniverse.maven.mima.runtime:standalone-static:2.4.36"
 	implementation "org.slf4j:slf4j-nop:2.0.18"
 	implementation "org.slf4j:jcl-over-slf4j:2.0.18"
+
+	testImplementation platform("org.junit:junit-bom:5.14.4")
+	testImplementation "org.junit.jupiter:junit-jupiter"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+	testImplementation "org.hamcrest:hamcrest:3.0"
+}
+
+test {
+	useJUnitPlatform()
+	testLogging {
+		events "failed"
+		exceptionFormat "full"
+	}
 }
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
-	options.compilerArgs.addAll(['--release', '8', '-Xlint:deprecation', '-Xlint:-options'])
+	options.compilerArgs.addAll(['--release', '11', '-Xlint:deprecation', '-Xlint:-options'])
 }
 
 tasks.withType(AbstractArchiveTask) {

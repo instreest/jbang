@@ -10,7 +10,8 @@ MIT License.
 
 | Files | Origin | License |
 | --- | --- | --- |
-| `src/main/java/dev/jbang/*` (Directives, CommandBuffer, DependencyResolver, DependencyCache, MavenCoordinate, ArtifactInfo, Util, Settings, ExitException, Main, launcher scripts `src/main/scripts/*`) | [jbangdev/jbang](https://github.com/jbangdev/jbang), Copyright (c) 2020 Max Rydahl Andersen | MIT |
+| the files listed in `misc/upstream-mirror.txt` (among them `Directives.java`, `MavenCoordinate.java`, `JitPackUtil.java` and their test) | [jbangdev/jbang](https://github.com/jbangdev/jbang), Copyright (c) 2020 Max Rydahl Andersen, copied unchanged | MIT |
+| the files listed in `misc/upstream-shims.txt` and the rest of `src/main/java/dev/jbang/*` and `src/main/scripts/*` | [jbangdev/jbang](https://github.com/jbangdev/jbang), Copyright (c) 2020 Max Rydahl Andersen, derived | MIT |
 | `Jdk.java`, `JdkManager.java`, `Unpacker.java`, parts of `Util.java` (OS/architecture detection, link handling) | [jbangdev/jbang-devkitman](https://github.com/jbangdev/jbang-devkitman), Copyright (c) Max Rydahl Andersen and contributors | MIT |
 | `PropertiesValueResolver.java` | Written by David M. Lloyd (Red Hat) for the JBoss/WildFly projects, included in JBang | Apache License 2.0 / MIT (as distributed in JBang) |
 | `OsDetector.java` (OS and architecture normalisation tables) | [os-maven-plugin](https://github.com/trustin/os-maven-plugin) by Trustin Lee, as also used by the Nisse os-detector in JBang | Apache License 2.0 |

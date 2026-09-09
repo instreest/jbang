@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.jdk;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -7,6 +7,7 @@ import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import dev.jbang.util.Util;
 
 /**
  * An installed JDK: its home directory and version. Version detection follows

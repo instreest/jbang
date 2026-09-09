@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.jdk;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -8,6 +8,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Optional;
+import dev.jbang.Settings;
+import dev.jbang.util.Util;
 
 /**
  * Minimal HTTP(S) downloader. Redirects are followed (also across protocols and

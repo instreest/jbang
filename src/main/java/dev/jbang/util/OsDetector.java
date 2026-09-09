@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.util;
 
 import java.util.Locale;
 import java.util.Properties;

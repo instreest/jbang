@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.util;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -6,24 +6,64 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Finds classes with a <code>main</code> method by reading the class files
- * directly (constant pool + method table), so no bytecode library is needed.
- * Both <code>public static void main(String[])</code> and the instance
- * <code>void main()</code> of JEP 445/512 are accepted.
+ * Finds classes declaring a given method by reading the class files directly
+ * (constant pool plus method table), so no bytecode library is needed. This
+ * covers what JBang uses jandex for: locating the main class and the
+ * <code>premain</code> or <code>agentmain</code> of a Java agent.
  */
-final class MainClassFinder {
+public final class MainClassFinder {
 	private static final int ACC_STATIC = 0x0008;
+
+	public static final String DESC_MAIN = "([Ljava/lang/String;)V";
+	public static final String DESC_NO_ARGS = "()V";
+	public static final String DESC_AGENT = "(Ljava/lang/String;)V";
+	public static final String DESC_AGENT_INSTRUMENTATION = "(Ljava/lang/String;Ljava/lang/instrument/Instrumentation;)V";
+
+	/** A method as found in a class file. */
+	public static final class Method {
+		public final String name;
+		public final String descriptor;
+		public final boolean isStatic;
+
+		Method(String name, String descriptor, boolean isStatic) {
+			this.name = name;
+			this.descriptor = descriptor;
+			this.isStatic = isStatic;
+		}
+	}
 
 	private MainClassFinder() {
 	}
 
-	/** Fully qualified names of all classes with a main method under dir. */
-	static List<String> findMainClasses(Path dir) throws IOException {
+	/**
+	 * Fully qualified names of all classes under dir with a main method, both
+	 * the classic <code>public static void main(String[])</code> and the
+	 * instance <code>void main()</code> of JEP 512.
+	 */
+	public static List<String> findMainClasses(Path dir) throws IOException {
+		return scan(dir, m -> ("main".equals(m.name)
+				&& (DESC_MAIN.equals(m.descriptor) || DESC_NO_ARGS.equals(m.descriptor))));
+	}
+
+	/**
+	 * Fully qualified names of the classes under dir declaring the given agent
+	 * method, with or without the Instrumentation parameter.
+	 */
+	public static List<String> findAgentClasses(Path dir, String method) throws IOException {
+		Set<String> wanted = new LinkedHashSet<>(Arrays.asList(DESC_AGENT, DESC_AGENT_INSTRUMENTATION));
+		return scan(dir, m -> method.equals(m.name) && wanted.contains(m.descriptor));
+	}
+
+	private static List<String> scan(Path dir, java.util.function.Predicate<Method> wanted) throws IOException {
 		try (Stream<Path> paths = Files.walk(dir)) {
 			List<Path> files = paths
 				.filter(Files::isRegularFile)
@@ -31,21 +71,25 @@ final class MainClassFinder {
 				.filter(f -> !f.getFileName().toString().contains("$"))
 				.sorted()
 				.collect(Collectors.toList());
-			List<String> mains = new ArrayList<>();
+			List<String> found = new ArrayList<>();
 			for (Path f : files) {
 				try (InputStream is = Files.newInputStream(f)) {
-					String name = mainClassName(is);
+					String name = classNameIfMatches(is, wanted);
 					if (name != null) {
-						mains.add(name);
+						found.add(name);
 					}
 				}
 			}
-			return mains;
+			return found;
 		}
 	}
 
-	/** Returns the class name if the class file has a main method, else null. */
-	static String mainClassName(InputStream is) throws IOException {
+	/**
+	 * Returns the class name if the class file declares a method the predicate
+	 * accepts, otherwise null.
+	 */
+	static String classNameIfMatches(InputStream is, java.util.function.Predicate<Method> wanted)
+			throws IOException {
 		DataInputStream in = new DataInputStream(is);
 		if (in.readInt() != 0xCAFEBABE) {
 			return null;
@@ -105,24 +149,17 @@ final class MainClassFinder {
 			skipMember(in);
 		}
 		int methodCount = in.readUnsignedShort();
-		boolean hasMain = false;
+		boolean matches = false;
 		for (int i = 0; i < methodCount; i++) {
 			int access = in.readUnsignedShort();
 			String name = utf8[in.readUnsignedShort()];
 			String desc = utf8[in.readUnsignedShort()];
 			skipAttributes(in);
-			if ("main".equals(name)) {
-				if ("([Ljava/lang/String;)V".equals(desc) && (access & ACC_STATIC) != 0) {
-					hasMain = true;
-				} else if ("()V".equals(desc) || "([Ljava/lang/String;)V".equals(desc)) {
-					hasMain = true; // instance main (JEP 512)
-				}
+			if (!matches && wanted.test(new Method(name, desc, (access & ACC_STATIC) != 0))) {
+				matches = true;
 			}
 		}
-		if (!hasMain) {
-			return null;
-		}
-		return utf8[classNameIdx[thisClass]].replace('/', '.');
+		return matches ? utf8[classNameIdx[thisClass]].replace('/', '.') : null;
 	}
 
 	private static void skipMember(DataInputStream in) throws IOException {
@@ -139,5 +176,9 @@ final class MainClassFinder {
 			int len = in.readInt();
 			in.skipBytes(len);
 		}
+	}
+
+	/** Unused, kept so the predicate type stays readable. */
+	interface MethodMatcher extends BiPredicate<String, Method> {
 	}
 }

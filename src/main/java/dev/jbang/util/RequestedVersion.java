@@ -1,8 +1,9 @@
-package dev.jbang;
+package dev.jbang.util;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+import dev.jbang.ExitException;
 
 /**
  * A Java version as requested by <code>//JAVA</code> or <code>--java</code>.

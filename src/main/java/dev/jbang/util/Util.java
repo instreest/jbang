@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.util;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -26,15 +26,28 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import dev.jbang.ExitException;
 
 /**
  * Small collection of helpers: messages, OS detection, file globbing, hashing
  * and process execution.
+ *
+ * JBangLite shim: the members used by the files mirrored from upstream
+ * (see misc/upstream-mirror.txt) keep upstream's signatures and behaviour, the
+ * rest is JBangLite's own. Upstream's class additionally deals with catalogs,
+ * remote resources and downloads, which JBangLite does not support.
  */
 public final class Util {
 	public static final String ENV_RUNTIME_SHELL = "JBANG_RUNTIME_SHELL";
+
+	public static final Pattern patternFQCN = Pattern.compile(
+			"^([a-z][a-z0-9]*\\.)*[a-zA-Z][a-zA-Z0-9_]*$");
+
+	public static final Pattern patternModuleId = Pattern.compile(
+			"^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)*$");
 
 	private static boolean verbose;
 	private static boolean quiet;
@@ -256,6 +269,10 @@ public final class Util {
 		return sb.toString();
 	}
 
+	public static void writeString(Path file, String text) throws IOException {
+		Files.write(file, text.getBytes(StandardCharsets.UTF_8));
+	}
+
 	public static Stream<String> stringLines(String text) {
 		return Arrays.stream(text.split("\\r?\\n"));
 	}
@@ -267,6 +284,23 @@ public final class Util {
 
 	public static boolean isPattern(String pattern) {
 		return pattern.contains("?") || pattern.contains("*");
+	}
+
+	public static boolean isValidClassIdentifier(String id) {
+		return patternFQCN.matcher(id).matches();
+	}
+
+	public static boolean isValidModuleIdentifier(String id) {
+		return patternModuleId.matcher(id).matches();
+	}
+
+	public static boolean isURL(String str) {
+		try {
+			new java.net.URL(str);
+			return true;
+		} catch (java.net.MalformedURLException e) {
+			return false;
+		}
 	}
 
 	public static boolean isValidPath(String path) {
@@ -282,9 +316,22 @@ public final class Util {
 	 * Expands a file pattern (glob) relative to baseDir and returns the matching
 	 * paths as strings (relative if the pattern was relative). A pattern that is
 	 * an existing folder is treated as if it ended in "/**". A plain (non glob)
-	 * path is returned unchanged.
+	 * path is returned unchanged. Unlike upstream, catalog references are not
+	 * recognised because JBangLite has no catalogs.
 	 */
-	public static List<String> explode(Path baseDir, String filePattern) {
+	public static List<String> explode(String source, Path baseDir, String filePattern) {
+		if (source != null && isURL(source)) {
+			// if url then just return it back for others to resolve
+			if (isPattern(filePattern)) {
+				warnMsg("Pattern " + filePattern + " used while using URL to run; this could result in errors.");
+				return Collections.emptyList();
+			} else {
+				return Collections.singletonList(filePattern);
+			}
+		} else if (isURL(filePattern)) {
+			return Collections.singletonList(filePattern);
+		}
+
 		if (!isPattern(filePattern)) {
 			if (isValidPath(filePattern) && Files.isDirectory(baseDir.resolve(filePattern))) {
 				if (!filePattern.endsWith("/") && !filePattern.endsWith(File.separator)) {

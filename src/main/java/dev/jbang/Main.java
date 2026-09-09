@@ -12,6 +12,14 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import dev.jbang.jdk.Jdk;
+import dev.jbang.jdk.JdkManager;
+import dev.jbang.source.AppBuilder;
+import dev.jbang.source.CmdGenerator;
+import dev.jbang.source.Project;
+import dev.jbang.util.CommandBuffer;
+import dev.jbang.util.RequestedVersion;
+import dev.jbang.util.Util;
 
 /**
  * JBangLite command line.
@@ -126,9 +134,16 @@ public final class Main {
 	private static final class ScriptOptions {
 		String javaVersion;
 		String mainClass;
+		String moduleName;
 		final List<String> deps = new ArrayList<>();
+		final List<String> repos = new ArrayList<>();
 		final Map<String, String> properties = new LinkedHashMap<>();
 		final List<String> runtimeOptions = new ArrayList<>();
+		final List<String> compileOptions = new ArrayList<>();
+		boolean enablePreview;
+		boolean enableAssertions;
+		boolean enableSystemAssertions;
+		boolean cds;
 		boolean depsOnly;
 		String script;
 		final List<String> userArgs = new ArrayList<>();
@@ -161,6 +176,30 @@ public final class Main {
 				case "--deps":
 					o.deps.addAll(Arrays.asList((value != null ? value : next(args, i++, key)).split(",")));
 					break;
+				case "--repos":
+					o.repos.addAll(Arrays.asList((value != null ? value : next(args, i++, key)).split(",")));
+					break;
+				case "--module":
+					o.moduleName = value != null ? value : "";
+					break;
+				case "--compile-option":
+				case "-C":
+					o.compileOptions.add(value != null ? value : next(args, i++, key));
+					break;
+				case "--enable-preview":
+					o.enablePreview = true;
+					break;
+				case "--enable-assertions":
+				case "-ea":
+					o.enableAssertions = true;
+					break;
+				case "--enable-system-assertions":
+				case "-esa":
+					o.enableSystemAssertions = true;
+					break;
+				case "--cds":
+					o.cds = true;
+					break;
 				case "--runtime-option":
 				case "-R":
 					o.runtimeOptions.add(value != null ? value : next(args, i++, key));
@@ -187,7 +226,9 @@ public final class Main {
 					}
 					break;
 				default:
-					if (a.startsWith("-D") && a.length() > 2) {
+					if (a.startsWith("-C") && a.length() > 2) {
+						o.compileOptions.add(a.substring(2));
+					} else if (a.startsWith("-D") && a.length() > 2) {
 						String prop = a.substring(2);
 						int p = prop.indexOf('=');
 						o.properties.put(p > 0 ? prop.substring(0, p) : prop, p > 0 ? prop.substring(p + 1) : "");
@@ -223,9 +264,10 @@ public final class Main {
 				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 						"Only .java source files are supported by JBangLite: '" + script + "'");
 			}
-			Project prj = new Project(file, properties, deps, javaVersion);
-			if (mainClass != null) {
-				prj.setMainClass(mainClass);
+			Project prj = new Project(file, properties, deps, repos, compileOptions, runtimeOptions,
+					javaVersion, mainClass, moduleName);
+			if (enablePreview) {
+				prj.setEnablePreview(true);
 			}
 			return prj;
 		}
@@ -234,28 +276,17 @@ public final class Main {
 	private static int runScript(List<String> args, boolean execute) throws IOException {
 		ScriptOptions opts = ScriptOptions.parse(args);
 		Project prj = opts.project();
-		Path jar = new Builder(prj).build();
+		Path jar = new AppBuilder(prj).build();
 		if (!execute) {
 			return ExitException.EXIT_OK;
 		}
-		if (prj.getMainClass() == null) {
-			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-					"No main class deduced, specified nor found. Use --main <main class> to specify a main class.");
-		}
-		Jdk jdk = prj.getJdk();
-		List<String> cmd = new ArrayList<>();
-		cmd.add(jdk.javaCmd());
-		cmd.addAll(opts.runtimeOptions);
-		prj.getUserProperties().forEach((k, v) -> cmd.add("-D" + k + "=" + v));
-		String cp = jar.toAbsolutePath().toString();
-		String deps = prj.getDependencyClassPath();
-		if (!deps.isEmpty()) {
-			cp += Settings.CP_SEPARATOR + deps;
-		}
-		cmd.addAll(Arrays.asList("-classpath", cp));
-		cmd.add(prj.getMainClass());
-		cmd.addAll(opts.userArgs);
-		String cmdline = CommandBuffer.of(cmd).applyWindowsMaxCliLimit().asCommandLine();
+		String cmdline = new CmdGenerator(prj, jar)
+			.arguments(opts.userArgs)
+			.runtimeOptions(opts.runtimeOptions)
+			.assertions(opts.enableAssertions)
+			.systemAssertions(opts.enableSystemAssertions)
+			.classDataSharing(opts.cds)
+			.generate();
 		Util.verboseMsg("run: " + cmdline);
 		realOut.println(cmdline);
 		return ExitException.EXIT_EXECUTE;
@@ -371,10 +402,16 @@ public final class Main {
 		realOut.println("  -o, --offline    Never access the network");
 		realOut.println();
 		realOut.println("Script options:");
-		realOut.println("  -j, --java <v>   Use the given Java version (e.g. 17, 17+ or 25.0.3)");
-		realOut.println("  -m, --main <c>   Main class to run");
-		realOut.println("  --deps <gav,...> Additional dependencies");
-		realOut.println("  -Dkey=value      System property for directive substitution and the script");
-		realOut.println("  -R<option>       Additional JVM option when running");
+		realOut.println("  -j, --java <v>       Use the given Java version (e.g. 17 or 17+)");
+		realOut.println("  -m, --main <c>       Main class to run");
+		realOut.println("  --module[=<name>]    Run as a module, optionally with the given name");
+		realOut.println("  --deps <gav,...>     Additional dependencies");
+		realOut.println("  --repos <repo,...>   Additional Maven repositories");
+		realOut.println("  -C<option>           Additional compiler option");
+		realOut.println("  -R<option>           Additional JVM option when running");
+		realOut.println("  -Dkey=value          System property for directive substitution and the script");
+		realOut.println("  --enable-preview     Activate Java preview features");
+		realOut.println("  -ea, -esa            Enable (system) assertions");
+		realOut.println("  --cds                Use class data sharing");
 	}
 }

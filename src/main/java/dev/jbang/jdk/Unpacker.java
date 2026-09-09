@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.jdk;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+import dev.jbang.util.Util;
 
 /**
  * Unpacks JDK archives (.zip and .tar.gz) using only the JDK's own APIs. The

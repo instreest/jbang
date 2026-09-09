@@ -1,4 +1,4 @@
-package dev.jbang;
+package dev.jbang.dependencies;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import dev.jbang.Settings;
+import dev.jbang.util.Util;
 
 /**
  * Simple on-disk cache of resolved class paths so that scripts start without
