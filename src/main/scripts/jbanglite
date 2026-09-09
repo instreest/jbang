@@ -1,9 +1,28 @@
 #!/usr/bin/env bash
-
 #
+# JBangLite launcher for POSIX shells (Linux, macOS, WSL, Git Bash, Cygwin).
+#
+# It runs the jbanglite.jar that sits next to it - committed to the project
+# together with this script, so a checkout needs nothing installed, not even a
+# JDK. What it does, in order:
+#
+#   1. Settings          - constants and the JBANG_* / JBANGLITE_* overrides
+#   2. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, java on the
+#                          PATH, or a Temurin downloaded from the Maven Central
+#                          JVM index
+#   3. Launch            - run the jar, and when it exits with 255 exec the
+#                          command line it printed (that is how a script is
+#                          started)
+#
+# Several JBangLite runs can be started at the same time (a build matrix, a
+# multi-module build). They share ~/.jbang, so the JDK download takes a
+# directory lock (mkdir is atomic) and every other download goes to a file of
+# this run's own that is renamed into place.
 
-# JBang itself only needs a JVM to run; which one hardly matters, so when the
-# machine has none we simply fetch the newest Temurin of this feature version.
+# --- 1. Settings -------------------------------------------------------------
+
+# JBangLite itself only needs a JVM to run; which one hardly matters, so when
+# the machine has none we simply fetch the newest Temurin of this version.
 bootstrapJavaVersion=25
 # The oldest Java that can run jbanglite.jar
 minJavaVersion=11
@@ -13,17 +32,6 @@ minJavaVersion=11
 # discovery service is involved. Override for a corporate mirror.
 jvmIndexBaseUrl=${JBANG_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
 
-# Base URL for downloading JBang releases.
-# Override for testing or corporate mirrors.
-# Example: JBANG_DOWNLOAD_BASEURL=http://localhost:18080
-jbangDownloadBaseUrl=${JBANG_DOWNLOAD_BASEURL:-https://github.com/instreest/jbang/releases}
-
-# Base URL the wrapper (jbanglitew) downloads jbanglite.jar from. The wrapper is
-# installed into a project with install.sh/install.cmd, which records the
-# repository and revision to take the jar from in jbanglite.properties next to
-# this script. Override for testing or a corporate mirror.
-jbangRawBaseUrl=${JBANGLITE_RAW_BASEURL:-https://raw.githubusercontent.com}
-
 # Tells this run's temporary files apart from those of a JBangLite running at
 # the same time
 runId=$$
@@ -32,7 +40,8 @@ runId=$$
 # the same directory
 lockTimeout=${JBANGLITE_LOCK_TIMEOUT:-600}
 
-# Number of retry attempts for downloads (curl/wget)
+# How often a failed download is retried, and how long to wait in between
+# (0 means an exponential backoff of 1, 2, 4, ... seconds)
 downloadRetry=${JBANG_DOWNLOAD_RETRY:-5}
 downloadRetryDelay=${JBANG_DOWNLOAD_RETRY_DELAY:-0}
 
@@ -288,11 +297,13 @@ install_bootstrap_jdk_locked() {
   return 0
 }
 
+# --- 2. Which Java to use ----------------------------------------------------
+
 # Determines the java to run jbanglite.jar with. Any Java $minJavaVersion or newer
 # will do; the JDK a script asks for with //JAVA is chosen by jbanglite.jar itself.
 setup_java_exec() {
   unset JAVA_EXEC
-  # The JDK JBang picked as the default
+  # The JDK JBangLite installed for a script and made the default
   if usable_java "$JBDIR/currentjdk"; then
     export JAVA_HOME="$JBDIR/currentjdk"
     JAVA_EXEC="$JAVA_HOME/bin/java"
@@ -328,20 +339,20 @@ setup_java_exec() {
   JAVA_EXEC="$JAVA_HOME/bin/java"
 }
 
-# Executes JBangLite and handles the output
-execute_jbanglite() {
-## https://stackoverflow.com/questions/1668649/how-to-keep-quotes-in-bash-arguments
-## attempt to ensure each argument keeps its original quoting
+# --- 3. Launch ---------------------------------------------------------------
 
+# Runs the jar. Its output is captured because exit code 255 means "run this
+# command line for me": that is how a script is started, with only the user's
+# process left once JBangLite is done.
+execute_jbanglite() {
   export JBANG_RUNTIME_SHELL=bash
   JBANG_STDIN_NOTTY=$([ -t 0 ] && echo "false" || echo "true")
   export JBANG_STDIN_NOTTY
   export JBANG_LAUNCH_CMD=$0
-  
-  ## run it using command substitution to have just the user process once JBangLite is done
+
   output=$(CLICOLOR_FORCE=1 "${JAVA_EXEC}" ${JBANG_JAVA_OPTIONS} -jar "${jarPath}" "$@")
   err=$?
-  
+
   if [ $err -eq 255 ]; then
     eval "exec $output"
   elif [ -n "$output" ]; then
@@ -353,8 +364,6 @@ execute_jbanglite() {
 }
 
 abs_jbang_dir=$(script_dir)
-
-# todo might vary by os so can be overwritten below
 
 case "$(uname -s)" in
   Linux*)
@@ -390,7 +399,7 @@ case "$(uname -m)" in
     arch=riscv64
     ;;
   *)
-    ## AIX gives a machine ID for `uname -m` but it only supports ppc64
+    # AIX gives a machine ID for `uname -m` but it only supports ppc64
     if [ "$os" = "aix" ]; then
       arch=ppc64
     else
@@ -399,7 +408,7 @@ case "$(uname -m)" in
     ;;
 esac
 
-## when using cygwin fall out to just running the bat file.
+# On Cygwin hand over to the Windows launcher
 if [[ $os == windows && -f "$abs_jbang_dir/jbanglite.cmd" && "$(uname -s)" == CYGWIN* ]]; then
   cmd /c "$(cygpath -m "$abs_jbang_dir"/jbanglite.cmd)" "$@"
   exit $?
@@ -408,133 +417,12 @@ fi
 
 if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
 if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
-## resolve the jar to run from this script's location
-jarPath=""
-if [ -f "$abs_jbang_dir/jbanglite.jar" ]; then
-  jarPath=$abs_jbang_dir/jbanglite.jar
-elif [ -f "$abs_jbang_dir/.jbanglite/jbanglite.jar" ]; then
-  jarPath=$abs_jbang_dir/.jbanglite/jbanglite.jar
-fi
 
-# Downloads jbanglite.jar into <wrapper dir>/.jbang as told by jbanglite.properties
-install_wrapper_jar() {
-  local props repo ref sha url target tmp actual
-  props="$abs_jbang_dir/jbanglite.properties"
-  repo=$(sed -n 's/^repo=//p' "$props" | head -1)
-  ref=$(sed -n 's/^ref=//p' "$props" | head -1)
-  sha=$(sed -n 's/^jarSha256=//p' "$props" | head -1)
-  if [ -z "$repo" ] || [ -z "$ref" ]; then
-    echo "$props does not name a repo and a ref to get jbanglite.jar from" 1>&2
-    exit 1
-  fi
-  url="$jbangRawBaseUrl/$repo/$ref/dist/jbanglite.jar"
-  target="$abs_jbang_dir/.jbanglite/jbanglite.jar"
-  # this run's own download, so runs at the same time cannot truncate each
-  # other's file; the finished jar is then renamed into place
-  tmp="$target.$runId.tmp"
-  mkdir -p "$abs_jbang_dir/.jbanglite"
-  echo "Downloading JBangLite from $url..." 1>&2
-  download "$url" "$tmp"
-  if [ $retval -ne 0 ]; then
-    rm -f "$tmp"
-    echo "Error downloading JBangLite from $url" 1>&2
-    exit $retval
-  fi
-  if [ -n "$sha" ]; then
-    actual=$(sha256_of "$tmp")
-    if [ -n "$actual" ] && [ "$sha" != "$actual" ]; then
-      rm -f "$tmp"
-      echo "SHA-256 mismatch for $url: expected $sha but got $actual" 1>&2
-      exit 1
-    fi
-  fi
-  # another run may have put the same jar in place while we were downloading;
-  # its copy is as good as ours
-  if [ -f "$target" ]; then
-    rm -f "$tmp"
-  else
-    mv "$tmp" "$target"
-  fi
-}
-
-# A wrapper installed in a project takes its jar from the repository it was
-# installed from, so there are no releases to look for
-if [[ -z "$jarPath" && -f "$abs_jbang_dir/jbanglite.properties" ]]; then
-  install_wrapper_jar
-  jarPath="$abs_jbang_dir/.jbanglite/jbanglite.jar"
-fi
-
-# Downloads and installs a release into $JBDIR/bin, one run at a time
-install_release() {
-  local bundleName jburl jbtag archive unpackdir
-  acquire_lock "$JBDIR/bin.lock" "$JBDIR/bin/jbanglite.jar"
-  case $? in
-    2) return 0 ;;
-    1) exit 1 ;;
-  esac
-  install_release_locked
-  retval=$?
-  release_lock "$JBDIR/bin.lock"
-  if [ $retval -ne 0 ]; then exit $retval; fi
-}
-
-install_release_locked() {
-  local bundleName jburl jbtag archive unpackdir
-  # another run may have installed it while we waited for the lock
-  if [ -f "$JBDIR/bin/jbanglite.jar" ] && [ -f "$JBDIR/bin/jbanglite" ]; then return 0; fi
-  bundleName="jbanglite.tar"
-  mkdir -p "$TDIR/urls"
-  if [ -n "$JBANG_DOWNLOAD_URL" ]; then
-    jburl="$JBANG_DOWNLOAD_URL";
-  elif [ -z "$JBANG_DOWNLOAD_VERSION" ]; then
-    jburl="${jbangDownloadBaseUrl}/latest/download/$bundleName";
-  else
-    # Numeric versions get a 'v' prefix (e.g. 0.120.0 -> v0.120.0); named
-    # release tags (e.g. 'early-access', '1.0.0-rc1') are used as-is.
-    case "$JBANG_DOWNLOAD_VERSION" in
-      *[!0-9.]*) jbtag="$JBANG_DOWNLOAD_VERSION" ;;
-      *)         jbtag="v$JBANG_DOWNLOAD_VERSION" ;;
-    esac
-    jburl="${jbangDownloadBaseUrl}/download/$jbtag/$bundleName";
-  fi
-  # this run's own archive and unpack directory
-  archive="$TDIR/urls/jbanglite-$runId.tar"
-  unpackdir="$TDIR/urls/jbanglite-$runId"
-  echo "Downloading JBangLite ${JBANG_DOWNLOAD_VERSION:-latest} from $jburl..." 1>&2
-  download "$jburl" "$archive"
-  if [ $retval -ne 0 ]; then
-    rm -f "$archive"
-    echo "Error downloading JBangLite from $jburl" 1>&2
-    return $retval
-  fi
-  echo "Installing JBangLite..." 1>&2
-  rm -rf "$unpackdir"
-  mkdir -p "$unpackdir"
-  if ! tar xf "$archive" -C "$unpackdir"; then
-    rm -rf "$unpackdir"
-    rm -f "$archive"
-    echo "Error installing JBangLite" 1>&2
-    return 1
-  fi
-  mkdir -p "$JBDIR/bin"
-  rm -f "$JBDIR/bin/jbanglite" "$JBDIR/bin"/jbanglite.*
-  cp -f "$unpackdir/jbanglite/bin"/* "$JBDIR/bin"
-  rm -rf "$unpackdir"
-  rm -f "$archive"
-  return 0
-}
-
-if [[ -z "$jarPath" ]]; then
-  if [[ ! -f "$JBDIR/bin/jbanglite.jar" || ! -f "$JBDIR/bin/jbanglite" ]]; then
-    install_release
-  fi
-  "$JBDIR"/bin/jbanglite "$@"
-  exit $?
-fi
-
-if [ -f "$jarPath.new" ]; then
-  # a new JBangLite version was found, we replace the old one with it
-  mv "$jarPath.new" "$jarPath"
+# The jar is committed next to this script; there is nothing to download
+jarPath=$abs_jbang_dir/jbanglite.jar
+if [ ! -f "$jarPath" ]; then
+  echo "$jarPath not found. Re-run $abs_jbang_dir/install.sh to restore it." 1>&2
+  exit 1
 fi
 
 setup_java_exec

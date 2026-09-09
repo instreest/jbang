@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 #
-# Installs the JBangLite wrapper into a project, so that the project can be
-# built and run without JBangLite (or a JDK) being installed on the machine:
-# only the small launcher scripts are committed, and they fetch jbanglite.jar - and
-# a JDK, if needed - on first use.
+# Installs JBangLite into a project: the launchers, jbanglite.jar and this
+# installer go into jbanglitew/, which is committed, so the project can be built
+# and run without JBangLite (or a JDK) being installed on the machine.
 #
 #   curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/dist/install.sh | bash
 #
-# Running it again updates an existing installation: the launchers, this script
-# and the pinned jar revision are refreshed and the cached jar is dropped, so
-# the next run picks up the new one.
+# Running it again updates an existing installation: every file, jbanglite.jar
+# included, is replaced by the one from the chosen revision.
 #
 # Usage: install.sh [<target directory>]   (default: ./jbanglitew, or the directory
 #                                           this script was installed in)
@@ -26,19 +24,10 @@ ref=${JBANGLITE_REF:-main}
 rawBaseUrl=${JBANGLITE_RAW_BASEURL:-https://raw.githubusercontent.com}
 base="$rawBaseUrl/$repo/$ref/dist"
 
-# Everything that is installed lives in dist/, as "<file in dist> <name in the
-# wrapper>"; jbanglite.jar is not copied but downloaded on first use
-files="
-jbanglite jbanglite
-jbanglite.cmd jbanglite.cmd
-install.sh install.sh
-install.cmd install.cmd
-README.md README.md
-gitignore .gitignore
-LICENSE LICENSE
-"
+# dist/ in the repository is exactly what a project gets
+files="jbanglite jbanglite.cmd jbanglite.jar install.sh install.cmd README.md LICENSE"
 
-fetch() {  # $1 = path in the repository, $2 = file to write
+fetch() {  # $1 = file in dist/, $2 = file to write
   if command -v curl > /dev/null 2>&1; then
     curl -fsSL "$base/$1" -o "$2"
   elif command -v wget > /dev/null 2>&1; then
@@ -63,29 +52,15 @@ fi
 staging=$(mktemp -d "${TMPDIR:-/tmp}/jbanglite.XXXXXX")
 trap 'rm -rf "$staging"' EXIT
 
-echo "Installing the JBangLite wrapper from $repo ($ref) into $dir" 1>&2
-echo "$files" | while read -r from to; do
-  [ -n "$from" ] || continue
-  fetch "$from" "$staging/$to"
+echo "Installing JBangLite from $repo ($ref) into $dir" 1>&2
+for f in $files; do
+  fetch "$f" "$staging/$f"
 done
-fetch jbanglite.jar.sha256 "$staging/jar.sha256"
-
-cat > "$staging/jbanglite.properties" <<PROPS
-# Written by install.sh - where the launchers get jbanglite.jar from.
-# Re-run install.sh (or install.cmd) to update; set JBANGLITE_REF to pin
-# another revision.
-repo=$repo
-ref=$ref
-jarSha256=$(cut -d' ' -f1 < "$staging/jar.sha256")
-PROPS
-rm -f "$staging/jar.sha256"
 
 mkdir -p "$dir"
-for f in "$staging"/* "$staging"/.gitignore; do
-  cp -f "$f" "$dir/$(basename "$f")"
+for f in $files; do
+  cp -f "$staging/$f" "$dir/$f"
 done
 chmod +x "$dir/jbanglite" "$dir/install.sh"
-# drop the cached jar so the next run downloads the one this revision pins
-rm -rf "$dir/.jbanglite"
 
 echo "Installed. Commit $(basename "$dir")/ and run '$(basename "$dir")/jbanglite <script.java>'." 1>&2

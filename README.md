@@ -15,34 +15,32 @@ installer machinery. It was reduced for use by
 
 ## Installing into a project
 
-JBangLite is not released as a package: a project installs the wrapper into its
-own repository and commits it, so anyone who checks the project out can run its
+JBangLite is not released as a package: a project installs it into its own
+repository and commits it, so anyone who checks the project out can run its
 scripts without installing JBangLite — or a JDK — first.
 
 ```bash
 curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/dist/install.sh | bash
-git add jbanglitew && git commit -m "Add the JBangLite wrapper"
+git add jbanglitew && git commit -m "Add JBangLite"
 jbanglitew/jbanglite src/Hello.java
 ```
 
-`install.cmd` does the same on Windows. The installer writes the launchers,
-itself, `LICENSE`, a `.gitignore` and `jbanglite.properties` — the repository,
-revision and jar checksum the launchers use — into `jbanglitew/`. On the first run
-the launcher downloads `dist/jbanglite.jar` from that revision, checks it against
-the recorded SHA-256 and caches it in `jbanglitew/.jbanglite/`, which the `.gitignore`
-keeps out of the project.
+`install.cmd` does the same on Windows. The installer copies the launchers,
+`jbanglite.jar`, itself, `LICENSE` and a `README.md` into `jbanglitew/`, and
+all of it is committed, like a Gradle wrapper. Nothing is downloaded at run
+time except a JDK when the machine has none.
 
-Re-running the installer updates an installation in place: it refreshes the
-launchers, itself and the pinned revision, and drops the cached jar so the next
-run fetches the matching one. `JBANGLITE_REF=<tag|commit>` pins another
-revision, `JBANGLITE_REPO` another fork.
+Re-running the installer updates an installation in place by replacing every
+file with the one from the chosen revision. `JBANGLITE_REF=<tag|commit>` pins
+another revision, `JBANGLITE_REPO` another fork.
 
-Everything a project installs lives in [`dist/`](dist) — the launchers, the
-installers, `LICENSE`, `gitignore`, `README.md` and the built `jbanglite.jar` with
-its checksum. Run `misc/update-dist.sh` to refresh it (it rebuilds the jar and
-copies the launchers and `LICENSE` there) and commit the result whenever a
-change should reach the projects that installed the wrapper;
-`misc/update-dist.sh --check` reports whether it is up to date.
+[`dist/`](dist) in this repository is exactly what a project gets. Run
+`misc/update-dist.sh` to refresh it (it rebuilds the jar and copies the
+launchers and `LICENSE` there) and commit the result whenever a change should
+reach the projects that installed JBangLite; `misc/update-dist.sh --check`
+reports whether the launchers there are up to date. The jar is committed, so
+every refresh adds about 4 MB to the history of this repository and of every
+project that updates.
 
 ## Directives
 
@@ -126,8 +124,8 @@ got there first:
 
 | | |
 | --- | --- |
-| the bootstrap JDK, an installed release | a directory lock (`mkdir` is atomic) — one run installs, the others wait for it and then use what it installed, giving up after `JBANGLITE_LOCK_TIMEOUT` seconds with a message naming the lock to remove |
-| the wrapper's `jbanglite.jar`, the JVM index, every archive and unpack directory | a file of this run's own, renamed into place when it is complete; whoever gets there first wins and the loser keeps that copy |
+| the bootstrap JDK | a directory lock (`mkdir` is atomic) — one run installs, the others wait for it and then use what it installed, giving up after `JBANGLITE_LOCK_TIMEOUT` seconds with a message naming the lock to remove |
+| the JVM index, every archive and unpack directory | a file of this run's own, renamed into place when it is complete; whoever gets there first wins and the loser keeps that copy |
 
 The JDKs the jar installs for `//JAVA` are locked by the jar itself, so the two
 mechanisms do not overlap.
@@ -218,12 +216,12 @@ like `25` or `25+` accepts any matching patch release.
 ```
 
 produces `build/libs/jbanglite.jar` (self-contained), `build/distributions/jbanglite.tar`
-and `jbanglite.zip` (root folder `jbanglite/` with `bin/jbanglite*`, as expected by the
-launcher scripts) plus versioned `jbanglite-<version>.tar/.zip`. Pass `-PjbangVersion=x.y.z`
+and `jbanglite.zip` (root folder `jbanglite/` with the launchers and the jar in `bin/`)
+plus versioned `jbanglite-<version>.tar/.zip`. Pass `-PjbangVersion=x.y.z`
 to set the version.
 
 `./gradlew test` runs the test suite: the mirrored `TestDirectives` from JBang
-and functional tests for the launcher scripts and the wrapper installer. There
+and functional tests for the launcher scripts and the installer. There
 is no release pipeline or CI configuration in this fork; `misc/update-dist.sh`
 takes the place of a release.
 

@@ -4,17 +4,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.jar.Attributes;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 
-import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
-import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.io.TempDir;
@@ -78,6 +85,13 @@ abstract class AbstractScriptTest {
 		assumeTrue(isCommandAvailable("bash"), "bash is not available");
 	}
 
+	/** For tests that need the launcher to look up a JVM index of a known platform. */
+	protected void requireLinuxAmd64() {
+		assumeTrue(System.getProperty("os.name").toLowerCase().contains("linux")
+				&& Arrays.asList("amd64", "x86_64").contains(System.getProperty("os.arch")),
+				"not linux-amd64");
+	}
+
 
 	// -------------------------------------------------------------------------
 	// Process execution
@@ -131,32 +145,59 @@ abstract class AbstractScriptTest {
 	}
 
 	// -------------------------------------------------------------------------
-	// Archive creation
+	// A launcher with a stand-in jar next to it
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Creates a minimal jbanglite.tar containing jbanglite/bin/jbanglite (a dummy script that
-	 * just exits 0) and an empty jbanglite/bin/jbanglitelite.jar.
+	 * Copies the bash launcher into a directory of its own with a fake
+	 * jbanglite.jar next to it, as installed into a project, and returns the
+	 * launcher.
 	 */
-	protected byte[] createJbangTar() throws Exception {
-		ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		try (TarArchiveOutputStream tar = new TarArchiveOutputStream(baos)) {
-			byte[] script = "#!/bin/bash\nexit 0\n".getBytes(StandardCharsets.UTF_8);
-			TarArchiveEntry entry = new TarArchiveEntry("jbanglite/bin/jbanglite");
-			entry.setSize(script.length);
-			entry.setMode(0755);
-			tar.putArchiveEntry(entry);
-			tar.write(script);
-			tar.closeArchiveEntry();
-
-			TarArchiveEntry jarEntry = new TarArchiveEntry("jbanglite/bin/jbanglitelite.jar");
-			jarEntry.setSize(0);
-			tar.putArchiveEntry(jarEntry);
-			tar.closeArchiveEntry();
-		}
-		return baos.toByteArray();
+	protected Path bashLauncherWithJar() throws IOException {
+		Path dir = Files.createDirectories(tempDir.resolve("bin"));
+		Path launcher = dir.resolve("jbanglite");
+		Files.copy(BASH_SCRIPT, launcher, StandardCopyOption.REPLACE_EXISTING);
+		createFakeJar(dir.resolve("jbanglite.jar"));
+		return launcher;
 	}
 
+	/** Writes a jar whose main class is {@link FakeJBang}. */
+	protected static void createFakeJar(Path jar) throws IOException {
+		Manifest manifest = new Manifest();
+		manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
+		manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, FakeJBang.class.getName());
+		String classResource = FakeJBang.class.getName().replace('.', '/') + ".class";
+		try (InputStream input = FakeJBang.class.getClassLoader().getResourceAsStream(classResource);
+				JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
+			if (input == null) {
+				throw new IOException("Could not find test class: " + classResource);
+			}
+			output.putNextEntry(new JarEntry(classResource));
+			input.transferTo(output);
+			output.closeEntry();
+		}
+	}
+
+	/**
+	 * Stand-in for jbanglite.jar: records the environment the launcher set up
+	 * in the file JBANG_TEST_ENV_FILE names and then either exits with the given
+	 * code ("exit N") or asks the launcher to run a command ("exec CMD", exit
+	 * code 255).
+	 */
+	public static class FakeJBang {
+		public static void main(String[] args) throws IOException {
+			Path envFile = Paths.get(System.getenv("JBANG_TEST_ENV_FILE"));
+			Files.write(envFile, Arrays.asList(System.getenv("JBANG_RUNTIME_SHELL"),
+					System.getenv("JBANG_LAUNCH_CMD")), StandardCharsets.UTF_8);
+			if ("exec".equals(args[0])) {
+				System.out.println(args[1]);
+				System.exit(255);
+			} else {
+				System.out.println("some output");
+				System.exit(Integer.parseInt(args[1]));
+			}
+		}
+	}
 
 	// -------------------------------------------------------------------------
 	// Base environment maps
@@ -184,12 +225,12 @@ abstract class AbstractScriptTest {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Builds a command list for running the bash startup script.
+	 * Builds a command list for running a bash launcher.
 	 */
-	protected List<String> bashCmd(String... args) {
+	protected List<String> bashCmd(Path launcher, String... args) {
 		List<String> cmd = new ArrayList<>();
 		cmd.add("bash");
-		cmd.add(BASH_SCRIPT.toString());
+		cmd.add(launcher.toString());
 		for (String arg : args) {
 			cmd.add(arg);
 		}

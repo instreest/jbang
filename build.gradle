@@ -33,7 +33,6 @@ dependencies {
 	testImplementation "org.hamcrest:hamcrest:3.0"
 	// only for the launcher script tests, never shipped
 	testImplementation "org.wiremock:wiremock:3.13.2"
-	testImplementation "org.apache.commons:commons-compress:1.27.1"
 }
 
 test {
@@ -107,8 +106,8 @@ distributions {
 	}
 }
 
-// "latest" bundles use the fixed root folder name "jbanglite" so that the
-// startup scripts can install them (jbanglite.tar / jbanglite.zip).
+// Unversioned bundles with the fixed root folder name "jbanglite"
+// (jbanglite.tar / jbanglite.zip), next to the versioned ones.
 tasks.register('latestDistZip', Zip) {
 	into('jbanglite') {
 		with commonSpec

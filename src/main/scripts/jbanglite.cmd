@@ -2,26 +2,24 @@
 rem ===========================================================================
 rem JBangLite launcher for Windows.
 rem
-rem It is self-contained: no PowerShell, only what Windows ships with (curl,
-rem tar, certutil). What it does, in order:
+rem It runs the jbanglite.jar that sits next to it - committed to the project
+rem together with this script, so a checkout needs nothing installed, not even
+rem a JDK. It is self-contained: no PowerShell, only what Windows ships with
+rem (curl, tar, certutil). What it does, in order:
 rem
 rem   1. Settings          - constants and the JBANG_* / JBANGLITE_* overrides
 rem   2. Launch environment- what jbanglite.jar expects to find in the environment
-rem   3. Which jar to run  - next to this script, in .jbanglite next to it,
-rem                          downloaded from the repository jbanglite.properties
-rem                          names (that is how a wrapper committed to a project
-rem                          gets its jar), or an installed release in
-rem                          %%JBANG_DIR%%\bin
-rem   4. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, or a
+rem   3. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, or a
 rem                          Temurin downloaded from the Maven Central JVM index
-rem   5. Launch            - run it, and when it exits with 255 run the command
-rem                          line it printed (that is how a script is started)
+rem   4. Launch            - run the jar, and when it exits with 255 run the
+rem                          command line it printed (that is how a script is
+rem                          started)
 rem
 rem Several JBangLite runs can be started at the same time (a build matrix, a
-rem multi-module build). They share ~/.jbang, so every download either takes a
-rem directory lock (mkdir is atomic: :acquire_lock / :release_lock) or writes to
-rem a file of its own and renames it into place, and no run ever fails because
-rem another one got there first.
+rem multi-module build). They share ~/.jbang, so the JDK download takes a
+rem directory lock (mkdir is atomic: :acquire_lock / :release_lock) and every
+rem other download goes to a file of this run's own that is renamed into place,
+rem so no run ever fails because another one got there first.
 rem
 rem Two CMD rules shape the code below and are easy to trip over:
 rem   - a variable set inside a parenthesized block cannot be read in that same
@@ -35,15 +33,18 @@ setlocal
 call :init_settings
 call :init_launch_environment
 
-rem --- 3. Which jar to run ---------------------------------------------------
-call :find_jar || exit /b 1
-if not defined jar_path goto :run_installed_release
+rem The jar is committed next to this script; there is nothing to download
+set "jar_path=%script_dir%jbanglite.jar"
+if not exist "%jar_path%" (
+  echo %jar_path% not found. Re-run %script_dir%install.cmd to restore it. 1>&2
+  exit /b 1
+)
 
-rem --- 4. Which Java to use -------------------------------------------------
+rem --- 3. Which Java to use -------------------------------------------------
 call :find_java || exit /b 1
 set launch_cmd="%java_exec%" %JBANG_JAVA_OPTIONS% -jar "%jar_path%"
 
-rem --- 5. Launch ------------------------------------------------------------
+rem --- 4. Launch ------------------------------------------------------------
 :launch
 rem The output is captured because exit code 255 means "run this command line
 rem for me" (see :run_printed_command). The name is this run's own, so several
@@ -67,18 +68,6 @@ del /f /q "%output_file%"
 %printed_command%
 exit /b %ERRORLEVEL%
 
-rem Runs the release installed in %jbang_dir%\bin, installing it first when this
-rem is neither a wrapper nor an unpacked distribution
-:run_installed_release
-if not exist "%jbang_dir%\bin\jbanglite.jar" goto :release_missing
-if not exist "%jbang_dir%\bin\jbanglite.cmd" goto :release_missing
-goto :launch_installed_release
-:release_missing
-call :install_release || exit /b 1
-:launch_installed_release
-call "%jbang_dir%\bin\jbanglite.cmd" %*
-exit /b %ERRORLEVEL%
-
 rem ===========================================================================
 rem 1. Settings
 rem ===========================================================================
@@ -96,16 +85,6 @@ rem install the JDKs that scripts ask for with //JAVA, published on Maven
 rem Central, so no JDK discovery service is involved. Override for a mirror.
 set "jvm_index_base_url=https://repo1.maven.org/maven2"
 if not "%JBANG_JVM_INDEX_BASEURL%"=="" set "jvm_index_base_url=%JBANG_JVM_INDEX_BASEURL%"
-
-rem Where a wrapper downloads jbanglite.jar from. The wrapper is installed into
-rem a project with install.sh/install.cmd, which records the repository and
-rem revision to take the jar from in jbanglite.properties next to this script.
-set "raw_base_url=https://raw.githubusercontent.com"
-if not "%JBANGLITE_RAW_BASEURL%"=="" set "raw_base_url=%JBANGLITE_RAW_BASEURL%"
-
-rem Where releases are downloaded from
-set "release_base_url=https://github.com/instreest/jbang/releases"
-if not "%JBANG_DOWNLOAD_BASEURL%"=="" set "release_base_url=%JBANG_DOWNLOAD_BASEURL%"
 
 rem How often a failed download is retried, and how long to wait in between
 rem (0 means an exponential backoff of 1, 2, 4, ... seconds)
@@ -152,160 +131,7 @@ set "JBANG_LAUNCH_CMD=%~f0"
 exit /b 0
 
 rem ===========================================================================
-rem 3. Which jar to run
-rem ===========================================================================
-
-rem Sets jar_path to the jar to run, downloading it when this is a wrapper.
-rem Leaves jar_path empty when there is no jar to be found next to this script,
-rem which means the installed release should be used instead.
-:find_jar
-set "jar_path="
-if exist "%script_dir%jbanglite.jar" (
-  set "jar_path=%script_dir%jbanglite.jar"
-  goto :find_jar_staged
-)
-if exist "%script_dir%.jbanglite\jbanglite.jar" (
-  set "jar_path=%script_dir%.jbanglite\jbanglite.jar"
-  goto :find_jar_staged
-)
-if not exist "%script_dir%jbanglite.properties" exit /b 0
-call :download_wrapper_jar || exit /b 1
-set "jar_path=%script_dir%.jbanglite\jbanglite.jar"
-
-:find_jar_staged
-rem a new version was staged next to the old one, so put it in place
-if exist "%jar_path%.new" move /y "%jar_path%.new" "%jar_path%" >nul
-exit /b 0
-
-rem Downloads jbanglite.jar into <wrapper dir>\.jbanglite from the repository
-rem and revision jbanglite.properties names, checked against the SHA-256 it
-rem records. That is what makes a wrapper committed to a project work without
-rem the jar being committed with it.
-:download_wrapper_jar
-set "wrapper_repo=" & set "wrapper_ref=" & set "wrapper_sha="
-for /f "usebackq tokens=1,* delims==" %%K in ("%script_dir%jbanglite.properties") do (
-  if "%%K"=="repo" set "wrapper_repo=%%L"
-  if "%%K"=="ref" set "wrapper_ref=%%L"
-  if "%%K"=="jarSha256" set "wrapper_sha=%%L"
-)
-if "%wrapper_repo%"=="" goto :download_wrapper_jar_unusable
-if "%wrapper_ref%"=="" goto :download_wrapper_jar_unusable
-set "wrapper_jar_url=%raw_base_url%/%wrapper_repo%/%wrapper_ref%/dist/jbanglite.jar"
-set "wrapper_jar=%script_dir%.jbanglite\jbanglite.jar"
-rem this run's own download, so runs at the same time cannot truncate each
-rem other's file; the finished jar is then renamed into place
-set "wrapper_jar_tmp=%wrapper_jar%.%run_id%.tmp"
-if not exist "%script_dir%.jbanglite" mkdir "%script_dir%.jbanglite" 2>nul
-
-echo Downloading JBangLite from %wrapper_jar_url%... 1>&2
-set "dl_url=%wrapper_jar_url%"
-set "dl_out=%wrapper_jar_tmp%"
-call :download
-if errorlevel 1 (
-  del /f /q "%wrapper_jar_tmp%" 2>nul
-  echo Error downloading JBangLite from %wrapper_jar_url% 1>&2
-  exit /b 1
-)
-if "%wrapper_sha%"=="" goto :download_wrapper_jar_keep
-call :sha256 "%wrapper_jar_tmp%"
-if /i "%wrapper_sha%"=="%sha256_result%" goto :download_wrapper_jar_keep
-del /f /q "%wrapper_jar_tmp%" 2>nul
-echo SHA-256 mismatch for %wrapper_jar_url%: expected %wrapper_sha% but got %sha256_result% 1>&2
-exit /b 1
-
-:download_wrapper_jar_keep
-rem another run may have put the same jar in place while we were downloading;
-rem its copy is as good as ours, so just keep whichever is there
-if exist "%wrapper_jar%" goto :download_wrapper_jar_done
-move /y "%wrapper_jar_tmp%" "%wrapper_jar%" >nul 2>&1
-if exist "%wrapper_jar%" goto :download_wrapper_jar_done
-echo Error installing JBangLite into %script_dir%.jbanglite 1>&2
-exit /b 1
-:download_wrapper_jar_done
-del /f /q "%wrapper_jar_tmp%" 2>nul
-exit /b 0
-
-:download_wrapper_jar_unusable
-echo %script_dir%jbanglite.properties does not name a repo and a ref to get jbanglite.jar from 1>&2
-exit /b 1
-
-rem Downloads and installs a release into %jbang_dir%\bin, one run at a time
-:install_release
-set "lock_dir=%jbang_dir%\bin.lock"
-set "lock_done=%jbang_dir%\bin\jbanglite.jar"
-call :acquire_lock
-if errorlevel 2 exit /b 0
-if errorlevel 1 exit /b 1
-call :install_release_locked
-set "install_result=%ERRORLEVEL%"
-call :release_lock
-exit /b %install_result%
-
-:install_release_locked
-rem another run may have installed it while we waited for the lock
-if exist "%jbang_dir%\bin\jbanglite.jar" if exist "%jbang_dir%\bin\jbanglite.cmd" exit /b 0
-set "bundle_name=jbanglite.zip"
-call :release_url
-set "release_version=latest"
-if not "%JBANG_DOWNLOAD_VERSION%"=="" set "release_version=%JBANG_DOWNLOAD_VERSION%"
-if not exist "%cache_dir%\urls" mkdir "%cache_dir%\urls" 2>nul
-rem this run's own archive and unpack directory, so nothing is shared even when
-rem another JBangLite is installing at the same time
-set "release_archive=%cache_dir%\urls\jbanglite-%run_id%.zip"
-set "release_unpack_dir=%cache_dir%\urls\jbanglite-%run_id%"
-
-echo Downloading JBangLite %release_version% from %release_url%... 1>&2
-set "dl_url=%release_url%"
-set "dl_out=%release_archive%"
-call :download
-if errorlevel 1 (
-  del /f /q "%release_archive%" 2>nul
-  echo Error downloading JBangLite from %release_url% to %release_archive% 1>&2
-  exit /b 1
-)
-echo Installing JBangLite... 1>&2
-if exist "%release_unpack_dir%" rmdir /s /q "%release_unpack_dir%"
-mkdir "%release_unpack_dir%"
-tar -xf "%release_archive%" -C "%release_unpack_dir%"
-if errorlevel 1 (
-  rmdir /s /q "%release_unpack_dir%" 2>nul
-  echo Error unzipping JBangLite from %release_archive% to %release_unpack_dir% 1>&2
-  exit /b 1
-)
-if not exist "%jbang_dir%\bin" mkdir "%jbang_dir%\bin"
-del /f /q "%jbang_dir%\bin\jbanglite" "%jbang_dir%\bin\jbanglite.*" 2>nul
-copy /y "%release_unpack_dir%\jbanglite\bin\*" "%jbang_dir%\bin" >nul
-rmdir /s /q "%release_unpack_dir%" 2>nul
-del /f /q "%release_archive%" 2>nul
-exit /b 0
-
-rem Sets release_url from the JBANG_DOWNLOAD_* settings and %bundle_name%
-:release_url
-if not "%JBANG_DOWNLOAD_URL%"=="" (
-  set "release_url=%JBANG_DOWNLOAD_URL%"
-  exit /b 0
-)
-if "%JBANG_DOWNLOAD_VERSION%"=="" (
-  set "release_url=%release_base_url%/latest/download/%bundle_name%"
-  exit /b 0
-)
-rem Numeric versions get a 'v' prefix (e.g. 0.120.0 -> v0.120.0); named release
-rem tags (e.g. 'early-access', '1.0.0-rc1') are used as-is.
-call :release_tag "%JBANG_DOWNLOAD_VERSION%"
-set "release_url=%release_base_url%/download/%release_tag%/%bundle_name%"
-exit /b 0
-
-rem Sets release_tag for the version %1
-:release_tag
-setlocal
-set "rest=%~1"
-for %%D in (0 1 2 3 4 5 6 7 8 9 .) do call set "rest=%%rest:%%D=%%"
-if "%rest%"=="" (set "tag=v%~1") else (set "tag=%~1")
-endlocal & set "release_tag=%tag%"
-exit /b 0
-
-rem ===========================================================================
-rem 4. Which Java to use
+rem 3. Which Java to use
 rem ===========================================================================
 
 rem Sets java_exec (and JAVA_HOME) to the Java to run the jar with, downloading

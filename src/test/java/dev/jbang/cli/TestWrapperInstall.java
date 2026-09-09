@@ -2,15 +2,13 @@ package dev.jbang.cli;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -21,92 +19,81 @@ import org.junit.jupiter.api.Test;
 import com.github.tomakehurst.wiremock.client.WireMock;
 
 /**
- * Functional tests for the wrapper installer (dist/install.sh) and
- * for the jbanglite.jar download it sets up: a project only commits the launchers
- * and jbanglite.properties, and the launcher fetches the jar recorded there on
- * first use.
+ * Functional tests for the installer (dist/install.sh): a project gets dist/ as
+ * it is, jbanglite.jar included, and the launcher runs the jar next to it.
  */
 class TestWrapperInstall extends AbstractScriptTest {
 
 	private static final Path DIST = Paths.get("dist").toAbsolutePath();
-	private static final byte[] JAR = "not really a jar\n".getBytes(StandardCharsets.UTF_8);
+	private static final List<String> FILES = Arrays.asList("jbanglite", "jbanglite.cmd", "jbanglite.jar",
+			"install.sh", "install.cmd", "README.md", "LICENSE");
 
 	private Path project;
+	private byte[] jar;
 
 	@BeforeEach
 	void serveRepository() throws Exception {
 		requireBash();
 		project = Files.createDirectories(tempDir.resolve("project"));
-		for (String name : Arrays.asList("jbanglite", "jbanglite.cmd", "install.sh", "install.cmd",
-				"README.md", "gitignore", "LICENSE")) {
-			stubFile("/instreest/jbang/main/dist/" + name, Files.readAllBytes(DIST.resolve(name)));
-		}
-		stubFile("/instreest/jbang/main/dist/jbanglite.jar", JAR);
-		stubFile("/instreest/jbang/main/dist/jbanglite.jar.sha256",
-				(sha256(JAR) + "  jbanglite.jar\n").getBytes(StandardCharsets.UTF_8));
+		Path fakeJar = tempDir.resolve("fake.jar");
+		createFakeJar(fakeJar);
+		jar = Files.readAllBytes(fakeJar);
+		serveDist(jar);
 	}
 
 	@Test
-	void installsTheFilesToCommit() throws Exception {
+	void installsDistAsItIs() throws Exception {
 		RunResult result = install(project);
 		assertEquals(0, result.exitCode, result.stderr);
 
 		Path wrapper = project.resolve("jbanglitew");
-		for (String name : Arrays.asList("jbanglite", "jbanglite.cmd", "install.sh", "install.cmd",
-				"README.md", ".gitignore", "LICENSE", "jbanglite.properties")) {
+		for (String name : FILES) {
 			assertTrue(Files.isRegularFile(wrapper.resolve(name)), name + " was not installed");
 		}
 		assertTrue(Files.isExecutable(wrapper.resolve("jbanglite")));
-		assertTrue(Files.readAllLines(wrapper.resolve(".gitignore")).contains(".jbanglite/"));
-
-		List<String> props = Files.readAllLines(wrapper.resolve("jbanglite.properties"));
-		assertTrue(props.contains("repo=instreest/jbang"), props.toString());
-		assertTrue(props.contains("ref=main"), props.toString());
-		assertTrue(props.contains("jarSha256=" + sha256(JAR)), props.toString());
+		assertArrayEquals(jar, Files.readAllBytes(wrapper.resolve("jbanglite.jar")));
+		assertEquals(FILES.size(), Files.list(wrapper).count(), "nothing but dist/ is installed");
 	}
 
 	@Test
-	void launcherDownloadsTheJarItPins() throws Exception {
+	void launcherRunsTheJarNextToIt() throws Exception {
 		assertEquals(0, install(project).exitCode);
 		Path wrapper = project.resolve("jbanglitew");
 
-		RunResult result = runWrapper(wrapper);
-		assertTrue(result.stderr.contains("Downloading JBangLite"), result.stderr);
-		assertArrayEquals(JAR, Files.readAllBytes(wrapper.resolve(".jbanglite/jbanglite.jar")));
-
-		// the second run uses the cached jar
-		result = runWrapper(wrapper);
-		assertFalse(result.stderr.contains("Downloading JBangLite"), result.stderr);
+		RunResult result = runLauncher(wrapper, "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertTrue(result.stdout.contains("some output"), result.stdout);
+		assertEquals(Arrays.asList("bash", wrapper.resolve("jbanglite").toString()),
+				Files.readAllLines(tempDir.resolve("env.txt")));
 	}
 
 	@Test
-	void launcherRefusesAJarWithTheWrongChecksum() throws Exception {
+	void launcherRefusesToRunWithoutTheJar() throws Exception {
 		assertEquals(0, install(project).exitCode);
 		Path wrapper = project.resolve("jbanglitew");
-		Path props = wrapper.resolve("jbanglite.properties");
-		Files.write(props, Files.readAllLines(props)
-			.stream()
-			.map(l -> l.startsWith("jarSha256=") ? "jarSha256=deadbeef" : l)
-			.collect(java.util.stream.Collectors.toList()));
+		Files.delete(wrapper.resolve("jbanglite.jar"));
 
-		RunResult result = runWrapper(wrapper);
-		assertTrue(result.stderr.contains("SHA-256 mismatch"), result.stderr);
-		assertTrue(Files.notExists(wrapper.resolve(".jbanglite/jbanglite.jar")), "the jar must not be kept");
+		RunResult result = runLauncher(wrapper, "exit", "0");
+		assertNotEquals(0, result.exitCode);
+		assertTrue(result.stderr.contains("jbanglite.jar not found"), result.stderr);
+		assertTrue(result.stderr.contains("install.sh"), result.stderr);
 	}
 
 	@Test
 	void rerunningTheInstallerUpdatesInPlace() throws Exception {
 		assertEquals(0, install(project).exitCode);
 		Path wrapper = project.resolve("jbanglitew");
-		runWrapper(wrapper);
-		assertTrue(Files.exists(wrapper.resolve(".jbanglite/jbanglite.jar")));
 
-		// running the installed copy updates the directory it lives in ...
+		// a newer revision was published ...
+		byte[] newerJar = "a newer jar\n".getBytes(StandardCharsets.UTF_8);
+		wm.resetAll();
+		serveDist(newerJar);
+
+		// ... and running the installed copy updates the directory it lives in
 		RunResult result = runProcess(Arrays.asList("bash", wrapper.resolve("install.sh").toString()), env());
 		assertEquals(0, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains(wrapper.toString()), result.stderr);
-		// ... and drops the cached jar, so the next run fetches the pinned one
-		assertTrue(Files.notExists(wrapper.resolve(".jbanglite")));
+		assertArrayEquals(newerJar, Files.readAllBytes(wrapper.resolve("jbanglite.jar")));
 	}
 
 	@Test
@@ -120,11 +107,12 @@ class TestWrapperInstall extends AbstractScriptTest {
 		RunResult result = runProcess(Arrays.asList("bash", wrapper.resolve("install.sh").toString()), env());
 		assertTrue(result.exitCode != 0, result.stderr);
 		assertArrayEquals(before, Files.readAllBytes(wrapper.resolve("jbanglite")));
+		assertArrayEquals(jar, Files.readAllBytes(wrapper.resolve("jbanglite.jar")));
 	}
 
 	/**
-	 * dist/ holds the files the wrapper installs, so the launchers copied there
-	 * must be the ones in src/main/scripts (misc/update-dist.sh refreshes them).
+	 * dist/ is what a project installs, so the launchers copied there must be
+	 * the ones in src/main/scripts (misc/update-dist.sh refreshes them).
 	 */
 	@Test
 	void distHoldsTheCurrentLaunchers() throws Exception {
@@ -135,11 +123,16 @@ class TestWrapperInstall extends AbstractScriptTest {
 		}
 		assertArrayEquals(Files.readAllBytes(Paths.get("LICENSE")), Files.readAllBytes(DIST.resolve("LICENSE")),
 				"dist/LICENSE is out of date, run misc/update-dist.sh");
+		assertTrue(Files.isRegularFile(DIST.resolve("jbanglite.jar")), "dist/jbanglite.jar is missing");
 	}
 
-	private void stubFile(String url, byte[] body) {
-		wm.stubFor(WireMock.get(WireMock.urlEqualTo(url))
-			.willReturn(WireMock.aResponse().withStatus(200).withBody(body)));
+	/** Serves dist/ as the repository would, with the given jar in it. */
+	private void serveDist(byte[] jar) throws Exception {
+		for (String name : FILES) {
+			byte[] body = name.equals("jbanglite.jar") ? jar : Files.readAllBytes(DIST.resolve(name));
+			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/instreest/jbang/main/dist/" + name))
+				.willReturn(WireMock.aResponse().withStatus(200).withBody(body)));
+		}
 	}
 
 	private RunResult install(Path where) throws Exception {
@@ -147,33 +140,18 @@ class TestWrapperInstall extends AbstractScriptTest {
 				where.resolve("jbanglitew").toString()), env());
 	}
 
-	/**
-	 * Runs the installed launcher. It downloads the jar and then fails to run it
-	 * (it is not a real jar), which is fine: the download is what is tested.
-	 */
-	private RunResult runWrapper(Path wrapper) throws Exception {
-		return runProcess(Arrays.asList("bash", wrapper.resolve("jbanglite").toString(), "version"), env());
+	private RunResult runLauncher(Path wrapper, String... args) throws Exception {
+		Map<String, String> env = env();
+		env.put("JBANG_TEST_ENV_FILE", tempDir.resolve("env.txt").toString());
+		return runProcess(bashCmd(wrapper.resolve("jbanglite"), args), env);
 	}
 
 	private Map<String, String> env() {
 		Map<String, String> env = baseBashEnv("wrapper");
 		env.put("JBANGLITE_RAW_BASEURL", wm.baseUrl());
-		env.put("JBANG_DOWNLOAD_RETRY", "0");
 		env.put("JAVA_HOME", System.getProperty("java.home"));
 		env.put("no_proxy", "localhost,127.0.0.1");
 		env.put("NO_PROXY", "localhost,127.0.0.1");
 		return env;
-	}
-
-	private static String sha256(byte[] content) throws IOException {
-		try {
-			StringBuilder sb = new StringBuilder();
-			for (byte b : MessageDigest.getInstance("SHA-256").digest(content)) {
-				sb.append(String.format("%02x", b));
-			}
-			return sb.toString();
-		} catch (Exception e) {
-			throw new IOException(e);
-		}
 	}
 }

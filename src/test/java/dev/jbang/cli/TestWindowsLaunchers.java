@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,10 +14,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.jar.Attributes;
-import java.util.jar.JarEntry;
-import java.util.jar.JarOutputStream;
-import java.util.jar.Manifest;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -169,41 +164,5 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 					Arrays.asList("JAVA_VERSION=\"" + version + "\"", "OS_NAME=\"Windows\""), StandardCharsets.UTF_8);
 		}
 		return jdk.toString();
-	}
-
-	private static void createFakeJar(Path jar) throws IOException {
-		Manifest manifest = new Manifest();
-		manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-		manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, FakeJBang.class.getName());
-		String classResource = FakeJBang.class.getName().replace('.', '/') + ".class";
-		try (InputStream input = FakeJBang.class.getClassLoader().getResourceAsStream(classResource);
-				JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
-			if (input == null) {
-				throw new IOException("Could not find test class: " + classResource);
-			}
-			output.putNextEntry(new JarEntry(classResource));
-			input.transferTo(output);
-			output.closeEntry();
-		}
-	}
-
-	/**
-	 * Stand-in for JBang: records the environment the launcher set up and then
-	 * either exits with the given code ("exit N") or asks the launcher to run a
-	 * command ("exec CMD", exit code 255).
-	 */
-	public static class FakeJBang {
-		public static void main(String[] args) throws IOException {
-			Path envFile = Paths.get(System.getenv("JBANG_TEST_ENV_FILE"));
-			Files.write(envFile, Arrays.asList(System.getenv("JBANG_RUNTIME_SHELL"),
-					System.getenv("JBANG_LAUNCH_CMD")), StandardCharsets.UTF_8);
-			if ("exec".equals(args[0])) {
-				System.out.println(args[1]);
-				System.exit(255);
-			} else {
-				System.out.println("some output");
-				System.exit(Integer.parseInt(args[1]));
-			}
-		}
 	}
 }

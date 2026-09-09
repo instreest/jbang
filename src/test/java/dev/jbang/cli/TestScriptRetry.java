@@ -1,9 +1,18 @@
 package dev.jbang.cli;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -13,14 +22,18 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
 
 /**
- * Functional tests for download retry support in JBang startup scripts. Runs
- * the real jbang script against a WireMock server that simulates
- * transient download failures, using JBANG_DOWNLOAD_URL to redirect downloads
- * to WireMock.
+ * Functional tests for download retry support in the launcher scripts. The
+ * only download a launcher makes is the bootstrap JDK, so the launcher is run
+ * without any usable Java and JBANG_JVM_INDEX_BASEURL points it at a WireMock
+ * server that simulates transient failures of the JVM index metadata.
  *
  * See https://github.com/jbangdev/jbang/issues/2459
  */
 class TestScriptRetry extends AbstractScriptTest {
+
+	private static final String METADATA_PATH = "/io/get-coursier/jvm/indices/index-linux-amd64/maven-metadata.xml";
+	private static final byte[] METADATA = "<metadata><versioning><release>0.0.1</release></versioning></metadata>\n"
+		.getBytes(StandardCharsets.UTF_8);
 
 	/**
 	 * Configures WireMock to fail {@code failCount} times with a 500 error, then
@@ -46,17 +59,58 @@ class TestScriptRetry extends AbstractScriptTest {
 
 	private Map<String, String> bashEnv(int retryCount) {
 		Map<String, String> env = baseBashEnv("retry-" + retryCount);
-		env.put("JBANG_DOWNLOAD_URL", wm.url("/jbanglite.tar"));
+		env.put("JBANG_JVM_INDEX_BASEURL", wm.baseUrl());
 		env.put("JBANG_DOWNLOAD_RETRY", String.valueOf(retryCount));
 		env.put("JBANG_DOWNLOAD_RETRY_DELAY", "0");
+		// neither JAVA_HOME nor the PATH offers a usable Java, so the launcher
+		// has to download one (a shell profile may set JAVA_HOME, so it is
+		// pointed at a JDK that is too old rather than removed)
+		env.put("JAVA_HOME", tooOldJdk());
+		env.put("PATH", pathWithoutJava());
+		env.put("no_proxy", "localhost,127.0.0.1");
+		env.put("NO_PROXY", "localhost,127.0.0.1");
 		return env;
 	}
 
+	/** A directory that looks like a Java 8 JDK, which the launcher must reject. */
+	private String tooOldJdk() {
+		try {
+			Path jdk = Files.createDirectories(tempDir.resolve("oldjdk/bin")).getParent();
+			Files.write(jdk.resolve("bin/java"), new byte[0]);
+			Files.write(jdk.resolve("release"), "JAVA_VERSION=\"1.8.0_292\"\n".getBytes(StandardCharsets.UTF_8));
+			return jdk.toString();
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
 
-	// -------------------------------------------------------------------------
-	// Bash tests — runs src/main/scripts/jbanglite with JBANG_DOWNLOAD_URL
-	// pointing at WireMock
-	// -------------------------------------------------------------------------
+	/**
+	 * A PATH with everything the launcher needs (coreutils, curl) but no java:
+	 * one directory of links to the tools on the real PATH, java left out.
+	 */
+	private String pathWithoutJava() {
+		try {
+			Path bin = Files.createDirectories(tempDir.resolve("path-without-java"));
+			for (String dir : System.getenv("PATH").split(File.pathSeparator)) {
+				Path d = Paths.get(dir);
+				if (!Files.isDirectory(d)) {
+					continue;
+				}
+				try (Stream<Path> tools = Files.list(d)) {
+					for (Path tool : (Iterable<Path>) tools::iterator) {
+						String name = tool.getFileName().toString();
+						if (name.startsWith("java") || Files.exists(bin.resolve(name))) {
+							continue;
+						}
+						Files.createSymbolicLink(bin.resolve(name), tool.toAbsolutePath());
+					}
+				}
+			}
+			return bin.toString();
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
 
 	@Nested
 	class BashDownloadRetry {
@@ -64,42 +118,42 @@ class TestScriptRetry extends AbstractScriptTest {
 		@BeforeEach
 		void checkBash() {
 			requireBash();
+			requireLinuxAmd64();
 		}
 
 		@Test
 		void downloadSucceedsAfterTransientFailures() throws Exception {
-			byte[] tar = createJbangTar();
-			stubFlakyEndpoint("/jbanglite.tar", 3, tar);
+			stubFlakyEndpoint(METADATA_PATH, 3, METADATA);
 
-			RunResult result = runProcess(bashCmd("version"), bashEnv(5));
+			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "version"), bashEnv(5));
 
-			// Download should have succeeded (no download error in stderr)
-			assertTrue(!result.stderr.contains("Error downloading JBang"),
-					"download should have succeeded after retries, stderr: " + result.stderr);
+			// the metadata was read after the retries; the index itself is not
+			// served, which is where the launcher gives up
+			assertTrue(result.stderr.contains("Retry in"), result.stderr);
+			assertFalse(result.stderr.contains("Could not read the JVM index"), result.stderr);
+			assertTrue(result.stderr.contains("Could not download the JVM index"), result.stderr);
 		}
 
 		@Test
 		void downloadFailsWhenRetriesExhausted() throws Exception {
-			byte[] tar = createJbangTar();
-			stubFlakyEndpoint("/jbanglite.tar", 10, tar);
+			stubFlakyEndpoint(METADATA_PATH, 10, METADATA);
 
-			RunResult result = runProcess(bashCmd("version"), bashEnv(2));
+			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "version"), bashEnv(2));
 
 			assertNotEquals(0, result.exitCode, "script should have failed");
-			assertTrue(result.stderr.contains("Error downloading JBang"),
-					"stderr should mention download error, was: " + result.stderr);
+			assertTrue(result.stderr.contains("Download 2/3 failed"), result.stderr);
+			assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
 		}
 
 		@Test
 		void downloadFailsWithZeroRetries() throws Exception {
-			byte[] tar = createJbangTar();
-			stubFlakyEndpoint("/jbanglite.tar", 1, tar);
+			stubFlakyEndpoint(METADATA_PATH, 1, METADATA);
 
-			RunResult result = runProcess(bashCmd("version"), bashEnv(0));
+			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "version"), bashEnv(0));
 
 			assertNotEquals(0, result.exitCode, "script should have failed");
-			assertTrue(result.stderr.contains("Error downloading JBang"),
-					"stderr should mention download error, was: " + result.stderr);
+			assertFalse(result.stderr.contains("Retry in"), result.stderr);
+			assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
 		}
 	}
 
