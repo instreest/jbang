@@ -64,6 +64,20 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	}
 
 	@Test
+	void cmdDelegatesToPs1() throws Exception {
+		// Without a usable native binary jbang.cmd must hand over to jbang.ps1,
+		// which warns and falls back to the jar
+		RunResult result = runLauncher(cmdLauncher(), "JBANG_USE_NATIVE", "true", "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("WARNING: JBang native binary"), result.stderr);
+		assertTrue(result.stdout.contains("some output"), result.stdout);
+		assertEquals(Arrays.asList("cmd", binDir.resolve("jbang.cmd").toString()), Files.readAllLines(envFile));
+
+		result = runLauncher(cmdLauncher(), "JBANG_USE_NATIVE", "true", "exec", "cmd /c exit 5");
+		assertEquals(5, result.exitCode, result.stderr);
+	}
+
+	@Test
 	void ps1PropagatesExitCodeAndOutput() throws Exception {
 		RunResult result = runLauncher(ps1Launcher(), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
@@ -88,8 +102,14 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	}
 
 	private RunResult runLauncher(List<String> command, String... args) throws Exception {
-		command.addAll(Arrays.asList(args));
 		Map<String, String> env = new HashMap<>(System.getenv());
+		int i = 0;
+		// leading "NAME", "value" pairs are environment variables
+		while (args.length - i > 2 && args[i].startsWith("JBANG_")) {
+			env.put(args[i], args[i + 1]);
+			i += 2;
+		}
+		command.addAll(Arrays.asList(args).subList(i, args.length));
 		env.put("JAVA_HOME", System.getProperty("java.home"));
 		env.put("JBANG_DIR", tempDir.resolve("jbang-home").toString());
 		env.put("JBANG_CACHE_DIR", tempDir.resolve("cache").toString());

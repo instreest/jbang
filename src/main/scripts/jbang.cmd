@@ -1,16 +1,44 @@
 @echo off
-rem JBang launcher for CMD. All the actual work (finding or downloading JBang
-rem and a JDK, running JBang) is done by jbang.ps1. This script only tells
-rem jbang.ps1 that it is running on behalf of CMD and, when JBang asks for a
-rem command to be executed (exit code 255), runs that command in this shell.
+rem JBang launcher for CMD.
+rem When a JDK and the JBang jar can be found without any further work, JBang
+rem is started directly from here. Everything else (native binaries, downloading
+rem JBang or a JDK, updating a staged jbang.jar.new) is delegated to jbang.ps1,
+rem which is told it runs on behalf of CMD via JBANG_RUNTIME_SHELL=cmd.
+rem Either way, when JBang asks for a command to be executed (exit code 255)
+rem that command is run in this shell.
 setlocal
+
+rem The Java version to install when it's not installed on the system yet
+if "%JBANG_DEFAULT_JAVA_VERSION%"=="" (set "javaVersion=17") else (set "javaVersion=%JBANG_DEFAULT_JAVA_VERSION%")
+if "%JBANG_DIR%"=="" (set "JBDIR=%userprofile%\.jbang") else (set "JBDIR=%JBANG_DIR%")
+if "%JBANG_CACHE_DIR%"=="" (set "TDIR=%JBDIR%\cache") else (set "TDIR=%JBANG_CACHE_DIR%")
+
+rem Setup environment for execution
 set "JBANG_RUNTIME_SHELL=cmd"
 set "JBANG_LAUNCH_CMD=%~f0"
+rem tell jbang whether stdin is a tty or not
+2>nul >nul timeout /t 0 && (set "JBANG_STDIN_NOTTY=false") || (set "JBANG_STDIN_NOTTY=true")
 
+rem Fast path: run the jar next to this script with an already available JDK
+if "%JBANG_USE_NATIVE%"=="true" goto :delegate
+if exist "%~dp0jbang.jar" (
+  set "jarPath=%~dp0jbang.jar"
+) else if exist "%~dp0.jbang\jbang.jar" (
+  set "jarPath=%~dp0.jbang\jbang.jar"
+) else goto :delegate
+if exist "%jarPath%.new" goto :delegate
+call :find_java || goto :delegate
+set CMD="%JAVA_EXEC%" %JBANG_JAVA_OPTIONS% -jar "%jarPath%"
+goto :run
+
+:delegate
+set CMD=powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0jbang.ps1"
+
+:run
 rem execute jbang and redirect output to temporary file
 rem (WARNING running jbang in parallel in quick succession will cause temp name collisions!!)
 set "tmpfile=%TEMP%\%RANDOM%.jbang.tmp"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0jbang.ps1" %* > "%tmpfile%"
+%CMD% %* > "%tmpfile%"
 set "ERROR=%ERRORLEVEL%"
 if %ERROR% EQU 255 goto :execute
 
@@ -25,3 +53,30 @@ for /f "usebackq delims=" %%L in ("%tmpfile%") do if not defined OUTPUT set "OUT
 del /f /q "%tmpfile%"
 %OUTPUT%
 exit /b %ERRORLEVEL%
+
+rem Finds an installed JDK (same order as jbang.ps1) and sets JAVA_EXEC and JAVA_HOME.
+rem Fails when none is found, in which case jbang.ps1 will download one.
+:find_java
+if not "%JAVA_HOME%"=="" (
+  if exist "%JAVA_HOME%\bin\javac.exe" (
+    set "JAVA_EXEC=%JAVA_HOME%\bin\java.exe"
+    exit /b 0
+  )
+  echo JAVA_HOME is set but does not seem to point to a valid Java JDK 1>&2
+)
+where javac >nul 2>&1 && (
+  set "JAVA_HOME="
+  set "JAVA_EXEC=java.exe"
+  exit /b 0
+)
+if exist "%JBDIR%\currentjdk\bin\javac.exe" (
+  set "JAVA_HOME=%JBDIR%\currentjdk"
+  set "JAVA_EXEC=%JBDIR%\currentjdk\bin\java.exe"
+  exit /b 0
+)
+if exist "%TDIR%\jdks\%javaVersion%\bin\javac.exe" (
+  set "JAVA_HOME=%TDIR%\jdks\%javaVersion%"
+  set "JAVA_EXEC=%TDIR%\jdks\%javaVersion%\bin\java.exe"
+  exit /b 0
+)
+exit /b 1
