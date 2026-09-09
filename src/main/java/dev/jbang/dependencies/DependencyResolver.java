@@ -146,7 +146,7 @@ public final class DependencyResolver {
 	private Session(boolean offline, boolean updateCache, List<MavenRepo> repositories) {
 		Map<String, String> userProperties = new HashMap<>();
 		// avoid being blocked by servers that reject the default "Java" user agent
-		userProperties.put("aether.connector.userAgent", "JBang/" + Util.getJBangVersion());
+		userProperties.put("aether.connector.userAgent", "JBangLite/" + Util.getJBangVersion());
 
 		ContextOverrides.Builder overrides = ContextOverrides.create()
 			.userProperties(userProperties)

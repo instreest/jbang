@@ -47,12 +47,12 @@ class TestScriptDownloadVersion extends AbstractScriptTest {
 		@Test
 		void numericVersionGetsVPrefix() throws Exception {
 			byte[] tar = createJbangTar();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/v0.120.0/jbang.tar"))
+			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/v0.120.0/jbanglite.tar"))
 				.willReturn(WireMock.aResponse().withStatus(200).withBody(tar)));
 
 			RunResult result = runProcess(bashCmd("version"), bashEnv("0.120.0"));
 
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/v0.120.0/jbang.tar")));
+			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/v0.120.0/jbanglite.tar")));
 			assertTrue(!result.stderr.contains("Error downloading JBang"),
 					"download should have succeeded, stderr: " + result.stderr);
 		}
@@ -60,12 +60,12 @@ class TestScriptDownloadVersion extends AbstractScriptTest {
 		@Test
 		void earlyAccessTagIsUsedAsIs() throws Exception {
 			byte[] tar = createJbangTar();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/early-access/jbang.tar"))
+			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/early-access/jbanglite.tar"))
 				.willReturn(WireMock.aResponse().withStatus(200).withBody(tar)));
 
 			RunResult result = runProcess(bashCmd("version"), bashEnv("early-access"));
 
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/early-access/jbang.tar")));
+			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/early-access/jbanglite.tar")));
 			assertTrue(!result.stderr.contains("Error downloading JBang"),
 					"download should have succeeded, stderr: " + result.stderr);
 		}
@@ -73,12 +73,12 @@ class TestScriptDownloadVersion extends AbstractScriptTest {
 		@Test
 		void prereleaseTagIsUsedAsIs() throws Exception {
 			byte[] tar = createJbangTar();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/1.0.0-rc1/jbang.tar"))
+			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/1.0.0-rc1/jbanglite.tar"))
 				.willReturn(WireMock.aResponse().withStatus(200).withBody(tar)));
 
 			RunResult result = runProcess(bashCmd("version"), bashEnv("1.0.0-rc1"));
 
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/1.0.0-rc1/jbang.tar")));
+			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/1.0.0-rc1/jbanglite.tar")));
 			assertTrue(!result.stderr.contains("Error downloading JBang"),
 					"download should have succeeded, stderr: " + result.stderr);
 		}

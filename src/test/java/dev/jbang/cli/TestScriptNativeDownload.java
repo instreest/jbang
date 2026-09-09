@@ -12,8 +12,8 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 
 /**
  * Functional tests verifying that JBANG_USE_NATIVE=true causes the startup
- * script to download a platform-specific bundle (e.g. jbang-linux-x64.tar)
- * instead of the generic jbang.tar.
+ * script to download a platform-specific bundle (e.g. jbanglite-linux-x64.tar)
+ * instead of the generic jbanglite.tar.
  *
  * See https://github.com/jbangdev/jbang/pull/2534
  */
@@ -84,12 +84,12 @@ class TestScriptNativeDownload extends AbstractScriptTest {
 		@Test
 		void latestDownloadUsesGenericBundleByDefault() throws Exception {
 			byte[] tar = createJbangTar();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/latest/download/jbang.tar"))
+			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/latest/download/jbanglite.tar"))
 				.willReturn(WireMock.aResponse().withStatus(200).withBody(tar)));
 
 			RunResult result = runProcess(bashCmd("version"), bashEnv(false));
 
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/latest/download/jbang.tar")));
+			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/latest/download/jbanglite.tar")));
 			assertTrue(!result.stderr.contains("Error downloading JBang"),
 					"download should have succeeded, stderr: " + result.stderr);
 		}
@@ -98,7 +98,7 @@ class TestScriptNativeDownload extends AbstractScriptTest {
 		void latestDownloadUsesPlatformBundleWhenNativeEnabled() throws Exception {
 			String os = detectOs();
 			String arch = detectArch();
-			String expectedPath = "/latest/download/jbang-" + os + "-" + arch + ".tar";
+			String expectedPath = "/latest/download/jbanglite-" + os + "-" + arch + ".tar";
 
 			byte[] tar = createJbangTar();
 			wm.stubFor(WireMock.get(WireMock.urlEqualTo(expectedPath))
@@ -114,12 +114,12 @@ class TestScriptNativeDownload extends AbstractScriptTest {
 		@Test
 		void versionedDownloadUsesGenericBundleByDefault() throws Exception {
 			byte[] tar = createJbangTar();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/v0.120.0/jbang.tar"))
+			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/download/v0.120.0/jbanglite.tar"))
 				.willReturn(WireMock.aResponse().withStatus(200).withBody(tar)));
 
 			RunResult result = runProcess(bashCmd("version"), bashEnvWithVersion(false, "0.120.0"));
 
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/v0.120.0/jbang.tar")));
+			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/download/v0.120.0/jbanglite.tar")));
 			assertTrue(!result.stderr.contains("Error downloading JBang"),
 					"download should have succeeded, stderr: " + result.stderr);
 		}
@@ -128,7 +128,7 @@ class TestScriptNativeDownload extends AbstractScriptTest {
 		void versionedDownloadUsesPlatformBundleWhenNativeEnabled() throws Exception {
 			String os = detectOs();
 			String arch = detectArch();
-			String expectedPath = "/download/v0.120.0/jbang-" + os + "-" + arch + ".tar";
+			String expectedPath = "/download/v0.120.0/jbanglite-" + os + "-" + arch + ".tar";
 
 			byte[] tar = createJbangTar();
 			wm.stubFor(WireMock.get(WireMock.urlEqualTo(expectedPath))
@@ -145,7 +145,7 @@ class TestScriptNativeDownload extends AbstractScriptTest {
 		void namedTagDownloadUsesPlatformBundleWhenNativeEnabled() throws Exception {
 			String os = detectOs();
 			String arch = detectArch();
-			String expectedPath = "/download/early-access/jbang-" + os + "-" + arch + ".tar";
+			String expectedPath = "/download/early-access/jbanglite-" + os + "-" + arch + ".tar";
 
 			byte[] tar = createJbangTar();
 			wm.stubFor(WireMock.get(WireMock.urlEqualTo(expectedPath))
@@ -161,17 +161,17 @@ class TestScriptNativeDownload extends AbstractScriptTest {
 		@Test
 		void downloadUrlOverrideIgnoresNativeFlag() throws Exception {
 			byte[] tar = createJbangTar();
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/custom/my-jbang.tar"))
+			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/custom/my-jbanglite.tar"))
 				.willReturn(WireMock.aResponse().withStatus(200).withBody(tar)));
 
 			Map<String, String> env = bashEnv(true);
-			env.put("JBANG_DOWNLOAD_URL", wm.url("/custom/my-jbang.tar"));
+			env.put("JBANG_DOWNLOAD_URL", wm.url("/custom/my-jbanglite.tar"));
 
 			RunResult result = runProcess(bashCmd("version"), env);
 
 			// When JBANG_DOWNLOAD_URL is set explicitly, it should be used as-is
 			// regardless of JBANG_USE_NATIVE
-			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/custom/my-jbang.tar")));
+			wm.verify(WireMock.getRequestedFor(WireMock.urlEqualTo("/custom/my-jbanglite.tar")));
 			assertTrue(!result.stderr.contains("Error downloading JBang"),
 					"download should have succeeded, stderr: " + result.stderr);
 		}

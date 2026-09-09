@@ -162,9 +162,9 @@ public final class Util {
 			Duration d = Duration.between(startTime, Instant.now());
 			long s = d.getSeconds();
 			long n = d.minus(s, ChronoUnit.SECONDS).toMillis();
-			return String.format("[jbang] [%d:%03d] ", s, n);
+			return String.format("[jbanglite] [%d:%03d] ", s, n);
 		}
-		return "[jbang] ";
+		return "[jbanglite] ";
 	}
 
 	// ------------------------------------------------------------------- OS

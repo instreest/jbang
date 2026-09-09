@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Refreshes dist/, the set of files the wrapper installs into a project (see
-# dist/install.sh). The launchers, LICENSE and jbang.jar are copied there from
+# dist/install.sh). The launchers, LICENSE and jbanglite.jar are copied there from
 # the sources; install.sh, install.cmd, README.md and gitignore are maintained
 # in dist/ itself.
 #
@@ -15,7 +15,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-copied="src/main/scripts/jbang src/main/scripts/jbang.cmd LICENSE"
+copied="src/main/scripts/jbanglite src/main/scripts/jbanglite.cmd LICENSE"
 
 if [ "${1:-}" = "--check" ]; then
   stale=
@@ -35,6 +35,6 @@ mkdir -p dist
 for from in $copied; do
   cp -f "$from" "dist/$(basename "$from")"
 done
-cp -f build/libs/jbang.jar dist/jbang.jar
-(cd dist && sha256sum jbang.jar > jbang.jar.sha256)
-cat dist/jbang.jar.sha256
+cp -f build/libs/jbanglite.jar dist/jbanglite.jar
+(cd dist && sha256sum jbanglite.jar > jbanglite.jar.sha256)
+cat dist/jbanglite.jar.sha256

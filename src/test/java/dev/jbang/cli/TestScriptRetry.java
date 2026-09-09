@@ -46,7 +46,7 @@ class TestScriptRetry extends AbstractScriptTest {
 
 	private Map<String, String> bashEnv(int retryCount) {
 		Map<String, String> env = baseBashEnv("retry-" + retryCount);
-		env.put("JBANG_DOWNLOAD_URL", wm.url("/jbang.tar"));
+		env.put("JBANG_DOWNLOAD_URL", wm.url("/jbanglite.tar"));
 		env.put("JBANG_DOWNLOAD_RETRY", String.valueOf(retryCount));
 		env.put("JBANG_DOWNLOAD_RETRY_DELAY", "0");
 		return env;
@@ -54,7 +54,7 @@ class TestScriptRetry extends AbstractScriptTest {
 
 
 	// -------------------------------------------------------------------------
-	// Bash tests — runs src/main/scripts/jbang with JBANG_DOWNLOAD_URL
+	// Bash tests — runs src/main/scripts/jbanglite with JBANG_DOWNLOAD_URL
 	// pointing at WireMock
 	// -------------------------------------------------------------------------
 
@@ -69,7 +69,7 @@ class TestScriptRetry extends AbstractScriptTest {
 		@Test
 		void downloadSucceedsAfterTransientFailures() throws Exception {
 			byte[] tar = createJbangTar();
-			stubFlakyEndpoint("/jbang.tar", 3, tar);
+			stubFlakyEndpoint("/jbanglite.tar", 3, tar);
 
 			RunResult result = runProcess(bashCmd("version"), bashEnv(5));
 
@@ -81,7 +81,7 @@ class TestScriptRetry extends AbstractScriptTest {
 		@Test
 		void downloadFailsWhenRetriesExhausted() throws Exception {
 			byte[] tar = createJbangTar();
-			stubFlakyEndpoint("/jbang.tar", 10, tar);
+			stubFlakyEndpoint("/jbanglite.tar", 10, tar);
 
 			RunResult result = runProcess(bashCmd("version"), bashEnv(2));
 
@@ -93,7 +93,7 @@ class TestScriptRetry extends AbstractScriptTest {
 		@Test
 		void downloadFailsWithZeroRetries() throws Exception {
 			byte[] tar = createJbangTar();
-			stubFlakyEndpoint("/jbang.tar", 1, tar);
+			stubFlakyEndpoint("/jbanglite.tar", 1, tar);
 
 			RunResult result = runProcess(bashCmd("version"), bashEnv(0));
 

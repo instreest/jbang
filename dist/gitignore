@@ -1,2 +1,2 @@
-# jbang.jar is downloaded on first use, not committed
-.jbang/
+# jbanglite.jar is downloaded on first use, not committed
+.jbanglite/

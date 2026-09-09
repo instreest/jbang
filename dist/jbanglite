@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
 
 #
-# To run this script remotely type this in your shell
-# (where <args>... are the arguments you want to pass to JBang):
-#   curl -Ls https://sh.jbang.dev | bash -s - <args>...
-#
 
 # JBang itself only needs a JVM to run; which one hardly matters, so when the
 # machine has none we simply fetch the newest Temurin of this feature version.
 bootstrapJavaVersion=25
-# The oldest Java that can run jbang.jar
+# The oldest Java that can run jbanglite.jar
 minJavaVersion=11
 
-# Where the JVM index lives. It is the same index jbang.jar uses to install the
+# Where the JVM index lives. It is the same index jbanglite.jar uses to install the
 # JDKs that scripts ask for with //JAVA, published on Maven Central, so no JDK
 # discovery service is involved. Override for a corporate mirror.
 jvmIndexBaseUrl=${JBANG_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
@@ -22,7 +18,7 @@ jvmIndexBaseUrl=${JBANG_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
 # Example: JBANG_DOWNLOAD_BASEURL=http://localhost:18080
 jbangDownloadBaseUrl=${JBANG_DOWNLOAD_BASEURL:-https://github.com/instreest/jbang/releases}
 
-# Base URL the wrapper (jbangw) downloads jbang.jar from. The wrapper is
+# Base URL the wrapper (jbanglitew) downloads jbanglite.jar from. The wrapper is
 # installed into a project with install.sh/install.cmd, which records the
 # repository and revision to take the jar from in jbanglite.properties next to
 # this script. Override for testing or a corporate mirror.
@@ -112,7 +108,7 @@ java_major() {
   echo "${v%%[.+_-]*}"
 }
 
-# True when $1 holds a Java new enough to run jbang.jar
+# True when $1 holds a Java new enough to run jbanglite.jar
 usable_java() {
   local major
   [ -x "$1/bin/java" ] || return 1
@@ -227,8 +223,8 @@ install_bootstrap_jdk() {
   rm -f "$archive" "$TDIR/bootstrap-jdk.sha256"
 }
 
-# Determines the java to run jbang.jar with. Any Java $minJavaVersion or newer
-# will do; the JDK a script asks for with //JAVA is chosen by jbang.jar itself.
+# Determines the java to run jbanglite.jar with. Any Java $minJavaVersion or newer
+# will do; the JDK a script asks for with //JAVA is chosen by jbanglite.jar itself.
 setup_java_exec() {
   unset JAVA_EXEC
   # The JDK JBang picked as the default
@@ -267,8 +263,8 @@ setup_java_exec() {
   JAVA_EXEC="$JAVA_HOME/bin/java"
 }
 
-# Executes jbang (either native binary or JAR) and handles the output
-execute_jbang() {
+# Executes JBangLite (either native binary or JAR) and handles the output
+execute_jbanglite() {
 ## https://stackoverflow.com/questions/1668649/how-to-keep-quotes-in-bash-arguments
 ## attempt to ensure each argument keeps its original quoting
 
@@ -277,7 +273,7 @@ execute_jbang() {
   export JBANG_STDIN_NOTTY
   export JBANG_LAUNCH_CMD=$0
   
-  ## run it using command substitution to have just the user process once jbang is done
+  ## run it using command substitution to have just the user process once JBangLite is done
   if [[ -n "$binaryPath" ]]; then
     # Run native binary
     output=$(CLICOLOR_FORCE=1 "$binaryPath" "$@")
@@ -346,8 +342,8 @@ case "$(uname -m)" in
 esac
 
 ## when using cygwin fall out to just running the bat file.
-if [[ $os == windows && -f "$abs_jbang_dir/jbang.cmd" && "$(uname -s)" == CYGWIN* ]]; then
-  cmd /c "$(cygpath -m "$abs_jbang_dir"/jbang.cmd)" "$@"
+if [[ $os == windows && -f "$abs_jbang_dir/jbanglite.cmd" && "$(uname -s)" == CYGWIN* ]]; then
+  cmd /c "$(cygpath -m "$abs_jbang_dir"/jbanglite.cmd)" "$@"
   exit $?
 fi
 
@@ -360,35 +356,35 @@ if [[ -z "$JBANG_USE_NATIVE" ]]; then JBANG_USE_NATIVE="false"; fi
 binaryPath=""
 jarPath=""
 if [[ "$JBANG_USE_NATIVE" == "true" ]]; then
-  # Look for platform-specific native binary first (e.g. jbang.bin-linux-x64),
-  # then fall back to generic jbang.bin for manually placed binaries
+  # Look for platform-specific native binary first (e.g. jbanglite.bin-linux-x64),
+  # then fall back to generic jbanglite.bin for manually placed binaries
   if [[ "$os" == "windows" ]]; then
-    if [ -f "$abs_jbang_dir/jbang.bin-${os}-${arch}.exe" ] && [ -x "$abs_jbang_dir/jbang.bin-${os}-${arch}.exe" ]; then
-      binaryPath="$abs_jbang_dir/jbang.bin-${os}-${arch}.exe"
-    elif [ -f "$abs_jbang_dir/jbang.bin.exe" ] && [ -x "$abs_jbang_dir/jbang.bin.exe" ]; then
-      binaryPath="$abs_jbang_dir/jbang.bin.exe"
+    if [ -f "$abs_jbang_dir/jbanglite.bin-${os}-${arch}.exe" ] && [ -x "$abs_jbang_dir/jbanglite.bin-${os}-${arch}.exe" ]; then
+      binaryPath="$abs_jbang_dir/jbanglite.bin-${os}-${arch}.exe"
+    elif [ -f "$abs_jbang_dir/jbanglite.bin.exe" ] && [ -x "$abs_jbang_dir/jbanglite.bin.exe" ]; then
+      binaryPath="$abs_jbang_dir/jbanglite.bin.exe"
     else
-      echo "WARNING: JBang native binary (jbang.bin-${os}-${arch}.exe or jbang.bin.exe) not found in $abs_jbang_dir" 1>&2
+      echo "WARNING: JBangLite native binary (jbanglite.bin-${os}-${arch}.exe or jbanglite.bin.exe) not found in $abs_jbang_dir" 1>&2
     fi
   else
-    if [ -f "$abs_jbang_dir/jbang.bin-${os}-${arch}" ] && [ -x "$abs_jbang_dir/jbang.bin-${os}-${arch}" ]; then
-      binaryPath="$abs_jbang_dir/jbang.bin-${os}-${arch}"
-    elif [ -f "$abs_jbang_dir/jbang.bin" ] && [ -x "$abs_jbang_dir/jbang.bin" ]; then
-      binaryPath="$abs_jbang_dir/jbang.bin"
+    if [ -f "$abs_jbang_dir/jbanglite.bin-${os}-${arch}" ] && [ -x "$abs_jbang_dir/jbanglite.bin-${os}-${arch}" ]; then
+      binaryPath="$abs_jbang_dir/jbanglite.bin-${os}-${arch}"
+    elif [ -f "$abs_jbang_dir/jbanglite.bin" ] && [ -x "$abs_jbang_dir/jbanglite.bin" ]; then
+      binaryPath="$abs_jbang_dir/jbanglite.bin"
     else
-      echo "WARNING: JBang native binary (jbang.bin-${os}-${arch} or jbang.bin) not found or not executable in $abs_jbang_dir" 1>&2
+      echo "WARNING: JBangLite native binary (jbanglite.bin-${os}-${arch} or jbanglite.bin) not found or not executable in $abs_jbang_dir" 1>&2
     fi
   fi
 fi
 if [[ -z "$binaryPath" ]]; then
   # Fall back to JAR if no native binary found or native binary disabled
-  if [ -f "$abs_jbang_dir/jbang.jar" ]; then
-    jarPath=$abs_jbang_dir/jbang.jar
-  elif [ -f "$abs_jbang_dir/.jbang/jbang.jar" ]; then
-    jarPath=$abs_jbang_dir/.jbang/jbang.jar
+  if [ -f "$abs_jbang_dir/jbanglite.jar" ]; then
+    jarPath=$abs_jbang_dir/jbanglite.jar
+  elif [ -f "$abs_jbang_dir/.jbanglite/jbanglite.jar" ]; then
+    jarPath=$abs_jbang_dir/.jbanglite/jbanglite.jar
   fi
 fi
-# Downloads jbang.jar into <wrapper dir>/.jbang as told by jbanglite.properties
+# Downloads jbanglite.jar into <wrapper dir>/.jbang as told by jbanglite.properties
 install_wrapper_jar() {
   local props repo ref sha url target actual
   props="$abs_jbang_dir/jbanglite.properties"
@@ -396,12 +392,12 @@ install_wrapper_jar() {
   ref=$(sed -n 's/^ref=//p' "$props" | head -1)
   sha=$(sed -n 's/^jarSha256=//p' "$props" | head -1)
   if [ -z "$repo" ] || [ -z "$ref" ]; then
-    echo "$props does not name a repo and a ref to get jbang.jar from" 1>&2
+    echo "$props does not name a repo and a ref to get jbanglite.jar from" 1>&2
     exit 1
   fi
-  url="$jbangRawBaseUrl/$repo/$ref/dist/jbang.jar"
-  target="$abs_jbang_dir/.jbang/jbang.jar"
-  mkdir -p "$abs_jbang_dir/.jbang"
+  url="$jbangRawBaseUrl/$repo/$ref/dist/jbanglite.jar"
+  target="$abs_jbang_dir/.jbanglite/jbanglite.jar"
+  mkdir -p "$abs_jbang_dir/.jbanglite"
   echo "Downloading JBangLite from $url..." 1>&2
   download "$url" "$target.tmp"
   if [ $retval -ne 0 ]; then
@@ -424,15 +420,15 @@ install_wrapper_jar() {
 # installed from, so there are no releases to look for
 if [[ -z "$binaryPath" && -z "$jarPath" && -f "$abs_jbang_dir/jbanglite.properties" ]]; then
   install_wrapper_jar
-  jarPath="$abs_jbang_dir/.jbang/jbang.jar"
+  jarPath="$abs_jbang_dir/.jbanglite/jbanglite.jar"
 fi
 
 if [[ -z "$binaryPath" && -z "$jarPath" ]]; then
-  if [[ ! -f "$JBDIR/bin/jbang.jar" || ! -f "$JBDIR/bin/jbang" ]]; then
+  if [[ ! -f "$JBDIR/bin/jbanglite.jar" || ! -f "$JBDIR/bin/jbanglite" ]]; then
     if [[ "$JBANG_USE_NATIVE" == "true" ]]; then
-      bundleName="jbang-${os}-${arch}.tar"
+      bundleName="jbanglite-${os}-${arch}.tar"
     else
-      bundleName="jbang.tar"
+      bundleName="jbanglite.tar"
     fi
     mkdir -p "$TDIR/urls"
     if [ -n "$JBANG_DOWNLOAD_URL" ]; then
@@ -448,23 +444,23 @@ if [[ -z "$binaryPath" && -z "$jarPath" ]]; then
       esac
       jburl="${jbangDownloadBaseUrl}/download/$jbtag/$bundleName";
     fi
-    echo "Downloading JBang ${JBANG_DOWNLOAD_VERSION:-latest} from $jburl..." 1>&2
-    download "$jburl" "$TDIR/urls/jbang.tar"
-    if [ $retval -ne 0 ]; then echo "Error downloading JBang from $jburl" 1>&2; exit $retval; fi
-    echo "Installing JBang..." 1>&2
-    rm -rf "$TDIR/urls/jbang"
-    tar xf "$TDIR/urls/jbang.tar" -C "$TDIR/urls"
-    if [ $retval -ne 0 ]; then echo "Error installing JBang" 1>&2; exit $retval; fi
+    echo "Downloading JBangLite ${JBANG_DOWNLOAD_VERSION:-latest} from $jburl..." 1>&2
+    download "$jburl" "$TDIR/urls/jbanglite.tar"
+    if [ $retval -ne 0 ]; then echo "Error downloading JBangLite from $jburl" 1>&2; exit $retval; fi
+    echo "Installing JBangLite..." 1>&2
+    rm -rf "$TDIR/urls/jbanglite"
+    tar xf "$TDIR/urls/jbanglite.tar" -C "$TDIR/urls"
+    if [ $retval -ne 0 ]; then echo "Error installing JBangLite" 1>&2; exit $retval; fi
     mkdir -p "$JBDIR/bin"
-    rm -f "$JBDIR/bin/jbang" "$JBDIR/bin"/jbang.*
-    cp -f "$TDIR/urls/jbang/bin"/* "$JBDIR/bin"
+    rm -f "$JBDIR/bin/jbanglite" "$JBDIR/bin"/jbanglite.*
+    cp -f "$TDIR/urls/jbanglite/bin"/* "$JBDIR/bin"
   fi
-  "$JBDIR"/bin/jbang "$@"
+  "$JBDIR"/bin/jbanglite "$@"
   exit $?
 fi
 
 if [ -f "$jarPath.new" ]; then
-  # a new jbang version was found, we replace the old one with it
+  # a new JBangLite version was found, we replace the old one with it
   mv "$jarPath.new" "$jarPath"
 fi
 
@@ -473,4 +469,4 @@ if [[ -z "$binaryPath" ]]; then
   setup_java_exec
 fi
 
-execute_jbang "$@"
+execute_jbanglite "$@"

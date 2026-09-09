@@ -74,7 +74,7 @@ shadowJar {
 			'JBang-Version': project.version
 		)
 	}
-	archiveFileName = "jbang.jar"
+	archiveFileName = "jbanglite.jar"
 }
 
 task versionTxt() {
@@ -92,37 +92,36 @@ def commonSpec = project.copySpec {
 	from(versionTxt)
 	from('LICENSE', 'THIRD-PARTY.md', 'README.md')
 	from('src/main/scripts') {
-		include 'jbang'
-		include 'jbang.cmd'
-		include 'jbang.ps1'
-		into 'bin'
+		include 'jbanglite'
+		include 'jbanglite.cmd'
+				into 'bin'
 	}
 }
 
 distributions {
 	main {
-		distributionBaseName = 'jbang'
+		distributionBaseName = 'jbanglite'
 		contents {
 			with commonSpec
 		}
 	}
 }
 
-// "latest" bundles use the fixed root folder name "jbang" so that the
-// startup scripts can install them (jbang.tar / jbang.zip).
+// "latest" bundles use the fixed root folder name "jbanglite" so that the
+// startup scripts can install them (jbanglite.tar / jbanglite.zip).
 tasks.register('latestDistZip', Zip) {
-	into('jbang') {
+	into('jbanglite') {
 		with commonSpec
 	}
 	destinationDirectory = layout.buildDirectory.dir('distributions')
-	archiveFileName = "jbang.zip"
+	archiveFileName = "jbanglite.zip"
 }
 tasks.register('latestDistTar', Tar) {
-	into('jbang') {
+	into('jbanglite') {
 		with commonSpec
 	}
 	destinationDirectory = layout.buildDirectory.dir('distributions')
-	archiveFileName = "jbang.tar"
+	archiveFileName = "jbanglite.tar"
 }
 assemble.dependsOn latestDistZip, latestDistTar
 

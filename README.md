@@ -21,15 +21,15 @@ scripts without installing JBangLite — or a JDK — first.
 
 ```bash
 curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/dist/install.sh | bash
-git add jbangw && git commit -m "Add the JBangLite wrapper"
-jbangw/jbang src/Hello.java
+git add jbanglitew && git commit -m "Add the JBangLite wrapper"
+jbanglitew/jbanglite src/Hello.java
 ```
 
 `install.cmd` does the same on Windows. The installer writes the launchers,
 itself, `LICENSE`, a `.gitignore` and `jbanglite.properties` — the repository,
-revision and jar checksum the launchers use — into `jbangw/`. On the first run
-the launcher downloads `dist/jbang.jar` from that revision, checks it against
-the recorded SHA-256 and caches it in `jbangw/.jbang/`, which the `.gitignore`
+revision and jar checksum the launchers use — into `jbanglitew/`. On the first run
+the launcher downloads `dist/jbanglite.jar` from that revision, checks it against
+the recorded SHA-256 and caches it in `jbanglitew/.jbanglite/`, which the `.gitignore`
 keeps out of the project.
 
 Re-running the installer updates an installation in place: it refreshes the
@@ -38,7 +38,7 @@ run fetches the matching one. `JBANGLITE_REF=<tag|commit>` pins another
 revision, `JBANGLITE_REPO` another fork.
 
 Everything a project installs lives in [`dist/`](dist) — the launchers, the
-installers, `LICENSE`, `gitignore`, `README.md` and the built `jbang.jar` with
+installers, `LICENSE`, `gitignore`, `README.md` and the built `jbanglite.jar` with
 its checksum. Run `misc/update-dist.sh` to refresh it (it rebuilds the jar and
 copies the launchers and `LICENSE` there) and commit the result whenever a
 change should reach the projects that installed the wrapper;
@@ -89,13 +89,13 @@ options are `--java`, `--main`, `--module`, `--deps`, `--repos`,
 The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<name>.jar`,
 `~/.jbang/cache/jdks/<version>`, `~/.jbang/currentjdk`), and `run` still prints the
 `java` command line and exits with status 255 so the launcher scripts
-(`jbang`, `jbang.cmd`) can exec it.
+(`jbanglite`, `jbanglite.cmd`) can exec it.
 
 ### What the launcher scripts need
 
-The scripts (`jbang` for POSIX shells, `jbang.cmd` for Windows) find or install a JDK on their
-own and then run `jbang.jar` with it; they never call a subcommand of the jar.
-Which JVM runs `jbang.jar` hardly matters, so the search is deliberately short:
+The scripts (`jbanglite` for POSIX shells, `jbanglite.cmd` for Windows) find or install a JDK on their
+own and then run `jbanglite.jar` with it; they never call a subcommand of the jar.
+Which JVM runs `jbanglite.jar` hardly matters, so the search is deliberately short:
 
 1. `$JBANG_DIR/currentjdk` (the JDK the jar installed for a script)
 2. `$JBANG_CACHE_DIR/jdks/bootstrap`
@@ -104,9 +104,9 @@ Which JVM runs `jbang.jar` hardly matters, so the search is deliberately short:
 
 Anything Java 11 or newer is accepted. If nothing is found, the scripts download
 the newest Temurin 25 into `$JBANG_CACHE_DIR/jdks/bootstrap`, verify its
-published SHA-256 and use that. `jbang.cmd` is self-contained — it uses the
+published SHA-256 and use that. `jbanglite.cmd` is self-contained — it uses the
 `curl`, `tar` and `certutil` that Windows ships with, so no PowerShell is
-involved and there is no `jbang.ps1` in this fork.
+involved and there is no PowerShell launcher in this fork.
 
 The download uses the very same JVM index the jar uses for `//JAVA`, the
 Coursier index published on Maven Central
@@ -114,7 +114,7 @@ Coursier index published on Maven Central
 involved, and `JBANG_JVM_INDEX_BASEURL` points both of them at a corporate mirror.
 
 The JDK a script asks for with `//JAVA` is still provisioned by the jar; the
-bootstrap JDK only exists to get `jbang.jar` started. `jdk default`, `jdk
+bootstrap JDK only exists to get `jbanglite.jar` started. `jdk default`, `jdk
 install` and `jdk list` were therefore removed.
 
 ## Staying in sync with JBang
@@ -147,7 +147,7 @@ The only third-party runtime dependencies are Maven Resolver (through
 and the jspecify annotations used by the mirrored files.
 JDK download/unpacking, class-file inspection for the main class, jar creation,
 OS detection and module-info generation are implemented with the JDK's standard
-library only. `jbang.jar` itself needs Java 11 or later to run (JBang targets
+library only. `jbanglite.jar` itself needs Java 11 or later to run (JBang targets
 Java 8); the JDK used for scripts is whatever `//JAVA` asks for.
 
 ## How JDKs are obtained
@@ -201,9 +201,9 @@ like `25` or `25+` accepts any matching patch release.
 ./gradlew assemble
 ```
 
-produces `build/libs/jbang.jar` (self-contained), `build/distributions/jbang.tar`
-and `jbang.zip` (root folder `jbang/` with `bin/jbang*`, as expected by the launcher
-scripts) plus versioned `jbang-<version>.tar/.zip`. Pass `-PjbangVersion=x.y.z`
+produces `build/libs/jbanglite.jar` (self-contained), `build/distributions/jbanglite.tar`
+and `jbanglite.zip` (root folder `jbanglite/` with `bin/jbanglite*`, as expected by the
+launcher scripts) plus versioned `jbanglite-<version>.tar/.zip`. Pass `-PjbangVersion=x.y.z`
 to set the version.
 
 `./gradlew test` runs the test suite: the mirrored `TestDirectives` from JBang
@@ -215,6 +215,6 @@ takes the place of a release.
 
 MIT License, Copyright (c) 2020 Max Rydahl Andersen (the original JBang notice
 is kept unchanged in [LICENSE](LICENSE)); the JBangLite modifications are
-provided under the same license. `jbang.jar` bundles MIMA (EPL-2.0), Apache
+provided under the same license. `jbanglite.jar` bundles MIMA (EPL-2.0), Apache
 Maven Resolver (Apache-2.0) and SLF4J (MIT); see [THIRD-PARTY.md](THIRD-PARTY.md)
 for details and for the origin of code adapted from other projects.

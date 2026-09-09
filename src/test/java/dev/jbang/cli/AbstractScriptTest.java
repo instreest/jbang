@@ -29,8 +29,8 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
  */
 abstract class AbstractScriptTest {
 
-	protected static final Path BASH_SCRIPT = Paths.get("src/main/scripts/jbang").toAbsolutePath();
-	protected static final Path CMD_SCRIPT = Paths.get("src/main/scripts/jbang.cmd").toAbsolutePath();
+	protected static final Path BASH_SCRIPT = Paths.get("src/main/scripts/jbanglite").toAbsolutePath();
+	protected static final Path CMD_SCRIPT = Paths.get("src/main/scripts/jbanglite.cmd").toAbsolutePath();
 
 	protected WireMockServer wm;
 
@@ -135,21 +135,21 @@ abstract class AbstractScriptTest {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Creates a minimal jbang.tar containing jbang/bin/jbang (a dummy script that
-	 * just exits 0) and an empty jbang/bin/jbang.jar.
+	 * Creates a minimal jbanglite.tar containing jbanglite/bin/jbanglite (a dummy script that
+	 * just exits 0) and an empty jbanglite/bin/jbanglitelite.jar.
 	 */
 	protected byte[] createJbangTar() throws Exception {
 		ByteArrayOutputStream baos = new ByteArrayOutputStream();
 		try (TarArchiveOutputStream tar = new TarArchiveOutputStream(baos)) {
 			byte[] script = "#!/bin/bash\nexit 0\n".getBytes(StandardCharsets.UTF_8);
-			TarArchiveEntry entry = new TarArchiveEntry("jbang/bin/jbang");
+			TarArchiveEntry entry = new TarArchiveEntry("jbanglite/bin/jbanglite");
 			entry.setSize(script.length);
 			entry.setMode(0755);
 			tar.putArchiveEntry(entry);
 			tar.write(script);
 			tar.closeArchiveEntry();
 
-			TarArchiveEntry jarEntry = new TarArchiveEntry("jbang/bin/jbang.jar");
+			TarArchiveEntry jarEntry = new TarArchiveEntry("jbanglite/bin/jbanglitelite.jar");
 			jarEntry.setSize(0);
 			tar.putArchiveEntry(jarEntry);
 			tar.closeArchiveEntry();

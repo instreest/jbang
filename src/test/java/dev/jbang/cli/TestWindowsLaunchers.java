@@ -26,9 +26,9 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
 /**
- * Functional tests for the Windows launcher (jbang.cmd) using a fake jbang.jar:
+ * Functional tests for the Windows launcher (jbanglite.cmd) using a fake jbanglite.jar:
  * exit codes must be propagated, output must be shown and the command JBang
- * asks to be executed (exit code 255) must be run by the launcher. jbang.cmd is
+ * asks to be executed (exit code 255) must be run by the launcher. jbanglite.cmd is
  * self-contained, so there is no PowerShell launcher to hand over to.
  */
 @EnabledOnOs(OS.WINDOWS)
@@ -40,8 +40,8 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	@BeforeEach
 	void setupLaunchers() throws IOException {
 		binDir = Files.createDirectories(tempDir.resolve("bin"));
-		Files.copy(CMD_SCRIPT, binDir.resolve("jbang.cmd"));
-		createFakeJar(binDir.resolve("jbang.jar"));
+		Files.copy(CMD_SCRIPT, binDir.resolve("jbanglite.cmd"));
+		createFakeJar(binDir.resolve("jbanglite.jar"));
 		envFile = tempDir.resolve("env.txt");
 	}
 
@@ -50,7 +50,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		RunResult result = runLauncher(cmdLauncher(), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("some output"), result.stdout);
-		assertEquals(Arrays.asList("cmd", binDir.resolve("jbang.cmd").toString()), Files.readAllLines(envFile));
+		assertEquals(Arrays.asList("cmd", binDir.resolve("jbanglite.cmd").toString()), Files.readAllLines(envFile));
 	}
 
 	@Test
@@ -73,8 +73,8 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void cmdRunsNativeBinaryDirectly() throws Exception {
-		// A stand-in for jbang.bin.exe: a copy of jbang.cmd would recurse, so use cmd.exe itself
-		Files.copy(Paths.get(System.getenv("ComSpec")), binDir.resolve("jbang.bin.exe"));
+		// A stand-in for jbanglite.bin.exe: a copy of jbanglite.cmd would recurse, so use cmd.exe itself
+		Files.copy(Paths.get(System.getenv("ComSpec")), binDir.resolve("jbanglite.bin.exe"));
 		RunResult result = runLauncher(cmdLauncher(), "JBANG_USE_NATIVE", "true", "/c", "echo native & exit 6");
 		assertEquals(6, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("native"), result.stdout);
@@ -83,7 +83,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void cmdIgnoresOldJavaHome() throws Exception {
-		// With JAVA_HOME rejected and no JDK of its own, jbang.cmd tries to
+		// With JAVA_HOME rejected and no JDK of its own, jbanglite.cmd tries to
 		// download one; an unreachable JVM index makes that fail quickly.
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"),
 				"JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
@@ -132,7 +132,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	}
 
 	/**
-	 * Makes the running JDK available as JBANG_DIR\currentjdk (as jbang.jar
+	 * Makes the running JDK available as JBANG_DIR\currentjdk (as jbanglite.jar
 	 * does for the JDK a script asks for with //JAVA).
 	 */
 	private void linkCurrentJdk() throws Exception {
@@ -148,7 +148,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 
 	private List<String> cmdLauncher() {
-		return new ArrayList<>(Arrays.asList("cmd.exe", "/c", binDir.resolve("jbang.cmd").toString()));
+		return new ArrayList<>(Arrays.asList("cmd.exe", "/c", binDir.resolve("jbanglite.cmd").toString()));
 	}
 
 

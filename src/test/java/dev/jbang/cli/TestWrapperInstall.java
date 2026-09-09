@@ -22,7 +22,7 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 
 /**
  * Functional tests for the wrapper installer (dist/install.sh) and
- * for the jbang.jar download it sets up: a project only commits the launchers
+ * for the jbanglite.jar download it sets up: a project only commits the launchers
  * and jbanglite.properties, and the launcher fetches the jar recorded there on
  * first use.
  */
@@ -37,13 +37,13 @@ class TestWrapperInstall extends AbstractScriptTest {
 	void serveRepository() throws Exception {
 		requireBash();
 		project = Files.createDirectories(tempDir.resolve("project"));
-		for (String name : Arrays.asList("jbang", "jbang.cmd", "install.sh", "install.cmd",
+		for (String name : Arrays.asList("jbanglite", "jbanglite.cmd", "install.sh", "install.cmd",
 				"README.md", "gitignore", "LICENSE")) {
 			stubFile("/instreest/jbang/main/dist/" + name, Files.readAllBytes(DIST.resolve(name)));
 		}
-		stubFile("/instreest/jbang/main/dist/jbang.jar", JAR);
-		stubFile("/instreest/jbang/main/dist/jbang.jar.sha256",
-				(sha256(JAR) + "  jbang.jar\n").getBytes(StandardCharsets.UTF_8));
+		stubFile("/instreest/jbang/main/dist/jbanglite.jar", JAR);
+		stubFile("/instreest/jbang/main/dist/jbanglite.jar.sha256",
+				(sha256(JAR) + "  jbanglite.jar\n").getBytes(StandardCharsets.UTF_8));
 	}
 
 	@Test
@@ -51,13 +51,13 @@ class TestWrapperInstall extends AbstractScriptTest {
 		RunResult result = install(project);
 		assertEquals(0, result.exitCode, result.stderr);
 
-		Path wrapper = project.resolve("jbangw");
-		for (String name : Arrays.asList("jbang", "jbang.cmd", "install.sh", "install.cmd",
+		Path wrapper = project.resolve("jbanglitew");
+		for (String name : Arrays.asList("jbanglite", "jbanglite.cmd", "install.sh", "install.cmd",
 				"README.md", ".gitignore", "LICENSE", "jbanglite.properties")) {
 			assertTrue(Files.isRegularFile(wrapper.resolve(name)), name + " was not installed");
 		}
-		assertTrue(Files.isExecutable(wrapper.resolve("jbang")));
-		assertTrue(Files.readAllLines(wrapper.resolve(".gitignore")).contains(".jbang/"));
+		assertTrue(Files.isExecutable(wrapper.resolve("jbanglite")));
+		assertTrue(Files.readAllLines(wrapper.resolve(".gitignore")).contains(".jbanglite/"));
 
 		List<String> props = Files.readAllLines(wrapper.resolve("jbanglite.properties"));
 		assertTrue(props.contains("repo=instreest/jbang"), props.toString());
@@ -68,11 +68,11 @@ class TestWrapperInstall extends AbstractScriptTest {
 	@Test
 	void launcherDownloadsTheJarItPins() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbangw");
+		Path wrapper = project.resolve("jbanglitew");
 
 		RunResult result = runWrapper(wrapper);
 		assertTrue(result.stderr.contains("Downloading JBangLite"), result.stderr);
-		assertArrayEquals(JAR, Files.readAllBytes(wrapper.resolve(".jbang/jbang.jar")));
+		assertArrayEquals(JAR, Files.readAllBytes(wrapper.resolve(".jbanglite/jbanglite.jar")));
 
 		// the second run uses the cached jar
 		result = runWrapper(wrapper);
@@ -82,7 +82,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 	@Test
 	void launcherRefusesAJarWithTheWrongChecksum() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbangw");
+		Path wrapper = project.resolve("jbanglitew");
 		Path props = wrapper.resolve("jbanglite.properties");
 		Files.write(props, Files.readAllLines(props)
 			.stream()
@@ -91,35 +91,35 @@ class TestWrapperInstall extends AbstractScriptTest {
 
 		RunResult result = runWrapper(wrapper);
 		assertTrue(result.stderr.contains("SHA-256 mismatch"), result.stderr);
-		assertTrue(Files.notExists(wrapper.resolve(".jbang/jbang.jar")), "the jar must not be kept");
+		assertTrue(Files.notExists(wrapper.resolve(".jbanglite/jbanglite.jar")), "the jar must not be kept");
 	}
 
 	@Test
 	void rerunningTheInstallerUpdatesInPlace() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbangw");
+		Path wrapper = project.resolve("jbanglitew");
 		runWrapper(wrapper);
-		assertTrue(Files.exists(wrapper.resolve(".jbang/jbang.jar")));
+		assertTrue(Files.exists(wrapper.resolve(".jbanglite/jbanglite.jar")));
 
 		// running the installed copy updates the directory it lives in ...
 		RunResult result = runProcess(Arrays.asList("bash", wrapper.resolve("install.sh").toString()), env());
 		assertEquals(0, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains(wrapper.toString()), result.stderr);
 		// ... and drops the cached jar, so the next run fetches the pinned one
-		assertTrue(Files.notExists(wrapper.resolve(".jbang")));
+		assertTrue(Files.notExists(wrapper.resolve(".jbanglite")));
 	}
 
 	@Test
 	void aFailedDownloadLeavesAnInstallationAlone() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbangw");
-		byte[] before = Files.readAllBytes(wrapper.resolve("jbang"));
+		Path wrapper = project.resolve("jbanglitew");
+		byte[] before = Files.readAllBytes(wrapper.resolve("jbanglite"));
 		wm.resetAll();
 		wm.stubFor(WireMock.get(WireMock.anyUrl()).willReturn(WireMock.aResponse().withStatus(404)));
 
 		RunResult result = runProcess(Arrays.asList("bash", wrapper.resolve("install.sh").toString()), env());
 		assertTrue(result.exitCode != 0, result.stderr);
-		assertArrayEquals(before, Files.readAllBytes(wrapper.resolve("jbang")));
+		assertArrayEquals(before, Files.readAllBytes(wrapper.resolve("jbanglite")));
 	}
 
 	/**
@@ -128,7 +128,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 	 */
 	@Test
 	void distHoldsTheCurrentLaunchers() throws Exception {
-		for (String name : Arrays.asList("jbang", "jbang.cmd")) {
+		for (String name : Arrays.asList("jbanglite", "jbanglite.cmd")) {
 			assertArrayEquals(Files.readAllBytes(BASH_SCRIPT.resolveSibling(name)),
 					Files.readAllBytes(DIST.resolve(name)),
 					"dist/" + name + " is out of date, run misc/update-dist.sh");
@@ -144,7 +144,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 
 	private RunResult install(Path where) throws Exception {
 		return runProcess(Arrays.asList("bash", DIST.resolve("install.sh").toString(),
-				where.resolve("jbangw").toString()), env());
+				where.resolve("jbanglitew").toString()), env());
 	}
 
 	/**
@@ -152,7 +152,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 	 * (it is not a real jar), which is fine: the download is what is tested.
 	 */
 	private RunResult runWrapper(Path wrapper) throws Exception {
-		return runProcess(Arrays.asList("bash", wrapper.resolve("jbang").toString(), "version"), env());
+		return runProcess(Arrays.asList("bash", wrapper.resolve("jbanglite").toString(), "version"), env());
 	}
 
 	private Map<String, String> env() {

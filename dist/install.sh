@@ -2,7 +2,7 @@
 #
 # Installs the JBangLite wrapper into a project, so that the project can be
 # built and run without JBangLite (or a JDK) being installed on the machine:
-# only the small launcher scripts are committed, and they fetch jbang.jar - and
+# only the small launcher scripts are committed, and they fetch jbanglite.jar - and
 # a JDK, if needed - on first use.
 #
 #   curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/dist/install.sh | bash
@@ -11,7 +11,7 @@
 # and the pinned jar revision are refreshed and the cached jar is dropped, so
 # the next run picks up the new one.
 #
-# Usage: install.sh [<target directory>]   (default: ./jbangw, or the directory
+# Usage: install.sh [<target directory>]   (default: ./jbanglitew, or the directory
 #                                           this script was installed in)
 #
 # Environment:
@@ -27,10 +27,10 @@ rawBaseUrl=${JBANGLITE_RAW_BASEURL:-https://raw.githubusercontent.com}
 base="$rawBaseUrl/$repo/$ref/dist"
 
 # Everything that is installed lives in dist/, as "<file in dist> <name in the
-# wrapper>"; jbang.jar is not copied but downloaded on first use
+# wrapper>"; jbanglite.jar is not copied but downloaded on first use
 files="
-jbang jbang
-jbang.cmd jbang.cmd
+jbanglite jbanglite
+jbanglite.cmd jbanglite.cmd
 install.sh install.sh
 install.cmd install.cmd
 README.md README.md
@@ -51,11 +51,11 @@ fetch() {  # $1 = path in the repository, $2 = file to write
 
 if [ $# -gt 0 ]; then
   dir=$1
-elif [ -n "${BASH_SOURCE[0]:-}" ] && [ "$(basename "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")" = jbangw ]; then
+elif [ -n "${BASH_SOURCE[0]:-}" ] && [ "$(basename "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")" = jbanglitew ]; then
   # updating an existing installation
   dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 else
-  dir=$PWD/jbangw
+  dir=$PWD/jbanglitew
 fi
 
 # Everything is fetched into a staging directory first, so a failed download
@@ -68,10 +68,10 @@ echo "$files" | while read -r from to; do
   [ -n "$from" ] || continue
   fetch "$from" "$staging/$to"
 done
-fetch jbang.jar.sha256 "$staging/jar.sha256"
+fetch jbanglite.jar.sha256 "$staging/jar.sha256"
 
 cat > "$staging/jbanglite.properties" <<PROPS
-# Written by install.sh - where the launchers get jbang.jar from.
+# Written by install.sh - where the launchers get jbanglite.jar from.
 # Re-run install.sh (or install.cmd) to update; set JBANGLITE_REF to pin
 # another revision.
 repo=$repo
@@ -84,8 +84,8 @@ mkdir -p "$dir"
 for f in "$staging"/* "$staging"/.gitignore; do
   cp -f "$f" "$dir/$(basename "$f")"
 done
-chmod +x "$dir/jbang" "$dir/install.sh"
+chmod +x "$dir/jbanglite" "$dir/install.sh"
 # drop the cached jar so the next run downloads the one this revision pins
-rm -rf "$dir/.jbang"
+rm -rf "$dir/.jbanglite"
 
-echo "Installed. Commit $(basename "$dir")/ and run '$(basename "$dir")/jbang <script.java>'." 1>&2
+echo "Installed. Commit $(basename "$dir")/ and run '$(basename "$dir")/jbanglite <script.java>'." 1>&2

@@ -8,7 +8,7 @@ rem Running it again updates an existing installation: the launchers, this
 rem script and the pinned jar revision are refreshed and the cached jar is
 rem dropped, so the next run picks up the new one.
 rem
-rem Usage: install.cmd [<target directory>]  (default: .\jbangw, or the
+rem Usage: install.cmd [<target directory>]  (default: .\jbanglitew, or the
 rem                                           directory this script is in)
 rem
 rem Environment:
@@ -26,10 +26,10 @@ set "base=%rawBaseUrl%/%repo%/%ref%/dist"
 if not "%~1"=="" (
   set "dir=%~f1"
 ) else (
-  rem updating an existing installation when this script sits in a jbangw directory
+  rem updating an existing installation when this script sits in a jbanglitew directory
   for %%D in ("%~dp0.") do set "here=%%~fD"
   for %%D in ("%~dp0.") do set "hereName=%%~nxD"
-  if /i "!hereName!"=="jbangw" (set "dir=!here!") else (set "dir=%CD%\jbangw")
+  if /i "!hereName!"=="jbanglitew" (set "dir=!here!") else (set "dir=%CD%\jbanglitew")
 )
 
 rem Everything is fetched into a staging directory first, so a failed download
@@ -38,14 +38,14 @@ set "staging=%TEMP%\jbanglite-%RANDOM%%RANDOM%"
 mkdir "%staging%" || exit /b 1
 
 echo Installing the JBangLite wrapper from %repo% (%ref%) into %dir% 1>&2
-call :fetch jbang           "%staging%\jbang"        || goto :failed
-call :fetch jbang.cmd       "%staging%\jbang.cmd"    || goto :failed
+call :fetch jbanglite       "%staging%\jbanglite"     || goto :failed
+call :fetch jbanglite.cmd   "%staging%\jbanglite.cmd" || goto :failed
 call :fetch install.sh      "%staging%\install.sh"   || goto :failed
 call :fetch install.cmd     "%staging%\install.cmd"  || goto :failed
 call :fetch README.md       "%staging%\README.md"    || goto :failed
 call :fetch gitignore       "%staging%\.gitignore"   || goto :failed
 call :fetch LICENSE         "%staging%\LICENSE"     || goto :failed
-call :fetch jbang.jar.sha256 "%staging%\jar.sha256" || goto :failed
+call :fetch jbanglite.jar.sha256 "%staging%\jar.sha256" || goto :failed
 
 set "jarSha256="
 for /f "usebackq tokens=1" %%A in ("%staging%\jar.sha256") do if not defined jarSha256 set "jarSha256=%%A"
@@ -64,10 +64,10 @@ if not exist "%dir%" mkdir "%dir%"
 copy /y "%staging%\*" "%dir%" >nul || goto :failed
 copy /y "%staging%\.gitignore" "%dir%\.gitignore" >nul || goto :failed
 rem drop the cached jar so the next run downloads the one this revision pins
-if exist "%dir%\.jbang" rmdir /s /q "%dir%\.jbang"
+if exist "%dir%\.jbanglite" rmdir /s /q "%dir%\.jbanglite"
 rmdir /s /q "%staging%"
 
-for %%D in ("%dir%") do echo Installed. Commit %%~nxD\ and run '%%~nxD\jbang ^<script.java^>'. 1>&2
+for %%D in ("%dir%") do echo Installed. Commit %%~nxD\ and run '%%~nxD\jbanglite ^<script.java^>'. 1>&2
 exit /b 0
 
 :fetch

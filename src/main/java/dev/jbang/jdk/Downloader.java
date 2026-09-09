@@ -82,7 +82,7 @@ final class Downloader {
 			conn.setInstanceFollowRedirects(false);
 			conn.setConnectTimeout(CONNECT_TIMEOUT);
 			conn.setReadTimeout(READ_TIMEOUT);
-			conn.setRequestProperty("User-Agent", "JBang/" + Util.getJBangVersion());
+			conn.setRequestProperty("User-Agent", "JBangLite/" + Util.getJBangVersion());
 			int status = conn.getResponseCode();
 			if (status >= 300 && status < 400) {
 				String location = conn.getHeaderField("Location");

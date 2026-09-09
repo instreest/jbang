@@ -22,14 +22,14 @@ import dev.jbang.util.Util;
  * JBangLite command line.
  *
  * <pre>
- * jbang [global options] [run] [run options] &lt;script.java&gt; [args...]
- * jbang [global options] info classpath [--deps-only] &lt;script.java&gt;
- * jbang version
+ * jbanglite [global options] [run] [run options] &lt;script.java&gt; [args...]
+ * jbanglite [global options] info classpath [--deps-only] &lt;script.java&gt;
+ * jbanglite version
  * </pre>
  *
  * Like the full JBang, <code>run</code> does not start the script itself: it
  * prints the java command line on stdout and exits with status 255, which the
- * launcher scripts (jbang, jbang.cmd, jbang.ps1) turn into an exec.
+ * launcher scripts (jbanglite, jbanglite.cmd) turn into an exec.
  */
 public final class Main {
 	private static final List<String> COMMANDS = Arrays.asList("run", "info", "version", "help");
@@ -93,7 +93,7 @@ public final class Main {
 				return runScript(args);
 			}
 		}
-		Util.verboseMsg("jbang version " + Util.getJBangVersion());
+		Util.verboseMsg("jbanglite version " + Util.getJBangVersion());
 		if (args.isEmpty()) {
 			printHelp();
 			return ExitException.EXIT_INVALID_INPUT;
@@ -301,15 +301,15 @@ public final class Main {
 	}
 
 	private static void printHelp() {
-		realOut.println("jbang (JBangLite) " + Util.getJBangVersion());
+		realOut.println("jbanglite " + Util.getJBangVersion());
 		realOut.println();
 		realOut.println("Builds and runs single-file Java programs that declare their needs with");
 		realOut.println("//DEPS, //JAVA and //SOURCES comment directives.");
 		realOut.println();
 		realOut.println("Usage:");
-		realOut.println("  jbang [<global options>] [run] [<options>] <script.java> [<args>...]");
-		realOut.println("  jbang [<global options>] info classpath [--deps-only] <script.java>");
-		realOut.println("  jbang version");
+		realOut.println("  jbanglite [<global options>] [run] [<options>] <script.java> [<args>...]");
+		realOut.println("  jbanglite [<global options>] info classpath [--deps-only] <script.java>");
+		realOut.println("  jbanglite version");
 		realOut.println();
 		realOut.println("Global options:");
 		realOut.println("  --verbose        Print what is being done");
