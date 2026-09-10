@@ -9,7 +9,7 @@ rem (curl, tar, certutil). What it does, in order:
 rem
 rem   1. Settings          - constants and the JBANG_* / JBANGLITE_* overrides
 rem   2. Launch environment- what jbanglite.jar expects to find in the environment
-rem   3. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, java on
+rem   3. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, javac on
 rem                          the PATH, or a Temurin downloaded from the Maven
 rem                          Central JVM index
 rem   4. Launch            - run the jar, and when it exits with 255 run the
@@ -169,16 +169,19 @@ if %java_major% LSS %min_java_version% (
 set "java_exec=%JAVA_HOME%\bin\java.exe"
 exit /b 0
 
-rem Then java on the PATH. It is asked where its home is, because what is on
-rem the PATH is usually a stub (the Oracle javapath one, the App Execution
-rem alias) rather than the JDK's own bin directory.
+rem Then javac on the PATH (javac rather than java, because a JRE cannot
+rem compile scripts). It is asked where its home is, because what is on the
+rem PATH is usually a stub (the Oracle javapath one, the App Execution alias)
+rem rather than the JDK's own bin directory. -J hands the option to javac's
+rem own JVM; it exists since Java 7, and an older javac just prints an error
+rem and no java.home, which leaves it ignored.
 :find_path_java
 set "path_java="
-for /f "delims=" %%J in ('where java 2^>nul') do if not defined path_java set "path_java=%%J"
+for /f "delims=" %%J in ('where javac 2^>nul') do if not defined path_java set "path_java=%%J"
 if not defined path_java goto :install_bootstrap_jdk
 rem (through a file: a quoted path in front of a pipe is mangled by cmd /c)
 set "path_java_probe=%TEMP%\jbanglite-%run_id%-java.txt"
-"%path_java%" -XshowSettings:properties -version > "%path_java_probe%" 2>&1
+"%path_java%" -J-XshowSettings:properties -version > "%path_java_probe%" 2>&1
 set "path_java_home="
 for /f "usebackq tokens=1,* delims== " %%A in (`findstr /r /c:"^ *java.home =" "%path_java_probe%"`) do set "path_java_home=%%B"
 del /f /q "%path_java_probe%" 2>nul
@@ -195,9 +198,11 @@ set "JAVA_HOME=%cache_dir%\jdks\bootstrap"
 set "java_exec=%cache_dir%\jdks\bootstrap\bin\java.exe"
 exit /b 0
 
-rem Succeeds when %1 holds a Java new enough to run jbanglite.jar
+rem Succeeds when %1 holds a JDK (scripts have to be compiled, so a JRE is no
+rem use) new enough to run jbanglite.jar
 :usable_java
 if not exist "%~1\bin\java.exe" exit /b 1
+if not exist "%~1\bin\javac.exe" exit /b 1
 call :java_major "%~1"
 if "%java_major%"=="" exit /b 1
 if %java_major% LSS %min_java_version% exit /b 1

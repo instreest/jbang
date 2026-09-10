@@ -21,7 +21,7 @@ jbanglitew\jbanglite.cmd src\Hello.java
 ## What happens on the first run
 
 1. The launcher looks for a usable Java (`$JBANG_DIR/currentjdk`, its own
-   bootstrap JDK, `JAVA_HOME`, `java` on the `PATH`; Java 11 or newer). If none
+   bootstrap JDK, `JAVA_HOME`, `javac` on the `PATH`; a JDK 11 or newer). If none
    is found it downloads a Temurin JDK into `~/.jbang/cache/jdks/bootstrap` and
    verifies its published SHA-256.
 2. It runs `jbanglite.jar` from this directory with that Java.

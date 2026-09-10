@@ -101,10 +101,12 @@ Which JVM runs `jbanglite.jar` hardly matters, so the search is deliberately sho
 1. `$JBANG_DIR/currentjdk` (the JDK the jar installed for a script)
 2. `$JBANG_CACHE_DIR/jdks/bootstrap`
 3. `JAVA_HOME`
-4. `java` on the `PATH`, asked for its `java.home` so that shims (jenv, SDKMAN,
+4. `javac` on the `PATH`, asked for its `java.home` (through
+   `javac -J-XshowSettings:properties -version`) so that shims (jenv, SDKMAN,
    the Windows `javapath` stub) lead to the real JDK
 
-Anything Java 11 or newer is accepted. If nothing is found, the scripts download
+Any JDK 11 or newer is accepted; a JRE is not, because scripts have to be
+compiled. If nothing is found, the scripts download
 the newest Temurin 25 into `$JBANG_CACHE_DIR/jdks/bootstrap`, verify its
 published SHA-256 and use that. The jar prefers the JVM it is running on when
 that satisfies a script's `//JAVA`, so a tool that asks for `//JAVA 25` costs
