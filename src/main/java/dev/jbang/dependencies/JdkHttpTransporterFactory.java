@@ -208,15 +208,9 @@ public final class JdkHttpTransporterFactory implements TransporterFactory {
 		 * "{SHA1{<hex>}}") did.
 		 */
 		static void extractChecksums(HttpHeaders headers, GetTask task) {
-			boolean found = false;
-			for (String[] header : X_CHECKSUM_HEADERS) {
-				Optional<String> value = headers.firstValue(header[0]);
-				if (value.isPresent() && !value.get().trim().isEmpty()) {
-					task.setChecksum(header[1], value.get().trim());
-					found = true;
-				}
-			}
-			if (found) {
+			// as upstream: the Central style headers first, the Google ones only
+			// when there are none of those
+			if (setChecksums(headers, task, "x-checksum-") || setChecksums(headers, task, "x-goog-meta-checksum-")) {
 				return;
 			}
 			Optional<String> etag = headers.firstValue("ETag");
@@ -230,13 +224,20 @@ public final class JdkHttpTransporterFactory implements TransporterFactory {
 			}
 		}
 
-		/** header name and the resolver's name for the algorithm */
-		private static final String[][] X_CHECKSUM_HEADERS = {
-				{ "x-checksum-sha1", "SHA-1" },
-				{ "x-checksum-md5", "MD5" },
-				{ "x-goog-meta-checksum-sha1", "SHA-1" },
-				{ "x-goog-meta-checksum-md5", "MD5" },
-		};
+		/** header suffix and the resolver's name for the algorithm */
+		private static final String[][] CHECKSUM_HEADERS = { { "sha1", "SHA-1" }, { "md5", "MD5" } };
+
+		private static boolean setChecksums(HttpHeaders headers, GetTask task, String prefix) {
+			boolean found = false;
+			for (String[] header : CHECKSUM_HEADERS) {
+				Optional<String> value = headers.firstValue(prefix + header[0]);
+				if (value.isPresent() && !value.get().trim().isEmpty()) {
+					task.setChecksum(header[1], value.get().trim());
+					found = true;
+				}
+			}
+			return found;
+		}
 
 		@Override
 		protected void implPut(PutTask task) {

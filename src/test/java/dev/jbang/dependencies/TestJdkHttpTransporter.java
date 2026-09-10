@@ -85,6 +85,27 @@ class TestJdkHttpTransporter {
 	}
 
 	@Test
+	void googleHeadersAreOnlyUsedWithoutCentralOnes() throws Exception {
+		wm.stubFor(get(urlEqualTo("/repo/both.jar")).willReturn(aResponse()
+			.withStatus(200)
+			.withHeader("x-checksum-sha1", "1111111111111111111111111111111111111111")
+			.withHeader("x-goog-meta-checksum-sha1", "2222222222222222222222222222222222222222")
+			.withBody("x")));
+		wm.stubFor(get(urlEqualTo("/repo/google.jar")).willReturn(aResponse()
+			.withStatus(200)
+			.withHeader("x-goog-meta-checksum-md5", "0123456789abcdef0123456789abcdef")
+			.withBody("x")));
+
+		GetTask both = new GetTask(URI.create("both.jar"));
+		transporter.get(both);
+		assertEquals("1111111111111111111111111111111111111111", both.getChecksums().get("SHA-1"));
+
+		GetTask google = new GetTask(URI.create("google.jar"));
+		transporter.get(google);
+		assertEquals("0123456789abcdef0123456789abcdef", google.getChecksums().get("MD5"));
+	}
+
+	@Test
 	void nexus2EtagIsReadWhenThereAreNoChecksumHeaders() throws Exception {
 		wm.stubFor(get(urlEqualTo("/repo/a.pom")).willReturn(aResponse()
 			.withStatus(200)
