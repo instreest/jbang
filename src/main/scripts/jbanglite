@@ -9,7 +9,8 @@
 #   1. Settings          - constants and the JBANG_* / JBANGLITE_* overrides
 #   2. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, java on the
 #                          PATH, or a Temurin downloaded from the Maven Central
-#                          JVM index
+#                          JVM index (needs curl or wget, unzip, and tar+gzip
+#                          on Linux and macOS)
 #   3. Launch            - run the jar, and when it exits with 255 exec the
 #                          command line it printed (that is how a script is
 #                          started)
@@ -322,14 +323,17 @@ setup_java_exec() {
     fi
     echo "JAVA_HOME is set but does not point to a Java $minJavaVersion or newer runtime, ignoring it" 1>&2
   fi
-  # java on the PATH
+  # java on the PATH. It is asked where its home is rather than resolved from
+  # its own path, because what is on the PATH is often a shim (jenv, SDKMAN,
+  # the Windows javapath stub) or a symlink chain that readlink -f does not
+  # exist to follow on every platform.
   local pathJava pathHome
   pathJava=$(command -v java 2>/dev/null)
   if [[ -n "$pathJava" ]]; then
-    pathHome=$(cd "$(dirname "$(readlink -f "$pathJava" 2>/dev/null || echo "$pathJava")")/.." && pwd)
-    if usable_java "$pathHome"; then
-      unset JAVA_HOME
-      JAVA_EXEC="java"
+    pathHome=$("$pathJava" -XshowSettings:properties -version 2>&1 | sed -n 's/^[[:space:]]*java\.home = //p' | head -1)
+    if [[ -n "$pathHome" ]] && usable_java "$pathHome"; then
+      export JAVA_HOME="$pathHome"
+      JAVA_EXEC="$JAVA_HOME/bin/java"
       return
     fi
   fi
@@ -408,8 +412,11 @@ case "$(uname -m)" in
     ;;
 esac
 
-# On Cygwin hand over to the Windows launcher
-if [[ $os == windows && -f "$abs_jbang_dir/jbanglite.cmd" && "$(uname -s)" == CYGWIN* ]]; then
+# On Windows (Cygwin, Git Bash, MSYS2) hand over to the Windows launcher: it
+# only needs what Windows ships with, whereas the download below would need
+# unzip, which Git Bash for one does not have. The shell converts POSIX paths
+# in the arguments for cmd.exe.
+if [[ $os == windows && -f "$abs_jbang_dir/jbanglite.cmd" ]]; then
   cmd /c "$(cygpath -m "$abs_jbang_dir"/jbanglite.cmd)" "$@"
   exit $?
 fi

@@ -1,11 +1,13 @@
 plugins {
 	id "java"
-	id "distribution"
 	id "com.gradleup.shadow" version "8.3.9"
 }
 
-// JBangLite: a reduced JBang that only supports //JAVA, //DEPS and //SOURCES
-// directives plus the compile/run machinery needed by java-call-hierarchy-exporter.
+// JBangLite: a reduced JBang that runs single-file Java programs. The only
+// deliverable is build/libs/jbanglite.jar, which misc/update-dist.sh copies to
+// dist/ together with the launchers; there is no other distribution.
+// misc/update-dist.sh passes -PjbangVersion so that the jar knows the source
+// revision it was built from.
 version = project.hasProperty('jbangVersion') ? project.property('jbangVersion') : '0.1.0-lite'
 
 repositories {
@@ -75,53 +77,5 @@ shadowJar {
 	}
 	archiveFileName = "jbanglite.jar"
 }
-
-task versionTxt() {
-	def out = layout.buildDirectory.file("tmp/version.txt")
-	outputs.file(out)
-	doLast {
-		out.get().asFile.text = project.version
-	}
-}
-
-def commonSpec = project.copySpec {
-	from(shadowJar) {
-		into 'bin'
-	}
-	from(versionTxt)
-	from('LICENSE', 'THIRD-PARTY.md', 'README.md')
-	from('src/main/scripts') {
-		include 'jbanglite'
-		include 'jbanglite.cmd'
-				into 'bin'
-	}
-}
-
-distributions {
-	main {
-		distributionBaseName = 'jbanglite'
-		contents {
-			with commonSpec
-		}
-	}
-}
-
-// Unversioned bundles with the fixed root folder name "jbanglite"
-// (jbanglite.tar / jbanglite.zip), next to the versioned ones.
-tasks.register('latestDistZip', Zip) {
-	into('jbanglite') {
-		with commonSpec
-	}
-	destinationDirectory = layout.buildDirectory.dir('distributions')
-	archiveFileName = "jbanglite.zip"
-}
-tasks.register('latestDistTar', Tar) {
-	into('jbanglite') {
-		with commonSpec
-	}
-	destinationDirectory = layout.buildDirectory.dir('distributions')
-	archiveFileName = "jbanglite.tar"
-}
-assemble.dependsOn latestDistZip, latestDistTar
 
 assemble.dependsOn shadowJar

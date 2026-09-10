@@ -34,11 +34,14 @@ Re-running the installer updates an installation in place by replacing every
 file with the one from the chosen revision. `JBANGLITE_REF=<tag|commit>` pins
 another revision, `JBANGLITE_REPO` another fork.
 
-[`dist/`](dist) in this repository is exactly what a project gets. Run
-`misc/update-dist.sh` to refresh it (it rebuilds the jar and copies the
-launchers and `LICENSE` there) and commit the result whenever a change should
-reach the projects that installed JBangLite; `misc/update-dist.sh --check`
-reports whether the launchers there are up to date. The jar is committed, so
+[`dist/`](dist) in this repository is exactly what a project gets, and it is
+the only form JBangLite is distributed in. Whenever a change should reach the
+projects that installed JBangLite: commit the change, run `misc/update-dist.sh`
+(it rebuilds the jar and copies the launchers and `LICENSE` there) and commit
+`dist/` as well. The jar is stamped with the commit it was built from, which is
+what `jbanglite version` prints (`0.1.0-lite+<commit>`), so a project can tell
+which revision it has; `misc/update-dist.sh --check` rebuilds the jar with the
+same stamp and reports whether `dist/` is up to date. The jar is committed, so
 every refresh adds about 4 MB to the history of this repository and of every
 project that updates.
 
@@ -77,7 +80,7 @@ applied the same way:
 | `.java` sources | `.jsh`, `.kt`, `.groovy`, `.md`, jars and GAVs as scripts |
 | local files | remote scripts, gists, catalogs and aliases |
 | plain jars | native images and the launchers' native mode, integrations (Quarkus and friends) |
-| a `tar`/`zip` distribution | releases, installers, packages, the update mechanism, CI |
+| `dist/`, committed into a project by `install.sh`/`install.cmd` | releases, `tar`/`zip` distributions, installers, packages, the update mechanism, CI |
 
 Global options are `--verbose`, `--quiet`, `--fresh` and `--offline`. Script
 options are `--java`, `--main`, `--module`, `--deps`, `--repos`,
@@ -98,13 +101,21 @@ Which JVM runs `jbanglite.jar` hardly matters, so the search is deliberately sho
 1. `$JBANG_DIR/currentjdk` (the JDK the jar installed for a script)
 2. `$JBANG_CACHE_DIR/jdks/bootstrap`
 3. `JAVA_HOME`
-4. `java` on the `PATH`
+4. `java` on the `PATH`, asked for its `java.home` so that shims (jenv, SDKMAN,
+   the Windows `javapath` stub) lead to the real JDK
 
 Anything Java 11 or newer is accepted. If nothing is found, the scripts download
 the newest Temurin 25 into `$JBANG_CACHE_DIR/jdks/bootstrap`, verify its
-published SHA-256 and use that. `jbanglite.cmd` is self-contained — it uses the
-`curl`, `tar` and `certutil` that Windows ships with, so no PowerShell is
-involved and there is no PowerShell launcher in this fork.
+published SHA-256 and use that. The jar prefers the JVM it is running on when
+that satisfies a script's `//JAVA`, so a tool that asks for `//JAVA 25` costs
+one download on a machine without Java, not two.
+
+`jbanglite.cmd` is self-contained — it uses the `curl`, `tar` and `certutil`
+that Windows ships with, so no PowerShell is involved and there is no
+PowerShell launcher in this fork. `jbanglite` needs `curl` or `wget`, `unzip`
+(to read the JVM index) and `tar` with `gzip` for the download; on Windows
+shells (Git Bash, MSYS2, Cygwin) it hands over to `jbanglite.cmd` instead, so
+nothing but Windows itself is needed there either.
 
 The download uses the very same JVM index the jar uses for `//JAVA`, the
 Coursier index published on Maven Central
@@ -215,10 +226,8 @@ like `25` or `25+` accepts any matching patch release.
 ./gradlew assemble
 ```
 
-produces `build/libs/jbanglite.jar` (self-contained), `build/distributions/jbanglite.tar`
-and `jbanglite.zip` (root folder `jbanglite/` with the launchers and the jar in `bin/`)
-plus versioned `jbanglite-<version>.tar/.zip`. Pass `-PjbangVersion=x.y.z`
-to set the version.
+produces `build/libs/jbanglite.jar` (self-contained). Pass `-PjbangVersion=x.y.z`
+to set the version; `misc/update-dist.sh` does so with the source commit.
 
 `./gradlew test` runs the test suite: the mirrored `TestDirectives` from JBang
 and functional tests for the launcher scripts and the installer. There

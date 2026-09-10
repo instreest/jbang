@@ -5,7 +5,8 @@ into a project: the launchers, `jbanglite.jar` and the installer that put them
 here. All of it is committed, so anyone who checks the project out can run its
 `.java` scripts without installing anything first — not even a JDK.
 
-On macOS, Linux, WSL and Git Bash:
+On macOS, Linux and WSL (and in Git Bash, which hands over to the Windows
+launcher):
 
 ```bash
 jbanglitew/jbanglite src/Hello.java
@@ -57,4 +58,6 @@ JBANGLITE_REF=v0.2.0 bash jbanglitew/install.sh   # a tag or commit instead
 ```
 
 `jbanglitew\install.cmd` does the same on Windows. Commit the changed files
-afterwards. `jbanglitew/jbanglite version` prints which version is installed.
+afterwards. `jbanglitew/jbanglite version` prints which version is installed,
+as `0.1.0-lite+<commit>`, the commit of the JBangLite repository the jar was
+built from.
