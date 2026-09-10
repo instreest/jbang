@@ -9,8 +9,9 @@ rem (curl, tar, certutil). What it does, in order:
 rem
 rem   1. Settings          - constants and the JBANG_* / JBANGLITE_* overrides
 rem   2. Launch environment- what jbanglite.jar expects to find in the environment
-rem   3. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, or a
-rem                          Temurin downloaded from the Maven Central JVM index
+rem   3. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, java on
+rem                          the PATH, or a Temurin downloaded from the Maven
+rem                          Central JVM index
 rem   4. Launch            - run the jar, and when it exits with 255 run the
 rem                          command line it printed (that is how a script is
 rem                          started)
@@ -151,21 +152,40 @@ call :usable_java "%cache_dir%\jdks\bootstrap" && (
   exit /b 0
 )
 rem Then JAVA_HOME, but only when it points to a Java that is recent enough
-if "%JAVA_HOME%"=="" goto :install_bootstrap_jdk
+if "%JAVA_HOME%"=="" goto :find_path_java
 if not exist "%JAVA_HOME%\bin\java.exe" (
   echo JAVA_HOME is set but does not seem to point to a Java runtime 1>&2
-  goto :install_bootstrap_jdk
+  goto :find_path_java
 )
 call :java_major "%JAVA_HOME%"
 if "%java_major%"=="" (
   echo JAVA_HOME is set but the Java version could not be determined, ignoring it 1>&2
-  goto :install_bootstrap_jdk
+  goto :find_path_java
 )
 if %java_major% LSS %min_java_version% (
   echo JAVA_HOME points to Java %java_major% which is older than Java %min_java_version%, ignoring it 1>&2
-  goto :install_bootstrap_jdk
+  goto :find_path_java
 )
 set "java_exec=%JAVA_HOME%\bin\java.exe"
+exit /b 0
+
+rem Then java on the PATH. It is asked where its home is, because what is on
+rem the PATH is usually a stub (the Oracle javapath one, the App Execution
+rem alias) rather than the JDK's own bin directory.
+:find_path_java
+set "path_java="
+for /f "delims=" %%J in ('where java 2^>nul') do if not defined path_java set "path_java=%%J"
+if not defined path_java goto :install_bootstrap_jdk
+rem (through a file: a quoted path in front of a pipe is mangled by cmd /c)
+set "path_java_probe=%TEMP%\jbanglite-%run_id%-java.txt"
+"%path_java%" -XshowSettings:properties -version > "%path_java_probe%" 2>&1
+set "path_java_home="
+for /f "usebackq tokens=1,* delims== " %%A in (`findstr /r /c:"^ *java.home =" "%path_java_probe%"`) do set "path_java_home=%%B"
+del /f /q "%path_java_probe%" 2>nul
+if not defined path_java_home goto :install_bootstrap_jdk
+call :usable_java "%path_java_home%" || goto :install_bootstrap_jdk
+set "JAVA_HOME=%path_java_home%"
+set "java_exec=%path_java_home%\bin\java.exe"
 exit /b 0
 
 rem Nothing usable found, so fetch a JVM of our own
