@@ -39,7 +39,6 @@ import org.eclipse.aether.util.repository.SimpleArtifactDescriptorPolicy;
 
 import eu.maveniverse.maven.mima.context.Context;
 import eu.maveniverse.maven.mima.context.ContextOverrides;
-import eu.maveniverse.maven.mima.context.Runtimes;
 import dev.jbang.ExitException;
 import dev.jbang.Settings;
 import dev.jbang.util.Util;
@@ -159,7 +158,7 @@ public final class DependencyResolver {
 		if (!Util.isQuiet()) {
 			overrides.repositoryListener(new ProgressListener());
 		}
-		this.context = Runtimes.INSTANCE.getRuntime().create(overrides.build());
+		this.context = new JBangLiteRuntime().create(overrides.build());
 	}
 
 	@Override

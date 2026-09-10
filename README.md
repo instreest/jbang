@@ -170,10 +170,14 @@ of unrelated files costs nothing here, which is why this is a sync and not a
 
 The only third-party runtime dependencies are Maven Resolver (through
 [MIMA](https://github.com/maveniverse/mima)), the slf4j no-op binding it needs
-and the jspecify annotations used by the mirrored files.
-JDK download/unpacking, class-file inspection for the main class, jar creation,
-OS detection and module-info generation are implemented with the JDK's standard
-library only. `jbanglite.jar` itself needs Java 11 or later to run (JBang targets
+and the jspecify annotations used by the mirrored files. Maven Resolver's own
+HTTP transport (Apache HttpClient, Gson and the public suffix list, a third of
+the jar) is left out: `JdkHttpTransporterFactory` does the same job on the
+JDK's `java.net.http.HttpClient`, with the credentials and proxies from
+`~/.m2/settings.xml` that the resolver hands it, and without uploads, which
+JBangLite never makes. JDK download/unpacking, class-file inspection for the
+main class, jar creation, OS detection and module-info generation are
+implemented with the JDK's standard library only. `jbanglite.jar` itself needs Java 11 or later to run (JBang targets
 Java 8); the JDK used for scripts is whatever `//JAVA` asks for.
 
 ## How JDKs are obtained

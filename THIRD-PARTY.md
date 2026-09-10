@@ -26,14 +26,18 @@ each distributor's own site, and the license of the JDK that gets installed is
 the one of that distribution (Eclipse Temurin, the default, is GPLv2 with the
 Classpath Exception).
 
-## Libraries bundled in `jbang.jar`
+## Libraries bundled in `jbanglite.jar`
 
 | Library | License |
 | --- | --- |
 | [MIMA](https://github.com/maveniverse/mima) (`eu.maveniverse.maven.mima:*`) | Eclipse Public License 2.0 |
-| [Apache Maven Resolver](https://maven.apache.org/resolver/) and Apache Maven model/settings builders (`org.apache.maven.resolver:*`, `org.apache.maven:*`) and their Apache dependencies (commons-lang3, plexus-*, sisu) | Apache License 2.0 |
-| [SLF4J](https://www.slf4j.org/) (`slf4j-api`, `slf4j-nop`, `jcl-over-slf4j`) | MIT License |
-| `javax.inject`, `javax.annotation` | Apache License 2.0 / CDDL |
+| [Apache Maven Resolver](https://maven.apache.org/resolver/) without its HTTP transport, and Apache Maven model/settings builders (`org.apache.maven.resolver:*`, `org.apache.maven:*`) with their Plexus dependencies | Apache License 2.0 |
+| [ASM](https://asm.ow2.io/) (`org.ow2.asm:asm`, needed by the Maven model builder) | BSD 3-Clause |
+| [SLF4J](https://www.slf4j.org/) (`slf4j-api`, `slf4j-nop`) | MIT License |
+
+HTTP downloads go through `java.net.http.HttpClient` in the JDK
+(`JdkHttpTransporterFactory`), so Apache HttpClient, Gson and the public
+suffix list are not bundled.
 
 The exact list of bundled artifacts can be printed with
 `./gradlew dependencies --configuration runtimeClasspath`.
