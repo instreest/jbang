@@ -37,7 +37,9 @@ Classpath Exception).
 
 HTTP downloads go through `java.net.http.HttpClient` in the JDK
 (`JdkHttpTransporterFactory`), so Apache HttpClient, Gson and the public
-suffix list are not bundled.
+suffix list are not bundled. The header checksum extraction in that class
+(`x-checksum-*`, `x-goog-meta-checksum-*`, the Nexus 2 `ETag`) follows the
+transport's `XChecksumChecksumExtractor` and `Nexus2ChecksumExtractor`.
 
 The exact list of bundled artifacts can be printed with
 `./gradlew dependencies --configuration runtimeClasspath`.

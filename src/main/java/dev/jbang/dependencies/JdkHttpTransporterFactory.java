@@ -8,6 +8,7 @@ import java.net.PasswordAuthentication;
 import java.net.ProxySelector;
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +16,7 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import org.eclipse.aether.ConfigurationProperties;
 import org.eclipse.aether.RepositorySystemSession;
@@ -186,6 +188,7 @@ public final class JdkHttpTransporterFactory implements TransporterFactory {
 			HttpResponse<InputStream> response = client.send(request, HttpResponse.BodyHandlers.ofInputStream());
 			try (InputStream body = response.body()) {
 				checkStatus(response, request.uri());
+				extractChecksums(response.headers(), task);
 				// a partial response continues the file; anything else starts over
 				boolean resume = resumeOffset > 0 && response.statusCode() == 206;
 				long length = response.headers().firstValueAsLong("Content-Length").orElse(-1L);
@@ -195,6 +198,45 @@ public final class JdkHttpTransporterFactory implements TransporterFactory {
 				utilGet(task, body, true, length, resume);
 			}
 		}
+
+		/**
+		 * Checksums some repositories send in the response headers, so that the
+		 * resolver can skip fetching the .sha1/.md5 file next to the artifact.
+		 * This is what maven-resolver-transport-http's XChecksumChecksumExtractor
+		 * (x-checksum-* as sent by Maven Central and Nexus 3, x-goog-meta-* by
+		 * Google Cloud Storage) and Nexus2ChecksumExtractor (an ETag of the form
+		 * "{SHA1{<hex>}}") did.
+		 */
+		static void extractChecksums(HttpHeaders headers, GetTask task) {
+			boolean found = false;
+			for (String[] header : X_CHECKSUM_HEADERS) {
+				Optional<String> value = headers.firstValue(header[0]);
+				if (value.isPresent() && !value.get().trim().isEmpty()) {
+					task.setChecksum(header[1], value.get().trim());
+					found = true;
+				}
+			}
+			if (found) {
+				return;
+			}
+			Optional<String> etag = headers.firstValue("ETag");
+			if (etag.isPresent()) {
+				String value = etag.get();
+				int start = value.indexOf("SHA1{");
+				int end = value.indexOf("}", start);
+				if (start >= 0 && end > start) {
+					task.setChecksum("SHA-1", value.substring(start + "SHA1{".length(), end));
+				}
+			}
+		}
+
+		/** header name and the resolver's name for the algorithm */
+		private static final String[][] X_CHECKSUM_HEADERS = {
+				{ "x-checksum-sha1", "SHA-1" },
+				{ "x-checksum-md5", "MD5" },
+				{ "x-goog-meta-checksum-sha1", "SHA-1" },
+				{ "x-goog-meta-checksum-md5", "MD5" },
+		};
 
 		@Override
 		protected void implPut(PutTask task) {

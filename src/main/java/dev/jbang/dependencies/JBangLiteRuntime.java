@@ -34,7 +34,9 @@ public final class JBangLiteRuntime extends StandaloneStaticRuntime {
 	private static final class JdkHttpLookup extends MemoizingRepositorySystemSupplierLookup {
 		@Override
 		protected Map<String, ChecksumExtractor> getChecksumExtractors() {
-			// checksums are fetched as files (.sha1 and friends) next to the artifact
+			// the transport reads them from the response headers itself, see
+			// JdkHttpTransporterFactory.extractChecksums; this SPI is tied to
+			// Apache HttpClient's response type
 			return Collections.emptyMap();
 		}
 
