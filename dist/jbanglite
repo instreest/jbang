@@ -7,8 +7,8 @@
 # JDK. What it does, in order:
 #
 #   1. Settings          - constants and the JBANG_* / JBANGLITE_* overrides
-#   2. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, java on the
-#                          PATH, or a Temurin downloaded from the Maven Central
+#   2. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, javac on
+#                          the PATH, or a Temurin downloaded from the Maven Central
 #                          JVM index (needs curl or wget, unzip, and tar+gzip
 #                          on Linux and macOS)
 #   3. Launch            - run the jar, and when it exits with 255 exec the
@@ -126,10 +126,11 @@ java_major() {
   echo "${v%%[.+_-]*}"
 }
 
-# True when $1 holds a Java new enough to run jbanglite.jar
+# True when $1 holds a JDK (scripts have to be compiled, so a JRE is no use)
+# new enough to run jbanglite.jar
 usable_java() {
   local major
-  [ -x "$1/bin/java" ] || return 1
+  [ -x "$1/bin/java" ] && [ -x "$1/bin/javac" ] || return 1
   major=$(java_major "$1") || return 1
   [ "$major" -ge "$minJavaVersion" ] 2>/dev/null
 }
@@ -323,14 +324,17 @@ setup_java_exec() {
     fi
     echo "JAVA_HOME is set but does not point to a Java $minJavaVersion or newer runtime, ignoring it" 1>&2
   fi
-  # java on the PATH. It is asked where its home is rather than resolved from
-  # its own path, because what is on the PATH is often a shim (jenv, SDKMAN,
-  # the Windows javapath stub) or a symlink chain that readlink -f does not
-  # exist to follow on every platform.
-  local pathJava pathHome
-  pathJava=$(command -v java 2>/dev/null)
-  if [[ -n "$pathJava" ]]; then
-    pathHome=$("$pathJava" -XshowSettings:properties -version 2>&1 | sed -n 's/^[[:space:]]*java\.home = //p' | head -1)
+  # javac on the PATH (javac rather than java, because a JRE cannot compile
+  # scripts). It is asked where its home is rather than resolved from its own
+  # path, because what is on the PATH is often a shim (jenv, SDKMAN, the
+  # Windows javapath stub) or a symlink chain that readlink -f does not exist
+  # to follow on every platform. -J hands the option to javac's own JVM; it
+  # exists since Java 7, and an older javac just prints an error and no
+  # java.home, which leaves it ignored.
+  local pathJavac pathHome
+  pathJavac=$(command -v javac 2>/dev/null)
+  if [[ -n "$pathJavac" ]]; then
+    pathHome=$("$pathJavac" -J-XshowSettings:properties -version 2>&1 | sed -n 's/^[[:space:]]*java\.home = //p' | head -1)
     if [[ -n "$pathHome" ]] && usable_java "$pathHome"; then
       export JAVA_HOME="$pathHome"
       JAVA_EXEC="$JAVA_HOME/bin/java"
