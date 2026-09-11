@@ -22,22 +22,19 @@ import org.junit.jupiter.api.condition.OS;
 
 /**
  * Functional tests for the Windows launcher (jbanglite.cmd) using a fake jbanglite.jar:
- * exit codes must be propagated, output must be shown and the command JBang
- * asks to be executed (exit code 255) must be run by the launcher. jbanglite.cmd is
+ * exit codes and output must pass through unchanged. jbanglite.cmd is
  * self-contained, so there is no PowerShell launcher to hand over to.
  */
 @EnabledOnOs(OS.WINDOWS)
 class TestWindowsLaunchers extends AbstractScriptTest {
 
 	private Path binDir;
-	private Path envFile;
 
 	@BeforeEach
 	void setupLaunchers() throws IOException {
 		binDir = Files.createDirectories(tempDir.resolve("bin"));
 		Files.copy(CMD_SCRIPT, binDir.resolve("jbanglite.cmd"));
 		createFakeJar(binDir.resolve("jbanglite.jar"));
-		envFile = tempDir.resolve("env.txt");
 	}
 
 	@Test
@@ -45,17 +42,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		RunResult result = runLauncher(cmdLauncher(), "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("some output"), result.stdout);
-		assertEquals(Arrays.asList("cmd", binDir.resolve("jbanglite.cmd").toString()), Files.readAllLines(envFile));
-	}
-
-	@Test
-	void cmdExecutesGeneratedCommand() throws Exception {
-		RunResult result = runLauncher(cmdLauncher(), "exec", "echo executed by cmd");
-		assertEquals(0, result.exitCode, result.stderr);
-		assertTrue(result.stdout.contains("executed by cmd"), result.stdout);
-
-		result = runLauncher(cmdLauncher(), "exec", "cmd /c exit 5");
-		assertEquals(5, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("some error output"), result.stderr);
 	}
 
 
@@ -145,7 +132,6 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		env.put("JBANG_DIR", tempDir.resolve("jbang-home").toString());
 		env.put("JBANG_CACHE_DIR", tempDir.resolve("cache").toString());
 		env.put("JBANG_NO_VERSION_CHECK", "true");
-		env.put("JBANG_TEST_ENV_FILE", envFile.toString());
 		return runProcess(command, env);
 	}
 

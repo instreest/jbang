@@ -12,7 +12,6 @@ import java.util.Map;
 import dev.jbang.ExitException;
 import dev.jbang.Settings;
 import dev.jbang.jdk.Jdk;
-import dev.jbang.util.CommandBuffer;
 import dev.jbang.util.ModuleUtil;
 import dev.jbang.util.Util;
 
@@ -63,7 +62,8 @@ public class CmdGenerator {
 		return this;
 	}
 
-	public String generate() throws IOException {
+	/** The <code>java</code> command line, one argument per element. */
+	public List<String> generate() throws IOException {
 		Jdk jdk = project.getJdk();
 		boolean runAsModule = project.getModuleName().isPresent();
 		List<String> fullArgs = new ArrayList<>();
@@ -129,7 +129,7 @@ public class CmdGenerator {
 		}
 		fullArgs.addAll(arguments);
 
-		return CommandBuffer.of(fullArgs).applyWindowsMaxCliLimit().asCommandLine();
+		return fullArgs;
 	}
 
 	private static void addAllUnnamed(List<String> result, String manifestValue, String prefix) {

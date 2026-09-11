@@ -88,14 +88,26 @@ options are `--java`, `--main`, `--module`, `--deps`, `--repos`,
 `-ea`, `-esa` and `--cds`.
 
 The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<name>.jar`,
-`~/.jbang/cache/jdks/<version>`, `~/.jbang/currentjdk`), and `run` still prints the
-`java` command line and exits with status 255 so the launcher scripts
-(`jbanglite`, `jbanglite.cmd`) can exec it.
+`~/.jbang/cache/jdks/<version>`, `~/.jbang/currentjdk`).
+
+### How a script is started
+
+Full JBang prints the `java` command line to stdout and exits with status 255,
+and its launcher script `eval`s that line. JBangLite does not: `run` starts the
+`java` process itself, as a child that shares stdin, stdout and stderr, and
+exits with the script's exit status. So there is no protocol between the jar
+and the launchers, no exit code with a special meaning, nothing is captured
+and nothing is re-parsed by a shell: `jbanglite Hello.java | sort` streams,
+`echo x | jbanglite Hello.java` reaches the script, and `$?` is the script's.
+The launchers only find a JDK and `exec` the jar. The price is that the
+jbanglite JVM stays around, idle, while the script runs; `JBANG_JAVA_OPTIONS`
+tunes that JVM.
 
 ### What the launcher scripts need
 
 The scripts (`jbanglite` for POSIX shells, `jbanglite.cmd` for Windows) find or install a JDK on their
-own and then run `jbanglite.jar` with it; they never call a subcommand of the jar.
+own and then `exec` `jbanglite.jar` with it; they never call a subcommand of the jar
+and set nothing in its environment.
 Which JVM runs `jbanglite.jar` hardly matters, so the search is deliberately short:
 
 1. `$JBANG_DIR/currentjdk` (the JDK the jar installed for a script)

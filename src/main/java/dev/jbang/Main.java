@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import dev.jbang.source.AppBuilder;
 import dev.jbang.source.CmdGenerator;
 import dev.jbang.source.Project;
@@ -27,9 +28,11 @@ import dev.jbang.util.Util;
  * jbanglite version
  * </pre>
  *
- * Like the full JBang, <code>run</code> does not start the script itself: it
- * prints the java command line on stdout and exits with status 255, which the
- * launcher scripts (jbanglite, jbanglite.cmd) turn into an exec.
+ * <code>run</code> builds the script and then runs it as a child process with
+ * this process's stdin, stdout and stderr; the script's exit status becomes
+ * this process's exit status. The launcher scripts (jbanglite, jbanglite.cmd)
+ * only find a JDK and exec the jar; there is no protocol between them and the
+ * jar.
  */
 public final class Main {
 	private static final List<String> COMMANDS = Arrays.asList("run", "info", "version", "help");
@@ -45,7 +48,7 @@ public final class Main {
 		try {
 			exitCode = run(new ArrayList<>(Arrays.asList(args)));
 		} catch (ExitException e) {
-			if (e.getStatus() != 0 && e.getStatus() != ExitException.EXIT_EXECUTE && e.getMessage() != null) {
+			if (e.getStatus() != 0 && e.getMessage() != null) {
 				Util.errorMsg(null, e);
 			}
 			exitCode = e.getStatus();
@@ -265,16 +268,48 @@ public final class Main {
 		ScriptOptions opts = ScriptOptions.parse(args);
 		Project prj = opts.project();
 		Path jar = new AppBuilder(prj).build();
-		String cmdline = new CmdGenerator(prj, jar)
+		List<String> cmd = new CmdGenerator(prj, jar)
 			.arguments(opts.userArgs)
 			.runtimeOptions(opts.runtimeOptions)
 			.assertions(opts.enableAssertions)
 			.systemAssertions(opts.enableSystemAssertions)
 			.classDataSharing(opts.cds)
 			.generate();
-		Util.verboseMsg("run: " + cmdline);
-		realOut.println(cmdline);
-		return ExitException.EXIT_EXECUTE;
+		Util.verboseMsg("run: " + CommandBuffer.of(cmd).asCommandLine());
+		return execute(cmd);
+	}
+
+	/**
+	 * Runs the command as a child process sharing this process's standard
+	 * streams and returns its exit status. A signal that ends this process
+	 * (SIGINT from the terminal, a SIGTERM) also ends the child, so a script
+	 * never outlives its launcher.
+	 */
+	static int execute(List<String> cmd) throws IOException {
+		ProcessBuilder pb = CommandBuffer.of(cmd).applyWindowsMaxProcessLimit().asProcessBuilder().inheritIO();
+		Process process = pb.start();
+		Thread stopChild = new Thread(() -> {
+			if (!process.isAlive()) {
+				return;
+			}
+			process.destroy();
+			try {
+				if (!process.waitFor(5, TimeUnit.SECONDS)) {
+					process.destroyForcibly();
+				}
+			} catch (InterruptedException e) {
+				process.destroyForcibly();
+			}
+		});
+		Runtime.getRuntime().addShutdownHook(stopChild);
+		try {
+			int status = process.waitFor();
+			Runtime.getRuntime().removeShutdownHook(stopChild);
+			return status;
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Interrupted while waiting for the script");
+		}
 	}
 
 	private static int info(List<String> args) {

@@ -98,7 +98,15 @@ abstract class AbstractScriptTest {
 	// -------------------------------------------------------------------------
 
 	protected static RunResult runProcess(List<String> cmd, Map<String, String> env) throws Exception {
+		return runProcess(cmd, env, null);
+	}
+
+	/** Runs the command with the given file as its stdin (none when null). */
+	protected static RunResult runProcess(List<String> cmd, Map<String, String> env, Path stdin) throws Exception {
 		ProcessBuilder pb = new ProcessBuilder(cmd);
+		if (stdin != null) {
+			pb.redirectInput(stdin.toFile());
+		}
 		// the map is the whole environment: what the caller removed stays removed
 		pb.environment().clear();
 		pb.environment().putAll(env);
@@ -181,23 +189,15 @@ abstract class AbstractScriptTest {
 	}
 
 	/**
-	 * Stand-in for jbanglite.jar: records the environment the launcher set up
-	 * in the file JBANG_TEST_ENV_FILE names and then either exits with the given
-	 * code ("exit N") or asks the launcher to run a command ("exec CMD", exit
-	 * code 255).
+	 * Stand-in for jbanglite.jar: writes to stdout and stderr and exits with the
+	 * given code ("exit N"). A launcher has nothing else to do with the jar than
+	 * to run it, so this is all a launcher test needs.
 	 */
 	public static class FakeJBang {
-		public static void main(String[] args) throws IOException {
-			Path envFile = Paths.get(System.getenv("JBANG_TEST_ENV_FILE"));
-			Files.write(envFile, Arrays.asList(System.getenv("JBANG_RUNTIME_SHELL"),
-					System.getenv("JBANG_LAUNCH_CMD")), StandardCharsets.UTF_8);
-			if ("exec".equals(args[0])) {
-				System.out.println(args[1]);
-				System.exit(255);
-			} else {
-				System.out.println("some output");
-				System.exit(Integer.parseInt(args[1]));
-			}
+		public static void main(String[] args) {
+			System.out.println("some output");
+			System.err.println("some error output");
+			System.exit(Integer.parseInt(args[1]));
 		}
 	}
 

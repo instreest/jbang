@@ -63,8 +63,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 		RunResult result = runLauncher(wrapper, "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("some output"), result.stdout);
-		assertEquals(Arrays.asList("bash", wrapper.resolve("jbanglite").toString()),
-				Files.readAllLines(tempDir.resolve("env.txt")));
+		assertTrue(result.stderr.contains("some error output"), result.stderr);
 	}
 
 	@Test
@@ -142,7 +141,6 @@ class TestWrapperInstall extends AbstractScriptTest {
 
 	private RunResult runLauncher(Path wrapper, String... args) throws Exception {
 		Map<String, String> env = env();
-		env.put("JBANG_TEST_ENV_FILE", tempDir.resolve("env.txt").toString());
 		return runProcess(bashCmd(wrapper.resolve("jbanglite"), args), env);
 	}
 
