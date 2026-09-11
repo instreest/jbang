@@ -13,10 +13,10 @@ import dev.jbang.util.Util;
  *
  * <pre>
  * $JBANG_DIR (~/.jbang)
- *   currentjdk        -&gt; link to the default JDK
  *   cache/            ($JBANG_CACHE_DIR)
  *     jars/           compiled scripts
  *     jdks/           JDKs installed by JBang
+ *     stdin/          scripts read from stdin, by content hash
  *     urls/           downloaded files
  *     dependency_cache.txt
  * </pre>
@@ -32,7 +32,6 @@ public final class Settings {
 	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JBANG_DOWNLOAD_RETRY_DELAY";
 
 	public static final String CP_SEPARATOR = File.pathSeparator;
-	public static final String DEFAULT_JDK = "currentjdk";
 	public static final String DEPENDENCY_CACHE_FILE = "dependency_cache.txt";
 
 	public static final int DEFAULT_JAVA_VERSION = 17;
@@ -41,7 +40,7 @@ public final class Settings {
 	public static final int DEFAULT_ALPINE_JAVA_VERSION = 16;
 
 	public enum CacheClass {
-		urls, jars, jdks
+		urls, jars, jdks, stdin
 	}
 
 	private Settings() {
@@ -51,10 +50,6 @@ public final class Settings {
 		String jd = System.getenv(ENV_JBANG_DIR);
 		Path dir = jd != null ? Paths.get(jd) : Paths.get(System.getProperty("user.home")).resolve(".jbang");
 		return mkdirs(dir);
-	}
-
-	public static Path getDefaultJdkLink() {
-		return getConfigDir().resolve(DEFAULT_JDK);
 	}
 
 	public static Path getCacheDir() {

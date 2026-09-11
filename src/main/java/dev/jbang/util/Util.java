@@ -152,8 +152,7 @@ public final class Util {
 		if (verbose) {
 			e.printStackTrace();
 		} else {
-			infoMsg("Run with --verbose for more details. "
-					+ "The --verbose must be placed before the jbang command. I.e. jbang --verbose run [...]");
+			infoMsg("Run with --verbose for more details.");
 		}
 	}
 
@@ -248,6 +247,19 @@ public final class Util {
 	}
 
 	/** The SHA-256 of a file as a lower case hex string. */
+	public static String sha256(byte[] bytes) {
+		try {
+			MessageDigest md = MessageDigest.getInstance("SHA-256");
+			StringBuilder sb = new StringBuilder();
+			for (byte b : md.digest(bytes)) {
+				sb.append(String.format("%02x", b));
+			}
+			return sb.toString();
+		} catch (NoSuchAlgorithmException e) {
+			throw new IllegalStateException(e);
+		}
+	}
+
 	public static String sha256(Path file) throws IOException {
 		final MessageDigest digest;
 		try {

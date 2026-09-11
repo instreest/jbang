@@ -26,8 +26,9 @@ jbanglitew/jbanglite src/Hello.java
 ```
 
 `install.cmd` does the same on Windows. The installer copies the launchers,
-`jbanglite.jar`, itself, `LICENSE` and a `README.md` into `jbanglitew/`, and
-all of it is committed, like a Gradle wrapper. Nothing is downloaded at run
+their bootstrap-JDK scripts, `jbanglite.jar`, itself, `LICENSE` and a
+`README.md` into `jbanglitew/`, and all of it is committed, like a Gradle
+wrapper. Nothing is downloaded at run
 time except a JDK when the machine has none.
 
 Re-running the installer updates an installation in place by replacing every
@@ -88,7 +89,21 @@ options are `--java`, `--main`, `--module`, `--deps`, `--repos`,
 `-ea`, `-esa` and `--cds`.
 
 The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<name>.jar`,
-`~/.jbang/cache/jdks/<version>`, `~/.jbang/currentjdk`).
+`~/.jbang/cache/jdks/<version>`), except that JBangLite never writes
+`~/.jbang/currentjdk`: running a script installs the JDK it asks for into the
+cache and nothing else, so one run never changes which JDK the next one picks.
+
+Options are read getopt style: every option is accepted anywhere before the
+script, whether before or after the command word, `--` ends them, and
+everything after the script is the script's. The script is a `.java` file, or
+`-` to read it from stdin; a path that is readable but not a regular file, such
+as a process substitution or a pipe, is read the same way. Relative `//SOURCES`
+and `//FILES` of such a script are resolved from the working directory.
+
+```bash
+cat Hello.java | jbanglite -
+jbanglite <(sed 's/World/JBang/' Hello.java)
+```
 
 ### How a script is started
 
@@ -105,31 +120,33 @@ tunes that JVM.
 
 ### What the launcher scripts need
 
-The scripts (`jbanglite` for POSIX shells, `jbanglite.cmd` for Windows) find or install a JDK on their
-own and then `exec` `jbanglite.jar` with it; they never call a subcommand of the jar
-and set nothing in its environment.
-Which JVM runs `jbanglite.jar` hardly matters, so the search is deliberately short:
+The launchers (`jbanglite` for POSIX shells, `jbanglite.cmd` for Windows) do
+one thing: find a JDK and `exec` `jbanglite.jar` with it. They never call a
+subcommand of the jar and set nothing in its environment. Which JVM runs
+`jbanglite.jar` hardly matters, so the search is deliberately short:
 
-1. `$JBANG_DIR/currentjdk` (the JDK the jar installed for a script)
-2. `$JBANG_CACHE_DIR/jdks/bootstrap`
-3. `JAVA_HOME`
-4. `javac` on the `PATH`, asked for its `java.home` (through
+1. `$JBANG_CACHE_DIR/jdks/bootstrap`
+2. `JAVA_HOME`
+3. `javac` on the `PATH`, asked for its `java.home` (through
    `javac -J-XshowSettings:properties -version`) so that shims (jenv, SDKMAN,
    the Windows `javapath` stub) lead to the real JDK
 
 Any JDK 11 or newer is accepted; a JRE is not, because scripts have to be
-compiled. If nothing is found, the scripts download
-the newest Temurin 25 into `$JBANG_CACHE_DIR/jdks/bootstrap`, verify its
-published SHA-256 and use that. The jar prefers the JVM it is running on when
+compiled. If nothing is found, the launcher runs `jbanglite-bootstrap-jdk`
+(`jbanglite-bootstrap-jdk.cmd` on Windows), which sits next to it, downloads
+the newest Temurin 25 into `$JBANG_CACHE_DIR/jdks/bootstrap`, verifies its
+published SHA-256 and prints that directory. The bootstrap script is a program
+of its own: it can be run by hand, tested alone, or replaced by anything else
+that puts a JDK there. The jar prefers the JVM it is running on when
 that satisfies a script's `//JAVA`, so a tool that asks for `//JAVA 25` costs
 one download on a machine without Java, not two.
 
-`jbanglite.cmd` is self-contained — it uses the `curl`, `tar` and `certutil`
-that Windows ships with, so no PowerShell is involved and there is no
-PowerShell launcher in this fork. `jbanglite` needs `curl` or `wget`, `unzip`
-(to read the JVM index) and `tar` with `gzip` for the download; on Windows
-shells (Git Bash, MSYS2, Cygwin) it hands over to `jbanglite.cmd` instead, so
-nothing but Windows itself is needed there either.
+`jbanglite-bootstrap-jdk.cmd` is self-contained — it uses the `curl`, `tar`
+and `certutil` that Windows ships with, so no PowerShell is involved and there
+is no PowerShell launcher in this fork. `jbanglite-bootstrap-jdk` needs `curl`
+or `wget`, `unzip` (to read the JVM index) and `tar` with `gzip`; on Windows
+shells (Git Bash, MSYS2, Cygwin) `jbanglite` hands over to `jbanglite.cmd`
+instead, so nothing but Windows itself is needed there either.
 
 The download uses the very same JVM index the jar uses for `//JAVA`, the
 Coursier index published on Maven Central
@@ -138,7 +155,8 @@ involved, and `JBANG_JVM_INDEX_BASEURL` points both of them at a corporate mirro
 
 The JDK a script asks for with `//JAVA` is still provisioned by the jar; the
 bootstrap JDK only exists to get `jbanglite.jar` started. `jdk default`, `jdk
-install` and `jdk list` were therefore removed. There is no native-image mode
+install` and `jdk list` were therefore removed, and so was the `currentjdk`
+link they managed. There is no native-image mode
 either: the launchers only ever run the jar.
 
 ### Several runs at once

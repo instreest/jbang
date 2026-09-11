@@ -34,6 +34,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	void setupLaunchers() throws IOException {
 		binDir = Files.createDirectories(tempDir.resolve("bin"));
 		Files.copy(CMD_SCRIPT, binDir.resolve("jbanglite.cmd"));
+		Files.copy(CMD_SCRIPT.resolveSibling("jbanglite-bootstrap-jdk.cmd"), binDir.resolve("jbanglite-bootstrap-jdk.cmd"));
 		createFakeJar(binDir.resolve("jbanglite.jar"));
 	}
 
@@ -69,15 +70,6 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 
 	@Test
-	void cmdPrefersCurrentJdkOverJavaHome() throws Exception {
-		linkCurrentJdk();
-		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
-		assertEquals(3, result.exitCode, result.stderr);
-		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
-	}
-
-
-	@Test
 	void cmdIgnoresJavaHomeOfUnknownVersion() throws Exception {
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk(null),
 				"JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
@@ -96,15 +88,6 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	private void linkCachedJdk() throws Exception {
 		Path jdks = Files.createDirectories(tempDir.resolve("cache/jdks"));
 		link(jdks.resolve("bootstrap"), Paths.get(System.getProperty("java.home")));
-	}
-
-	/**
-	 * Makes the running JDK available as JBANG_DIR\currentjdk (as jbanglite.jar
-	 * does for the JDK a script asks for with //JAVA).
-	 */
-	private void linkCurrentJdk() throws Exception {
-		Path jbangHome = Files.createDirectories(tempDir.resolve("jbang-home"));
-		link(jbangHome.resolve("currentjdk"), Paths.get(System.getProperty("java.home")));
 	}
 
 	private void link(Path link, Path target) throws Exception {

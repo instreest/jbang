@@ -110,6 +110,7 @@ public class Project {
 	private boolean enableCDS;
 	private boolean enablePreview;
 
+	private final Path mainBaseDir;
 	private JdkManager jdkManager;
 
 	// cached values
@@ -120,7 +121,20 @@ public class Project {
 	public Project(Path mainSource, Map<String, String> properties, List<String> extraDeps,
 			List<String> extraRepos, List<String> extraCompileOptions, List<String> extraRuntimeOptions,
 			String forcedJavaVersion, String forcedMainClass, String forcedModuleName) {
-		this(mainSource, properties, new LinkedHashSet<>());
+		this(mainSource, null, properties, extraDeps, extraRepos, extraCompileOptions, extraRuntimeOptions,
+				forcedJavaVersion, forcedMainClass, forcedModuleName);
+	}
+
+	/**
+	 * As above, with the directory that relative <code>//SOURCES</code> and
+	 * <code>//FILES</code> of the main source are resolved against; null means
+	 * the main source's own directory. Used when the main source was read from
+	 * stdin and lives in the cache, but was written from the working directory.
+	 */
+	public Project(Path mainSource, Path mainBaseDir, Map<String, String> properties, List<String> extraDeps,
+			List<String> extraRepos, List<String> extraCompileOptions, List<String> extraRuntimeOptions,
+			String forcedJavaVersion, String forcedMainClass, String forcedModuleName) {
+		this(mainSource, mainBaseDir, properties, new LinkedHashSet<>());
 		dependencies.addAll(extraDeps);
 		extraRepos.forEach(r -> addRepository(DependencyUtil.toMavenRepo(replaceProperties(r))));
 		compileOptions.addAll(extraCompileOptions);
@@ -137,8 +151,9 @@ public class Project {
 		}
 	}
 
-	private Project(Path mainSource, Map<String, String> properties, Set<Path> beingBuilt) {
+	private Project(Path mainSource, Path mainBaseDir, Map<String, String> properties, Set<Path> beingBuilt) {
 		this.mainSource = mainSource.toAbsolutePath().normalize();
+		this.mainBaseDir = mainBaseDir != null ? mainBaseDir.toAbsolutePath().normalize() : null;
 		this.properties = properties;
 		this.contextProperties = new Properties(System.getProperties());
 		OsDetector.detect(contextProperties);
@@ -171,7 +186,7 @@ public class Project {
 					"Source file could not be found or read: " + source);
 		}
 		Directives directives = new Directives.Extended(Util.readString(source), propertyReplacer());
-		Path baseDir = source.getParent();
+		Path baseDir = main && mainBaseDir != null ? mainBaseDir : source.getParent();
 
 		if (main) {
 			description = directives.description();
@@ -208,7 +223,7 @@ public class Project {
 
 		for (String srcDep : directives.sourceDependencies()) {
 			Path dep = baseDir.resolve(replaceProperties(srcDep)).toAbsolutePath().normalize();
-			subProjects.add(new Project(dep, properties, beingBuilt));
+			subProjects.add(new Project(dep, null, properties, beingBuilt));
 		}
 
 		for (String pattern : directives.sources()) {

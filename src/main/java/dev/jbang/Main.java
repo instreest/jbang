@@ -1,18 +1,24 @@
 package dev.jbang;
 
+import java.io.ByteArrayOutputStream;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import dev.jbang.source.AppBuilder;
 import dev.jbang.source.CmdGenerator;
 import dev.jbang.source.Project;
@@ -23,10 +29,17 @@ import dev.jbang.util.Util;
  * JBangLite command line.
  *
  * <pre>
- * jbanglite [global options] [run] [run options] &lt;script.java&gt; [args...]
- * jbanglite [global options] info classpath [--deps-only] &lt;script.java&gt;
+ * jbanglite [options] [run] [options] &lt;script.java&gt; [args...]
+ * jbanglite [options] info classpath [options] &lt;script.java&gt;
  * jbanglite version
  * </pre>
+ *
+ * Options are read, getopt style, up to the script: every option is accepted
+ * anywhere before it, whether before or after the command word, <code>--</code>
+ * ends them, and everything after the script belongs to the script. The script
+ * is a <code>.java</code> file, or <code>-</code> for stdin; a path that is
+ * not a regular file but can be read (a process substitution, a pipe) is read
+ * like stdin.
  *
  * <code>run</code> builds the script and then runs it as a child process with
  * this process's stdin, stdout and stderr; the script's exit status becomes
@@ -65,8 +78,9 @@ public final class Main {
 	}
 
 	static int run(List<String> args) throws IOException {
-		// global options come before the command / script
-		while (!args.isEmpty() && args.get(0).startsWith("-")) {
+		// options in front of the command word; ScriptOptions takes the same
+		// ones after it, so their position does not matter
+		while (!args.isEmpty() && args.get(0).startsWith("-") && !args.get(0).equals("-")) {
 			String opt = args.remove(0);
 			switch (opt) {
 			case "--verbose":
@@ -211,7 +225,12 @@ public final class Main {
 				case "--offline":
 					Util.setOffline(true);
 					break;
+				case "-h":
+				case "--help":
+					printHelp();
+					throw new ExitException(ExitException.EXIT_OK);
 				case "--":
+					// the getopt convention: what follows is never an option
 					if (i < args.size()) {
 						o.script = args.get(i++);
 					}
@@ -245,17 +264,30 @@ public final class Main {
 			return args.get(i);
 		}
 
-		Project project() {
-			Path file = Paths.get(script);
-			if (!Files.isRegularFile(file)) {
-				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-						"Script or alias could not be found or read: '" + script + "'");
+		Project project() throws IOException {
+			Path file;
+			Path baseDir = null;
+			if (script.equals("-")) {
+				file = StdinScript.store(System.in);
+				baseDir = Util.getCwd();
+			} else {
+				file = Paths.get(script);
+				if (!Files.isRegularFile(file)) {
+					if (!Files.isReadable(file)) {
+						throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+								"Script could not be found or read: '" + script + "'");
+					}
+					// a process substitution or a pipe: read it like stdin
+					try (InputStream in = Files.newInputStream(file)) {
+						file = StdinScript.store(in);
+					}
+					baseDir = Util.getCwd();
+				} else if (!file.toString().endsWith(".java")) {
+					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+							"Only .java source files are supported by JBangLite: '" + script + "'");
+				}
 			}
-			if (!file.toString().endsWith(".java")) {
-				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-						"Only .java source files are supported by JBangLite: '" + script + "'");
-			}
-			Project prj = new Project(file, properties, deps, repos, compileOptions, runtimeOptions,
+			Project prj = new Project(file, baseDir, properties, deps, repos, compileOptions, runtimeOptions,
 					javaVersion, mainClass, moduleName);
 			if (enablePreview) {
 				prj.setEnablePreview(true);
@@ -312,7 +344,7 @@ public final class Main {
 		}
 	}
 
-	private static int info(List<String> args) {
+	private static int info(List<String> args) throws IOException {
 		if (args.isEmpty()) {
 			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 					"Missing required subcommand for 'info' (classpath)");
@@ -335,6 +367,56 @@ public final class Main {
 		}
 	}
 
+	/**
+	 * A script read from stdin is kept as a file in the cache, because javac
+	 * wants a file and its name has to match the public class in it. The name
+	 * is taken from the source, the directory from a hash of it, so the same
+	 * input builds into the same place and is reused.
+	 */
+	static final class StdinScript {
+		private static final Pattern PUBLIC_TYPE = Pattern
+			.compile("(?m)^\\s*public\\s+(?:(?:final|abstract|static|sealed|non-sealed)\\s+)*"
+					+ "(?:class|interface|enum|record)\\s+(\\w+)");
+		private static final Pattern ANY_TYPE = Pattern
+			.compile("(?m)^\\s*(?:(?:final|abstract|static|sealed|non-sealed)\\s+)*"
+					+ "(?:class|interface|enum|record)\\s+(\\w+)");
+
+		private StdinScript() {
+		}
+
+		static Path store(InputStream in) throws IOException {
+			// read by hand: readAllBytes on a pipe or a process substitution
+			// asks for the stream's position and fails with "Illegal seek"
+			ByteArrayOutputStream buf = new ByteArrayOutputStream();
+			byte[] chunk = new byte[8192];
+			int n;
+			while ((n = in.read(chunk)) > 0) {
+				buf.write(chunk, 0, n);
+			}
+			byte[] bytes = buf.toByteArray();
+			String source = new String(bytes, StandardCharsets.UTF_8);
+			String name = typeName(source);
+			Path dir = Settings.getCacheDir(Settings.CacheClass.stdin).resolve(Util.sha256(bytes));
+			Path file = dir.resolve(name + ".java");
+			if (!Files.exists(file) || !Arrays.equals(Files.readAllBytes(file), bytes)) {
+				Files.createDirectories(dir);
+				Path tmp = Files.createTempFile(dir, name, ".tmp");
+				Files.write(tmp, bytes);
+				Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+			}
+			return file;
+		}
+
+		static String typeName(String source) {
+			Matcher m = PUBLIC_TYPE.matcher(source);
+			if (m.find()) {
+				return m.group(1);
+			}
+			m = ANY_TYPE.matcher(source);
+			return m.find() ? m.group(1) : "Script";
+		}
+	}
+
 	private static void printHelp() {
 		realOut.println("jbanglite " + Util.getJBangVersion());
 		realOut.println();
@@ -342,11 +424,15 @@ public final class Main {
 		realOut.println("//DEPS, //JAVA and //SOURCES comment directives.");
 		realOut.println();
 		realOut.println("Usage:");
-		realOut.println("  jbanglite [<global options>] [run] [<options>] <script.java> [<args>...]");
-		realOut.println("  jbanglite [<global options>] info classpath [--deps-only] <script.java>");
+		realOut.println("  jbanglite [<options>] [run] <script.java> [<args>...]");
+		realOut.println("  jbanglite [<options>] info classpath [--deps-only] <script.java>");
 		realOut.println("  jbanglite version");
 		realOut.println();
-		realOut.println("Global options:");
+		realOut.println("Options may appear anywhere before the script, '--' ends them, and");
+		realOut.println("everything after the script is passed to it. The script is a .java");
+		realOut.println("file, or '-' to read it from stdin.");
+		realOut.println();
+		realOut.println("Options:");
 		realOut.println("  --verbose        Print what is being done");
 		realOut.println("  --quiet          Only print errors");
 		realOut.println("  --fresh          Ignore caches and rebuild/re-resolve everything");

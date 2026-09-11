@@ -18,7 +18,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-copied="src/main/scripts/jbanglite src/main/scripts/jbanglite.cmd LICENSE"
+copied="src/main/scripts/jbanglite src/main/scripts/jbanglite-bootstrap-jdk src/main/scripts/jbanglite.cmd src/main/scripts/jbanglite-bootstrap-jdk.cmd LICENSE"
 jarInputs="src/main/java build.gradle settings.gradle gradle LICENSE THIRD-PARTY.md"
 
 # the revision the jar is built from: the last commit touching its inputs,

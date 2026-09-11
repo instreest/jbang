@@ -5,7 +5,6 @@ import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -26,7 +25,6 @@ import dev.jbang.util.Util;
  * version:
  * <ol>
  * <li>the JVM running JBang</li>
- * <li>the default JDK link ($JBANG_DIR/currentjdk)</li>
  * <li>JAVA_HOME</li>
  * <li>javac found on the PATH</li>
  * <li>JDKs installed by JBang in the cache ($JBANG_CACHE_DIR/jdks)</li>
@@ -35,18 +33,15 @@ import dev.jbang.util.Util;
  */
 public final class JdkManager {
 	private final Path jdksDir;
-	private final Path defaultLink;
 	private final int defaultJavaVersion;
 	private List<Jdk> installed;
 
 	public JdkManager() {
-		this(Settings.getCacheDir(Settings.CacheClass.jdks), Settings.getDefaultJdkLink(),
-				Settings.getDefaultJavaVersion());
+		this(Settings.getCacheDir(Settings.CacheClass.jdks), Settings.getDefaultJavaVersion());
 	}
 
-	JdkManager(Path jdksDir, Path defaultLink, int defaultJavaVersion) {
+	JdkManager(Path jdksDir, int defaultJavaVersion) {
 		this.jdksDir = jdksDir;
-		this.defaultLink = defaultLink;
 		this.defaultJavaVersion = defaultJavaVersion;
 	}
 
@@ -79,7 +74,6 @@ public final class JdkManager {
 		if (installed == null) {
 			List<Jdk> jdks = new ArrayList<>();
 			add(jdks, Jdk.of(jre2jdk(Paths.get(System.getProperty("java.home"))), "current"));
-			add(jdks, Jdk.of(defaultLink, "default"));
 			String javaHome = System.getenv("JAVA_HOME");
 			if (javaHome != null && !javaHome.isEmpty()) {
 				add(jdks, Jdk.of(jre2jdk(Paths.get(javaHome)), "JAVA_HOME"));
@@ -140,7 +134,8 @@ public final class JdkManager {
 	 * $JBANG_CACHE_DIR/jdks/&lt;version&gt;. The archive's SHA-256 is verified
 	 * against the checksum published next to it. A lock file makes concurrent
 	 * JBang processes wait for each other instead of installing on top of one
-	 * another. When no default JDK is set yet, the new JDK becomes the default.
+	 * another. Nothing outside that directory is touched: running a script
+	 * never changes which JDK the next run picks.
 	 */
 	public Jdk install(RequestedVersion version) {
 		if (Util.isOffline()) {
@@ -246,34 +241,7 @@ public final class JdkManager {
 
 	private Jdk finish(Jdk jdk) {
 		installed = null;
-		if (getDefaultJdk() == null) {
-			setDefaultJdk(jdk);
-		}
 		return jdk;
-	}
-
-	/** The JDK the default link points to, or null. */
-	public Jdk getDefaultJdk() {
-		if (!Files.exists(defaultLink, LinkOption.NOFOLLOW_LINKS)) {
-			return null;
-		}
-		if (!Files.exists(defaultLink)) {
-			Util.verboseMsg("Removing broken default JDK link " + defaultLink);
-			Util.deletePath(defaultLink, true);
-			return null;
-		}
-		return Jdk.of(defaultLink, "default");
-	}
-
-	public void setDefaultJdk(Jdk jdk) {
-		Jdk current = getDefaultJdk();
-		if (current != null && sameHome(current.home(), jdk.home())) {
-			Util.infoMsg("Default JDK already set to " + jdk.majorVersion());
-			return;
-		}
-		Util.createLink(defaultLink, jdk.home());
-		Util.infoMsg("Default JDK set to " + jdk.majorVersion() + " (" + jdk.home() + ")");
-		installed = null;
 	}
 
 	/** Maps a JRE folder inside a JDK to the JDK's home. */

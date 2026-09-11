@@ -159,14 +159,16 @@ abstract class AbstractScriptTest {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Copies the bash launcher into a directory of its own with a fake
-	 * jbanglite.jar next to it, as installed into a project, and returns the
-	 * launcher.
+	 * Copies the bash launcher and its bootstrap script into a directory of
+	 * their own with a fake jbanglite.jar next to them, as installed into a
+	 * project, and returns the launcher.
 	 */
 	protected Path bashLauncherWithJar() throws IOException {
 		Path dir = Files.createDirectories(tempDir.resolve("bin"));
 		Path launcher = dir.resolve("jbanglite");
 		Files.copy(BASH_SCRIPT, launcher, StandardCopyOption.REPLACE_EXISTING);
+		Files.copy(BASH_SCRIPT.resolveSibling("jbanglite-bootstrap-jdk"), dir.resolve("jbanglite-bootstrap-jdk"),
+				StandardCopyOption.REPLACE_EXISTING);
 		createFakeJar(dir.resolve("jbanglite.jar"));
 		return launcher;
 	}

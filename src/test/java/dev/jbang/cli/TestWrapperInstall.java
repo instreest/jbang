@@ -25,8 +25,8 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 class TestWrapperInstall extends AbstractScriptTest {
 
 	private static final Path DIST = Paths.get("dist").toAbsolutePath();
-	private static final List<String> FILES = Arrays.asList("jbanglite", "jbanglite.cmd", "jbanglite.jar",
-			"install.sh", "install.cmd", "README.md", "LICENSE");
+	private static final List<String> FILES = Arrays.asList("jbanglite", "jbanglite-bootstrap-jdk", "jbanglite.cmd",
+			"jbanglite-bootstrap-jdk.cmd", "jbanglite.jar", "install.sh", "install.cmd", "README.md", "LICENSE");
 
 	private Path project;
 	private byte[] jar;
@@ -51,6 +51,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 			assertTrue(Files.isRegularFile(wrapper.resolve(name)), name + " was not installed");
 		}
 		assertTrue(Files.isExecutable(wrapper.resolve("jbanglite")));
+		assertTrue(Files.isExecutable(wrapper.resolve("jbanglite-bootstrap-jdk")));
 		assertArrayEquals(jar, Files.readAllBytes(wrapper.resolve("jbanglite.jar")));
 		assertEquals(FILES.size(), Files.list(wrapper).count(), "nothing but dist/ is installed");
 	}
@@ -115,7 +116,8 @@ class TestWrapperInstall extends AbstractScriptTest {
 	 */
 	@Test
 	void distHoldsTheCurrentLaunchers() throws Exception {
-		for (String name : Arrays.asList("jbanglite", "jbanglite.cmd")) {
+		for (String name : Arrays.asList("jbanglite", "jbanglite-bootstrap-jdk", "jbanglite.cmd",
+				"jbanglite-bootstrap-jdk.cmd")) {
 			assertArrayEquals(Files.readAllBytes(BASH_SCRIPT.resolveSibling(name)),
 					Files.readAllBytes(DIST.resolve(name)),
 					"dist/" + name + " is out of date, run misc/update-dist.sh");
