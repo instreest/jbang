@@ -20,10 +20,10 @@ jbanglitew\jbanglite.cmd src\Hello.java
 
 ## What happens on the first run
 
-1. The launcher looks for a usable Java (`$JBANG_DIR/currentjdk`, its own
-   bootstrap JDK, `JAVA_HOME`, `javac` on the `PATH`; a JDK 11 or newer). If none
-   is found it downloads a Temurin JDK into `~/.jbang/cache/jdks/bootstrap` and
-   verifies its published SHA-256.
+1. The launcher looks for a usable JDK (its own bootstrap JDK, `JAVA_HOME`,
+   `javac` on the `PATH`; a JDK 11 or newer). If none is found it runs
+   `jbanglite-bootstrap-jdk`, which downloads a Temurin JDK into
+   `~/.jbang/cache/jdks/bootstrap` and verifies its published SHA-256.
 2. It runs `jbanglite.jar` from this directory with that Java.
 3. The JDK a script asks for with `//JAVA` is installed by `jbanglite.jar` itself.
 
@@ -38,7 +38,8 @@ renamed into place, so a parallel build never fails over a half-written file.
 
 | File | |
 | --- | --- |
-| `jbanglite`, `jbanglite.cmd` | the launchers (POSIX shells and Windows) |
+| `jbanglite`, `jbanglite.cmd` | the launchers (POSIX shells and Windows): find a JDK, run the jar |
+| `jbanglite-bootstrap-jdk`, `jbanglite-bootstrap-jdk.cmd` | download a JDK when the machine has none; run by the launchers, or by hand |
 | `jbanglite.jar` | JBangLite itself |
 | `install.sh`, `install.cmd` | install and update this directory |
 | `LICENSE` | MIT, from JBang |

@@ -37,7 +37,7 @@ mkdir "%staging%" || exit /b 1
 
 echo Installing JBangLite from %repo% (%ref%) into %dir% 1>&2
 rem dist\ in the repository is exactly what a project gets
-for %%F in (jbanglite jbanglite.cmd jbanglite.jar install.sh install.cmd README.md LICENSE) do (
+for %%F in (jbanglite jbanglite-bootstrap-jdk jbanglite.cmd jbanglite-bootstrap-jdk.cmd jbanglite.jar install.sh install.cmd README.md LICENSE) do (
   curl -fsSL "%base%/%%F" -o "%staging%\%%F" || goto :failed
 )
 

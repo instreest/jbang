@@ -25,7 +25,7 @@ rawBaseUrl=${JBANGLITE_RAW_BASEURL:-https://raw.githubusercontent.com}
 base="$rawBaseUrl/$repo/$ref/dist"
 
 # dist/ in the repository is exactly what a project gets
-files="jbanglite jbanglite.cmd jbanglite.jar install.sh install.cmd README.md LICENSE"
+files="jbanglite jbanglite-bootstrap-jdk jbanglite.cmd jbanglite-bootstrap-jdk.cmd jbanglite.jar install.sh install.cmd README.md LICENSE"
 
 fetch() {  # $1 = file in dist/, $2 = file to write
   if command -v curl > /dev/null 2>&1; then
@@ -61,6 +61,6 @@ mkdir -p "$dir"
 for f in $files; do
   cp -f "$staging/$f" "$dir/$f"
 done
-chmod +x "$dir/jbanglite" "$dir/install.sh"
+chmod +x "$dir/jbanglite" "$dir/jbanglite-bootstrap-jdk" "$dir/install.sh"
 
 echo "Installed. Commit $(basename "$dir")/ and run '$(basename "$dir")/jbanglite <script.java>'." 1>&2

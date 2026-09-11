@@ -1,0 +1,326 @@
+#!/usr/bin/env bash
+#
+# Installs the JDK that runs jbanglite.jar when the machine has none: the
+# newest Temurin $bootstrapJavaVersion from the JVM index on Maven Central,
+# into $JBANG_CACHE_DIR/jdks/bootstrap (~/.jbang/cache/jdks/bootstrap). It
+# prints that directory on stdout and says nothing else there; progress and
+# errors go to stderr. When the JDK is already installed it only prints.
+#
+# The launcher (jbanglite) runs it when it finds no usable JDK; it can just as
+# well be run by hand, or replaced by anything else that puts a JDK there.
+#
+#   jbanglite-bootstrap-jdk            install if needed, print the JDK home
+#
+# Environment:
+#   JBANG_DIR, JBANG_CACHE_DIR       where JBangLite keeps things (~/.jbang)
+#   JBANG_JVM_INDEX_BASEURL          a mirror of Maven Central
+#   JBANG_DOWNLOAD_RETRY, JBANG_DOWNLOAD_RETRY_DELAY
+#   JBANGLITE_LOCK_TIMEOUT           seconds to wait for another run's download
+#
+# Needs curl or wget, unzip (to read the JVM index) and tar with gzip.
+#
+# Several JBangLite runs can be started at the same time (a build matrix, a
+# multi-module build). They share ~/.jbang, so the download takes a directory
+# lock (mkdir is atomic) and every other download goes to a file of this run's
+# own that is renamed into place.
+
+# --- Settings ----------------------------------------------------------------
+
+# JBangLite itself only needs a JVM to run; which one hardly matters, so we
+# simply fetch the newest Temurin of this version.
+bootstrapJavaVersion=25
+
+# Where the JVM index lives. It is the same index jbanglite.jar uses to install the
+# JDKs that scripts ask for with //JAVA, published on Maven Central, so no JDK
+# discovery service is involved. Override for a corporate mirror.
+jvmIndexBaseUrl=${JBANG_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
+
+# Tells this run's temporary files apart from those of a JBangLite running at
+# the same time
+runId=$$
+
+# How long to wait (in seconds) for another JBangLite that is downloading into
+# the same directory
+lockTimeout=${JBANGLITE_LOCK_TIMEOUT:-600}
+
+# How often a failed download is retried, and how long to wait in between
+# (0 means an exponential backoff of 1, 2, 4, ... seconds)
+downloadRetry=${JBANG_DOWNLOAD_RETRY:-5}
+downloadRetryDelay=${JBANG_DOWNLOAD_RETRY_DELAY:-0}
+
+if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
+if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
+jdkDir="$TDIR/jdks/bootstrap"
+
+# --- Downloading -------------------------------------------------------------
+
+download() {
+  local attempt=0
+  local maxAttempts=$((downloadRetry + 1))
+  while true; do
+    attempt=$((attempt + 1))
+    if [ -x "$(command -v curl)" ]; then
+      curl -sLf -o "$2" "$1"
+      retval=$?
+    elif [ -x "$(command -v wget)" ]; then
+      wget -q -O "$2" "$1"
+      retval=$?
+    else
+      echo "Error: curl or wget not found, please make sure one of them is installed" 1>&2
+      exit 1
+    fi
+    if [ $retval -eq 0 ] || [ $attempt -ge $maxAttempts ]; then
+      break
+    fi
+    if [ "$downloadRetryDelay" -gt 0 ] 2>/dev/null; then
+      sleepSeconds=$downloadRetryDelay
+    else
+      # Exponential backoff: 1, 2, 4, 8, ...
+      sleepSeconds=$((1 << (attempt - 1)))
+    fi
+    echo "Download $attempt/$maxAttempts failed. Retry in $sleepSeconds second(s)..." 1>&2
+    if [ $attempt -eq 1 ]; then
+      echo "(Set JBANG_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
+    fi
+    sleep $sleepSeconds
+  done
+}
+
+unpack() {   # $1 = archive, $2 = target dir; the archive's single root folder is stripped
+  if [[ "$1" == *.tar.gz || "$1" == *.tgz ]]; then
+    gzip -cd "$1" | tar xf - -C "$2"
+    retval=$?
+  else
+    unzip -qq -o "$1" -d "$2"
+    retval=$?
+  fi
+  if [ $retval -ne 0 ]; then return; fi
+  local root
+  root=$(find "$2" -mindepth 1 -maxdepth 1 -type d | head -1)
+  if [[ -z "$root" ]]; then retval=1; return; fi
+  if [[ $os == mac && -d "$root/Contents/Home" ]]; then root="$root/Contents/Home"; fi
+  mv "$root"/* "$2"/
+  retval=$?
+}
+
+sha256_of() {
+  if [ -x "$(command -v sha256sum)" ]; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif [ -x "$(command -v shasum)" ]; then
+    shasum -a 256 "$1" | cut -d' ' -f1
+  fi
+}
+
+# --- The JVM index -------------------------------------------------------------
+
+# The name of the JVM index for this platform, e.g. linux-amd64
+jvm_index_platform() {
+  local idxOs idxArch
+  case "$os" in
+    linux)   idxOs=linux;;
+    mac)     idxOs=darwin;;
+    windows) idxOs=windows;;
+    alpine-linux)
+      echo "No Java found and the JVM index has no musl builds for Alpine." 1>&2
+      echo "Install a JDK, or set JAVA_HOME." 1>&2
+      return 1;;
+    *)
+      echo "No Java found and none can be downloaded for this OS: $(uname -s)" 1>&2
+      return 1;;
+  esac
+  case "$arch" in
+    x64)      idxArch=amd64;;
+    aarch64)  idxArch=arm64;;
+    x32)      idxArch=x86;;
+    "")
+      echo "No Java found and none can be downloaded for this architecture: $(uname -m)" 1>&2
+      return 1;;
+    *)        idxArch=$arch;;
+  esac
+  echo "$idxOs-$idxArch"
+}
+
+# Prints "<version> <archive type> <url>" of the newest Temurin
+# $bootstrapJavaVersion in the JVM index of platform $1
+jvm_index_entry() {
+  local base metaVersion
+  mkdir -p "$TDIR"
+  base="$jvmIndexBaseUrl/io/get-coursier/jvm/indices/index-$1"
+  download "$base/maven-metadata.xml" "$TDIR/jvm-index-$runId.xml"
+  if [ $retval -ne 0 ]; then echo "Could not read the JVM index from $base" 1>&2; return 1; fi
+  metaVersion=$(grep -o '<release>[^<]*' "$TDIR/jvm-index-$runId.xml" | head -1 | cut -d'>' -f2)
+  if [ -z "$metaVersion" ]; then echo "Could not determine the newest JVM index version" 1>&2; return 1; fi
+  download "$base/$metaVersion/index-$1-$metaVersion.jar" "$TDIR/jvm-index-$runId.jar"
+  if [ $retval -ne 0 ]; then echo "Could not download the JVM index" 1>&2; return 1; fi
+  if [ ! -x "$(command -v unzip)" ]; then
+    echo "unzip is needed to read the JVM index; install unzip or a JDK" 1>&2
+    return 1
+  fi
+  unzip -p "$TDIR/jvm-index-$runId.jar" "coursier/jvm/indices/v1/$1.json" > "$TDIR/jvm-index-$runId.json" 2>/dev/null
+  # The index lists, per distribution, a version and a "<type>+<url>" value
+  awk -v want="$bootstrapJavaVersion" '
+    /^[[:space:]]*"temurin"[[:space:]]*:[[:space:]]*\{/ { inside = 1; next }
+    inside && /^[[:space:]]*\}/ { exit }
+    inside && match($0, /"[0-9][^"]*"[[:space:]]*:[[:space:]]*"[a-z]+\+[^"]+"/) {
+      split(substr($0, RSTART, RLENGTH), field, "\"")
+      version = field[2]
+      value = field[4]
+      if (version == want || index(version, want ".") == 1) {
+        plus = index(value, "+")
+        print version " " substr(value, 1, plus - 1) " " substr(value, plus + 1)
+      }
+    }
+  ' "$TDIR/jvm-index-$runId.json" | sort -V | tail -1
+  rm -f "$TDIR/jvm-index-$runId.xml" "$TDIR/jvm-index-$runId.jar" "$TDIR/jvm-index-$runId.json"
+}
+
+# Several JBangLite runs can share $JBANG_DIR, so a download either takes a
+# directory lock or writes to a file of its own and renames it into place.
+# mkdir is atomic, so exactly one run gets the lock; the others wait, and stop
+# waiting as soon as $2 shows the work they waited for is done.
+#   0 - the lock is ours, do the work and release_lock afterwards
+#   1 - gave up (another run is stuck, or its lock directory is stale)
+#   2 - no need to do anything, another run already did the work
+acquire_lock() {  # $1 = lock directory, $2 = path that exists once the work is done
+  local waited=0
+  # the lock sits next to what it protects, which may not exist yet
+  mkdir -p "$(dirname "$1")"
+  while ! mkdir "$1" 2> /dev/null; do
+    if [ -e "$2" ]; then return 2; fi
+    if [ "$waited" -ge "$lockTimeout" ]; then
+      echo "Gave up after $lockTimeout seconds waiting for another JBangLite to finish." 1>&2
+      echo "If no other JBangLite is running, remove $1 and try again." 1>&2
+      return 1
+    fi
+    if [ "$waited" -eq 0 ]; then
+      echo "Waiting for another JBangLite to finish downloading..." 1>&2
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  return 0
+}
+
+release_lock() {
+  rm -rf "$1"
+}
+
+# Downloads the newest Temurin $bootstrapJavaVersion into $TDIR/jdks/bootstrap,
+# one run at a time; the others wait and then use what it installed.
+install_bootstrap_jdk() {
+  mkdir -p "$TDIR/jdks"
+  acquire_lock "$jdkDir.lock" "$jdkDir/bin/java"
+  case $? in
+    2) return 0 ;;
+    1) exit 1 ;;
+  esac
+  install_bootstrap_jdk_locked
+  retval=$?
+  release_lock "$jdkDir.lock"
+  if [ $retval -ne 0 ]; then exit $retval; fi
+}
+
+install_bootstrap_jdk_locked() {
+  local plat entry version type url archive shafile unpackdir expected actual
+  # another run may have installed it while we waited for the lock
+  if [ -x "$jdkDir/bin/java" ]; then return 0; fi
+  plat=$(jvm_index_platform) || return 1
+  entry=$(jvm_index_entry "$plat")
+  if [ -z "$entry" ]; then
+    echo "No Temurin $bootstrapJavaVersion found in the JVM index for $plat" 1>&2
+    return 1
+  fi
+  version=$(echo "$entry" | cut -d' ' -f1)
+  type=$(echo "$entry" | cut -d' ' -f2)
+  url=$(echo "$entry" | cut -d' ' -f3)
+  if [ "$type" = "tgz" ]; then type=tar.gz; fi
+  # this run's own files, so nothing is shared with a JBangLite running at the
+  # same time
+  archive="$TDIR/bootstrap-jdk-$runId.$type"
+  shafile="$TDIR/bootstrap-jdk-$runId.sha256"
+  unpackdir="$TDIR/jdks/bootstrap-$runId.tmp"
+
+  echo "No Java found. Downloading Temurin $version. Be patient, this can take several minutes..." 1>&2
+  download "$url" "$archive"
+  if [ $retval -ne 0 ]; then
+    rm -f "$archive"
+    echo "Error downloading JDK from $url" 1>&2
+    return 1
+  fi
+
+  download "$url.sha256.txt" "$shafile"
+  if [ $retval -eq 0 ]; then
+    expected=$(cut -d' ' -f1 < "$shafile")
+    actual=$(sha256_of "$archive")
+    if [ -n "$actual" ] && [ "$expected" != "$actual" ]; then
+      rm -f "$archive" "$shafile"
+      echo "SHA-256 mismatch for $url: expected $expected but got $actual" 1>&2
+      return 1
+    fi
+  else
+    echo "No published SHA-256 found for $url, skipping verification" 1>&2
+  fi
+
+  echo "Installing Temurin $version..." 1>&2
+  rm -rf "$unpackdir"
+  mkdir -p "$unpackdir"
+  unpack "$archive" "$unpackdir"
+  if [ $retval -ne 0 ] || [ ! -x "$unpackdir/bin/java" ]; then
+    rm -rf "$unpackdir"
+    rm -f "$archive" "$shafile"
+    echo "Error installing JDK" 1>&2
+    return 1
+  fi
+  rm -rf "$jdkDir"
+  mv "$unpackdir" "$jdkDir"
+  rm -f "$archive" "$shafile"
+  return 0
+}
+
+# --- Main --------------------------------------------------------------------
+
+case "$(uname -s)" in
+  Linux*)
+    os=linux
+    if [ -f /etc/alpine-release ]; then
+      os=alpine-linux
+    fi
+    ;;
+  Darwin*)
+    os=mac;;
+  CYGWIN*|MINGW*|MSYS*)
+    os=windows;;
+  AIX)
+    os=aix;;
+  *)
+    os=
+esac
+
+case "$(uname -m)" in
+  i?86)
+    arch=x32;;
+  x86_64|amd64)
+    arch=x64;;
+  aarch64|arm64)
+    arch=aarch64;;
+  armv7l)
+    arch=arm;;
+  ppc64le)
+    arch=ppc64le;;
+  s390x)
+    arch=s390x;;
+  riscv64)
+    arch=riscv64
+    ;;
+  *)
+    # AIX gives a machine ID for `uname -m` but it only supports ppc64
+    if [ "$os" = "aix" ]; then
+      arch=ppc64
+    else
+      arch=
+    fi
+    ;;
+esac
+
+install_bootstrap_jdk
+echo "$jdkDir"
