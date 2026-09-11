@@ -11,9 +11,7 @@
 #                          the PATH, or a Temurin downloaded from the Maven Central
 #                          JVM index (needs curl or wget, unzip, and tar+gzip
 #                          on Linux and macOS)
-#   3. Launch            - run the jar, and when it exits with 255 exec the
-#                          command line it printed (that is how a script is
-#                          started)
+#   3. Launch            - exec the jar; it builds the script and runs it
 #
 # Several JBangLite runs can be started at the same time (a build matrix, a
 # multi-module build). They share ~/.jbang, so the JDK download takes a
@@ -349,26 +347,12 @@ setup_java_exec() {
 
 # --- 3. Launch ---------------------------------------------------------------
 
-# Runs the jar. Its output is captured because exit code 255 means "run this
-# command line for me": that is how a script is started, with only the user's
-# process left once JBangLite is done.
+# The jar does the rest: it builds the script and runs it as a child process
+# with our stdin, stdout and stderr, and exits with the script's status. So
+# this is a plain exec: nothing is captured, nothing is interpreted.
 execute_jbanglite() {
-  export JBANG_RUNTIME_SHELL=bash
-  JBANG_STDIN_NOTTY=$([ -t 0 ] && echo "false" || echo "true")
-  export JBANG_STDIN_NOTTY
-  export JBANG_LAUNCH_CMD=$0
-
-  output=$(CLICOLOR_FORCE=1 "${JAVA_EXEC}" ${JBANG_JAVA_OPTIONS} -jar "${jarPath}" "$@")
-  err=$?
-
-  if [ $err -eq 255 ]; then
-    eval "exec $output"
-  elif [ -n "$output" ]; then
-    echo "$output"
-    exit $err
-  else
-    exit $err
-  fi
+  # shellcheck disable=SC2086 # JBANG_JAVA_OPTIONS is a list of options
+  exec "${JAVA_EXEC}" ${JBANG_JAVA_OPTIONS} -jar "${jarPath}" "$@"
 }
 
 abs_jbang_dir=$(script_dir)

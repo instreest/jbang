@@ -8,13 +8,10 @@ rem a JDK. It is self-contained: no PowerShell, only what Windows ships with
 rem (curl, tar, certutil). What it does, in order:
 rem
 rem   1. Settings          - constants and the JBANG_* / JBANGLITE_* overrides
-rem   2. Launch environment- what jbanglite.jar expects to find in the environment
-rem   3. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, javac on
+rem   2. Which Java to use - currentjdk, the bootstrap JDK, JAVA_HOME, javac on
 rem                          the PATH, or a Temurin downloaded from the Maven
 rem                          Central JVM index
-rem   4. Launch            - run the jar, and when it exits with 255 run the
-rem                          command line it printed (that is how a script is
-rem                          started)
+rem   3. Launch            - run the jar; it builds the script and runs it
 rem
 rem Several JBangLite runs can be started at the same time (a build matrix, a
 rem multi-module build). They share ~/.jbang, so the JDK download takes a
@@ -32,7 +29,6 @@ rem ===========================================================================
 setlocal
 
 call :init_settings
-call :init_launch_environment
 
 rem The jar is committed next to this script; there is nothing to download
 set "jar_path=%script_dir%jbanglite.jar"
@@ -41,32 +37,14 @@ if not exist "%jar_path%" (
   exit /b 1
 )
 
-rem --- 3. Which Java to use -------------------------------------------------
+rem --- 2. Which Java to use -------------------------------------------------
 call :find_java || exit /b 1
 set launch_cmd="%java_exec%" %JBANG_JAVA_OPTIONS% -jar "%jar_path%"
 
-rem --- 4. Launch ------------------------------------------------------------
-:launch
-rem The output is captured because exit code 255 means "run this command line
-rem for me" (see :run_printed_command). The name is this run's own, so several
-rem JBangLite runs at once cannot read each other's output.
-:pick_output_file
-set "output_file=%TEMP%\jbanglite-%run_id%-%RANDOM%.tmp"
-if exist "%output_file%" goto :pick_output_file
-%launch_cmd% %* > "%output_file%"
-set "exit_code=%ERRORLEVEL%"
-if %exit_code% EQU 255 goto :run_printed_command
-
-type "%output_file%"
-del /f /q "%output_file%"
-exit /b %exit_code%
-
-:run_printed_command
-rem the command to run is the first line of the output
-set "printed_command="
-for /f "usebackq delims=" %%L in ("%output_file%") do if not defined printed_command set "printed_command=%%L"
-del /f /q "%output_file%"
-%printed_command%
+rem --- 3. Launch ------------------------------------------------------------
+rem The jar does the rest: it builds the script and runs it as a child process
+rem with our stdin, stdout and stderr, and exits with the script's status.
+%launch_cmd% %*
 exit /b %ERRORLEVEL%
 
 rem ===========================================================================
@@ -119,20 +97,7 @@ if not "%JBANGLITE_LOCK_TIMEOUT%"=="" set "lock_timeout=%JBANGLITE_LOCK_TIMEOUT%
 exit /b 0
 
 rem ===========================================================================
-rem 2. Launch environment
-rem ===========================================================================
-
-rem What jbanglite.jar reads to know how it was started: which shell is waiting
-rem for the command line it prints, how to spell a re-invocation of itself, and
-rem whether stdin is a terminal.
-:init_launch_environment
-set "JBANG_RUNTIME_SHELL=cmd"
-set "JBANG_LAUNCH_CMD=%~f0"
-2>nul >nul timeout /t 0 && (set "JBANG_STDIN_NOTTY=false") || (set "JBANG_STDIN_NOTTY=true")
-exit /b 0
-
-rem ===========================================================================
-rem 3. Which Java to use
+rem 2. Which Java to use
 rem ===========================================================================
 
 rem Sets java_exec (and JAVA_HOME) to the Java to run the jar with, downloading
