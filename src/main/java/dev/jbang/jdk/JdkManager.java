@@ -180,7 +180,7 @@ public final class JdkManager {
 		return index.find(version)
 			.orElseThrow(() -> new ExitException(ExitException.EXIT_INVALID_INPUT,
 					"No JDK matching version '" + version + "' is available for "
-							+ JdkIndex.platform() + " from " + JdkIndex.distros()));
+							+ JdkIndex.platform() + " from " + Settings.JDK_DISTRO));
 	}
 
 	private Jdk download(JdkIndex.Entry entry, Path jdkDir) {

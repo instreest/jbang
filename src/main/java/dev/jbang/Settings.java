@@ -26,8 +26,6 @@ public final class Settings {
 	public static final String ENV_JBANG_CACHE_DIR = "JBANG_CACHE_DIR";
 	public static final String ENV_JBANG_REPO = "JBANG_REPO";
 	public static final String ENV_DEFAULT_JAVA_VERSION = "JBANG_DEFAULT_JAVA_VERSION";
-	public static final String ENV_JDK_DISTRO = "JBANG_JDK_DISTRO";
-	public static final String ENV_JDK_INDEX = "JBANG_JDK_INDEX";
 	public static final String ENV_DOWNLOAD_RETRY = "JBANG_DOWNLOAD_RETRY";
 	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JBANG_DOWNLOAD_RETRY_DELAY";
 
@@ -35,12 +33,12 @@ public final class Settings {
 	public static final String DEPENDENCY_CACHE_FILE = "dependency_cache.txt";
 
 	public static final int DEFAULT_JAVA_VERSION = 17;
-	public static final String DEFAULT_JDK_DISTRO = "temurin";
+	/** The one JDK distribution JBangLite installs: Eclipse Temurin. */
+	public static final String JDK_DISTRO = "temurin";
 	public static final int DEFAULT_DOWNLOAD_RETRY = 5;
-	public static final int DEFAULT_ALPINE_JAVA_VERSION = 16;
 
 	public enum CacheClass {
-		urls, jars, jdks, stdin
+		urls, jars, jdks
 	}
 
 	private Settings() {
@@ -83,7 +81,7 @@ public final class Settings {
 				Util.warnMsg("Ignoring invalid " + ENV_DEFAULT_JAVA_VERSION + ": " + v);
 			}
 		}
-		return Util.getOS() == Util.OS.alpine_linux ? DEFAULT_ALPINE_JAVA_VERSION : DEFAULT_JAVA_VERSION;
+		return DEFAULT_JAVA_VERSION;
 	}
 
 	/** Number of extra download attempts, see also the launcher scripts. */

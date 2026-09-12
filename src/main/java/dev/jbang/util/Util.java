@@ -41,8 +41,6 @@ import dev.jbang.ExitException;
  * remote resources and downloads, which JBangLite does not support.
  */
 public final class Util {
-	public static final String ENV_RUNTIME_SHELL = "JBANG_RUNTIME_SHELL";
-
 	public static final Pattern patternFQCN = Pattern.compile(
 			"^([a-z][a-z0-9]*\\.)*[a-zA-Z][a-zA-Z0-9_]*$");
 
@@ -214,12 +212,12 @@ public final class Util {
 		return getOS() == OS.mac;
 	}
 
+	/**
+	 * Upstream reads JBANG_RUNTIME_SHELL here; JBangLite never launches through
+	 * a shell, so only the OS matters (CommandBuffer quotes for it).
+	 */
 	public static Shell getShell() {
-		try {
-			return Shell.valueOf(System.getenv(ENV_RUNTIME_SHELL));
-		} catch (IllegalArgumentException | NullPointerException ex) {
-			return isWindows() ? Shell.powershell : Shell.bash;
-		}
+		return isWindows() ? Shell.powershell : Shell.bash;
 	}
 
 	public static Path getCwd() {

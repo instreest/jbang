@@ -12,7 +12,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
@@ -23,14 +22,12 @@ import dev.jbang.ExitException;
 import dev.jbang.Settings;
 import dev.jbang.dependencies.ArtifactInfo;
 import dev.jbang.dependencies.DependencyResolver;
-import dev.jbang.dependencies.DependencyUtil;
 import dev.jbang.dependencies.MavenRepo;
 import dev.jbang.jdk.Jdk;
 import dev.jbang.jdk.JdkManager;
 import dev.jbang.source.parser.Directives;
 import dev.jbang.source.parser.KeyValue;
 import dev.jbang.util.JavaUtil;
-import dev.jbang.util.ModuleUtil;
 import dev.jbang.util.OsDetector;
 import dev.jbang.util.PropertiesValueResolver;
 import dev.jbang.util.Util;
@@ -41,9 +38,10 @@ import dev.jbang.util.Util;
  * file and of every file it pulls in with <code>//SOURCES</code>.
  *
  * The directives are parsed by {@link Directives}, which is mirrored from
- * JBang, and are applied here with the same rules JBang uses: description, GAV,
- * main class and module name come from the main file only, everything else
- * accumulates over all files.
+ * JBang, and are applied here with the same rules JBang uses: the main class
+ * comes from the main file only, everything else accumulates over all files.
+ * Directives JBangLite has no use for (//MODULE, //CDS, //JAVAAGENT, //GAV,
+ * //DESCRIPTION, //DOCS, //DEPS on a .java file) are parsed and ignored.
  *
  * The build output goes to
  * <code>$JBANG_CACHE_DIR/jars/&lt;file&gt;.&lt;hash&gt;/&lt;base&gt;.jar</code>,
@@ -51,8 +49,6 @@ import dev.jbang.util.Util;
  * in any of them triggers a rebuild.
  */
 public class Project {
-	public static final String ATTR_PREMAIN_CLASS = "Premain-Class";
-	public static final String ATTR_AGENT_CLASS = "Agent-Class";
 	public static final String ATTR_ADD_EXPORTS = "Add-Exports";
 	public static final String ATTR_ADD_OPENS = "Add-Opens";
 	public static final String ATTR_ENABLE_NATIVE_ACCESS = "Enable-Native-Access";
@@ -96,21 +92,13 @@ public class Project {
 	private final List<String> compileOptions = new ArrayList<>();
 	private final List<String> runtimeOptions = new ArrayList<>();
 	private final Map<String, String> manifestAttributes = new LinkedHashMap<>();
-	private final List<Project> subProjects = new ArrayList<>();
-	private final List<KeyValue> docs = new ArrayList<>();
 	private final Map<String, String> properties;
 	private final Properties contextProperties;
 
 	private String javaVersion;
 	private String mainClass;
-	private String moduleName;
-	private String gav;
-	private String description;
-	private boolean agent;
-	private boolean enableCDS;
 	private boolean enablePreview;
 
-	private final Path mainBaseDir;
 	private JdkManager jdkManager;
 
 	// cached values
@@ -118,51 +106,18 @@ public class Project {
 	private List<ArtifactInfo> classPath;
 	private Jdk jdk;
 
-	public Project(Path mainSource, Map<String, String> properties, List<String> extraDeps,
-			List<String> extraRepos, List<String> extraCompileOptions, List<String> extraRuntimeOptions,
-			String forcedJavaVersion, String forcedMainClass, String forcedModuleName) {
-		this(mainSource, null, properties, extraDeps, extraRepos, extraCompileOptions, extraRuntimeOptions,
-				forcedJavaVersion, forcedMainClass, forcedModuleName);
-	}
-
 	/**
-	 * As above, with the directory that relative <code>//SOURCES</code> and
-	 * <code>//FILES</code> of the main source are resolved against; null means
-	 * the main source's own directory. Used when the main source was read from
-	 * stdin and lives in the cache, but was written from the working directory.
+	 * Reads the script and everything its directives pull in. The properties
+	 * are the -Dkey=value ones, used for <code>${...}</code> substitution in the
+	 * directives and passed on to the script.
 	 */
-	public Project(Path mainSource, Path mainBaseDir, Map<String, String> properties, List<String> extraDeps,
-			List<String> extraRepos, List<String> extraCompileOptions, List<String> extraRuntimeOptions,
-			String forcedJavaVersion, String forcedMainClass, String forcedModuleName) {
-		this(mainSource, mainBaseDir, properties, new LinkedHashSet<>());
-		dependencies.addAll(extraDeps);
-		extraRepos.forEach(r -> addRepository(DependencyUtil.toMavenRepo(replaceProperties(r))));
-		compileOptions.addAll(extraCompileOptions);
-		runtimeOptions.addAll(extraRuntimeOptions);
-		if (forcedJavaVersion != null) {
-			JavaUtil.checkRequestedVersion(forcedJavaVersion);
-			javaVersion = forcedJavaVersion;
-		}
-		if (forcedMainClass != null) {
-			mainClass = forcedMainClass;
-		}
-		if (forcedModuleName != null) {
-			moduleName = forcedModuleName;
-		}
-	}
-
-	private Project(Path mainSource, Path mainBaseDir, Map<String, String> properties, Set<Path> beingBuilt) {
+	public Project(Path mainSource, Map<String, String> properties) {
 		this.mainSource = mainSource.toAbsolutePath().normalize();
-		this.mainBaseDir = mainBaseDir != null ? mainBaseDir.toAbsolutePath().normalize() : null;
 		this.properties = properties;
 		this.contextProperties = new Properties(System.getProperties());
 		OsDetector.detect(contextProperties);
 		contextProperties.putAll(properties);
-		if (!beingBuilt.add(this.mainSource)) {
-			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-					"Self-referencing project dependency found for: '" + this.mainSource + "'");
-		}
-		addSource(this.mainSource, true, beingBuilt);
+		addSource(this.mainSource, true);
 	}
 
 	private String replaceProperties(String item) {
@@ -177,7 +132,7 @@ public class Project {
 	 * Reads a source file and applies its directives, then does the same for
 	 * every file it names with //SOURCES.
 	 */
-	private void addSource(Path source, boolean main, Set<Path> beingBuilt) {
+	private void addSource(Path source, boolean main) {
 		if (!sources.add(source)) {
 			return;
 		}
@@ -186,20 +141,11 @@ public class Project {
 					"Source file could not be found or read: " + source);
 		}
 		Directives directives = new Directives.Extended(Util.readString(source), propertyReplacer());
-		Path baseDir = main && mainBaseDir != null ? mainBaseDir : source.getParent();
+		Path baseDir = source.getParent();
 
 		if (main) {
-			description = directives.description();
-			gav = directives.gav();
-			if (mainClass == null) {
-				mainClass = directives.mainMethod();
-			}
-			if (moduleName == null) {
-				moduleName = directives.module();
-			}
-			agent = directives.isAgent();
-			enableCDS = directives.enableCDS();
-			enablePreview = enablePreview || directives.enablePreview();
+			mainClass = directives.mainMethod();
+			enablePreview = directives.enablePreview();
 			// as JBang does for Java sources, so that debugging and named
 			// parameters keep working
 			compileOptions.add("-g");
@@ -210,9 +156,7 @@ public class Project {
 		addRepositories(directives.repositories());
 		compileOptions.addAll(directives.compileOptions());
 		runtimeOptions.addAll(directives.runtimeOptions());
-		docs.addAll(directives.collectDocs());
 		directives.manifestOptions().forEach(this::putManifestAttribute);
-		directives.agentOptions().forEach(this::putManifestAttribute);
 		resources.addAll(toFileRefs(directives.files(), baseDir));
 
 		String version = directives.javaVersion();
@@ -221,18 +165,13 @@ public class Project {
 			javaVersion = version;
 		}
 
-		for (String srcDep : directives.sourceDependencies()) {
-			Path dep = baseDir.resolve(replaceProperties(srcDep)).toAbsolutePath().normalize();
-			subProjects.add(new Project(dep, null, properties, beingBuilt));
-		}
-
 		for (String pattern : directives.sources()) {
 			List<String> files = Util.explode(null, baseDir, pattern);
 			if (files.isEmpty()) {
 				Util.warnMsg("//SOURCES " + pattern + " (in " + source.getFileName() + ") matched no files");
 			}
 			for (String f : files) {
-				addSource(baseDir.resolve(f).toAbsolutePath().normalize(), false, beingBuilt);
+				addSource(baseDir.resolve(f).toAbsolutePath().normalize(), false);
 			}
 		}
 	}
@@ -313,22 +252,6 @@ public class Project {
 		return manifestAttributes;
 	}
 
-	public void setAgentMainClass(String value) {
-		manifestAttributes.put(ATTR_AGENT_CLASS, value);
-	}
-
-	public void setPreMainClass(String value) {
-		manifestAttributes.put(ATTR_PREMAIN_CLASS, value);
-	}
-
-	public List<Project> getSubProjects() {
-		return Collections.unmodifiableList(subProjects);
-	}
-
-	public List<KeyValue> getDocs() {
-		return Collections.unmodifiableList(docs);
-	}
-
 	public Map<String, String> getProperties() {
 		return properties;
 	}
@@ -346,32 +269,8 @@ public class Project {
 		this.mainClass = mainClass;
 	}
 
-	public Optional<String> getModuleName() {
-		return Optional.ofNullable(moduleName);
-	}
-
-	public Optional<String> getGav() {
-		return Optional.ofNullable(gav);
-	}
-
-	public Optional<String> getDescription() {
-		return Optional.ofNullable(description);
-	}
-
-	public boolean isAgent() {
-		return agent;
-	}
-
-	public boolean enableCDS() {
-		return enableCDS;
-	}
-
 	public boolean enablePreview() {
 		return enablePreview;
-	}
-
-	public void setEnablePreview(boolean enablePreview) {
-		this.enablePreview = enablePreview;
 	}
 
 	public void setJdkManager(JdkManager jdkManager) {
@@ -383,27 +282,18 @@ public class Project {
 			if (jdkManager == null) {
 				jdkManager = new JdkManager();
 			}
-			String requested = javaVersion;
-			if (requested == null && moduleName != null) {
-				// modules need at least Java 9
-				requested = "9+";
-			}
-			jdk = jdkManager.getOrInstallJdk(requested);
+			jdk = jdkManager.getOrInstallJdk(javaVersion);
 		}
 		return jdk;
 	}
 
-	/** The dependencies of this project and of all its sub-projects. */
+	/** The resolved dependencies, jars on disk. */
 	public List<ArtifactInfo> resolveClassPath() {
 		if (classPath == null) {
-			DependencyResolver resolver = new DependencyResolver()
+			classPath = new DependencyResolver()
 				.addRepositories(repositories)
-				.addDependencies(getDependencies());
-			for (Project sub : subProjects) {
-				resolver.addRepositories(sub.getRepositories()).addDependencies(sub.getDependencies());
-				resolver.addClassPath(sub.getJarFile().toAbsolutePath().toString());
-			}
-			classPath = resolver.resolve();
+				.addDependencies(getDependencies())
+				.resolve();
 		}
 		return classPath;
 	}
@@ -416,16 +306,11 @@ public class Project {
 			.collect(Collectors.joining(Settings.CP_SEPARATOR));
 	}
 
-	public String getModuleNameOrDefault() {
-		return ModuleUtil.getModuleName(this);
-	}
-
 	public String getStableId() {
 		if (stableId == null) {
 			Stream<String> srcs = sources.stream().map(Util::readString);
 			Stream<String> ress = resources.stream().map(r -> safeRead(r.getSource()));
-			Stream<String> subs = subProjects.stream().map(Project::getStableId);
-			stableId = Util.getStableID(Stream.concat(Stream.concat(srcs, ress), subs));
+			stableId = Util.getStableID(Stream.concat(srcs, ress));
 		}
 		return stableId;
 	}
@@ -447,16 +332,8 @@ public class Project {
 		return getBuildDir().resolve(Util.getBaseName(mainSource.getFileName().toString()) + ".jar");
 	}
 
-	public Path getJsaFile() {
-		return getBuildDir().resolve(Util.getBaseName(mainSource.getFileName().toString()) + ".jsa");
-	}
-
 	public Path getCompileDir() {
 		return getBuildDir().resolve("classes");
-	}
-
-	public Path getGeneratedSourcesDir() {
-		return getBuildDir().resolve("generated");
 	}
 
 	@Override

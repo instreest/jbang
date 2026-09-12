@@ -3,7 +3,6 @@ package dev.jbang.source;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -20,20 +19,17 @@ import java.util.stream.Stream;
 
 import dev.jbang.ExitException;
 import dev.jbang.dependencies.ArtifactInfo;
-import dev.jbang.dependencies.MavenCoordinate;
 import dev.jbang.jdk.Jdk;
 import dev.jbang.util.CommandBuffer;
 import dev.jbang.util.JavaUtil;
 import dev.jbang.util.MainClassFinder;
-import dev.jbang.util.ModuleUtil;
 import dev.jbang.util.Util;
 
 /**
  * Compiles a {@link Project} with the JDK's <code>javac</code> and packages the
  * result into a jar, applying the directives that affect the build:
- * <code>//COMPILE_OPTIONS</code>, <code>//FILES</code>, <code>//MODULE</code>,
- * <code>//MANIFEST</code>, <code>//JAVAAGENT</code>, <code>//MAIN</code>,
- * <code>//PREVIEW</code>, <code>//GAV</code> and <code>//DESCRIPTION</code>.
+ * <code>//COMPILE_OPTIONS</code>, <code>//FILES</code>, <code>//MANIFEST</code>,
+ * <code>//MAIN</code> and <code>//PREVIEW</code>.
  *
  * An existing jar is reused when the sources and resources are unchanged (the
  * build directory name contains a hash of them), the dependencies are still
@@ -48,11 +44,8 @@ public class AppBuilder {
 		this.project = project;
 	}
 
-	/** Builds the project (and its //DEPS sub-projects) and returns the jar. */
+	/** Builds the project and returns the jar. */
 	public Path build() throws IOException {
-		for (Project sub : project.getSubProjects()) {
-			new AppBuilder(sub).build();
-		}
 		Path jar = project.getJarFile();
 		if (!Util.isFresh() && isUpToDate(jar)) {
 			Util.verboseMsg("No build required. Reusing jar from " + jar);
@@ -70,9 +63,7 @@ public class AppBuilder {
 		try {
 			compile(compileDir);
 			copyResources(compileDir);
-			generatePom(compileDir);
 			findMain(compileDir);
-			findAgentMethods(compileDir);
 			createJar(compileDir, jar);
 		} finally {
 			if (!keepClasses()) {
@@ -137,17 +128,12 @@ public class AppBuilder {
 		cmd.addAll(project.getCompileOptions());
 		String cp = project.getDependencyClassPath();
 		if (!cp.isEmpty()) {
-			cmd.addAll(Arrays.asList(project.getModuleName().isPresent() ? "-p" : "-classpath", cp));
+			cmd.addAll(Arrays.asList("-classpath", cp));
 		}
 		cmd.addAll(Arrays.asList("-d", compileDir.toAbsolutePath().toString()));
 		cmd.addAll(project.getSources().stream().map(Path::toString).collect(Collectors.toList()));
-		if (project.getModuleName().isPresent() && !hasModuleInfo()) {
-			Path infoFile = ModuleUtil.generateModuleInfo(project);
-			cmd.add(infoFile.toString());
-		}
 
-		Util.infoMsg("Building " + (project.isAgent() ? "javaagent" : "jar") + " for "
-				+ project.getMainSource().getFileName() + "...");
+		Util.infoMsg("Building jar for " + project.getMainSource().getFileName() + "...");
 		Util.verboseMsg("Compile: " + String.join(" ", cmd));
 		ProcessBuilder pb = CommandBuffer.of(cmd).applyWindowsMaxProcessLimit().asProcessBuilder().inheritIO();
 		Process process = pb.start();
@@ -162,59 +148,9 @@ public class AppBuilder {
 		}
 	}
 
-	private boolean hasModuleInfo() {
-		return project.getSources().stream().anyMatch(s -> s.getFileName().toString().equals("module-info.java"));
-	}
-
 	/** Copies the //FILES entries next to the classes so they end up in the jar. */
 	private void copyResources(Path compileDir) {
 		project.getResources().forEach(r -> r.copy(compileDir));
-	}
-
-	/**
-	 * Writes the pom.xml that JBang also puts in the jar, so that other tools
-	 * can see the //GAV, //DESCRIPTION and resolved dependencies.
-	 */
-	private void generatePom(Path compileDir) throws IOException {
-		MavenCoordinate gav = project.getGav()
-			.map(g -> MavenCoordinate.fromString(g).withVersion())
-			.orElseGet(() -> new MavenCoordinate(MavenCoordinate.DUMMY_GROUP,
-					Util.getBaseName(project.getMainSource().getFileName().toString()),
-					MavenCoordinate.DEFAULT_VERSION));
-		StringBuilder sb = new StringBuilder();
-		sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-		sb.append("<project xsi:schemaLocation=\"http://maven.apache.org/POM/4.0.0 "
-				+ "http://maven.apache.org/xsd/maven-4.0.0.xsd\"\n");
-		sb.append("\t\t xmlns=\"http://maven.apache.org/POM/4.0.0\"\n");
-		sb.append("\t\t xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n");
-		sb.append("\t<modelVersion>4.0.0</modelVersion>\n");
-		sb.append("\t<groupId>").append(xml(gav.getGroupId())).append("</groupId>\n");
-		sb.append("\t<artifactId>").append(xml(gav.getArtifactId())).append("</artifactId>\n");
-		sb.append("\t<version>").append(xml(gav.getVersion())).append("</version>\n");
-		sb.append("\t<description>").append(xml(project.getDescription().orElse(""))).append("</description>\n");
-		sb.append("\t<dependencies>\n");
-		for (ArtifactInfo a : project.resolveClassPath()) {
-			if (a.getCoordinate() == null) {
-				continue;
-			}
-			sb.append("\t\t<dependency>\n");
-			sb.append("\t\t\t<groupId>").append(xml(a.getCoordinate().getGroupId())).append("</groupId>\n");
-			sb.append("\t\t\t<artifactId>").append(xml(a.getCoordinate().getArtifactId())).append("</artifactId>\n");
-			sb.append("\t\t\t<version>").append(xml(a.getCoordinate().getVersion())).append("</version>\n");
-			sb.append("\t\t\t<scope>compile</scope>\n");
-			sb.append("\t\t</dependency>\n");
-		}
-		sb.append("\t</dependencies>\n");
-		sb.append("</project>\n");
-
-		Path pomPath = compileDir.resolve("META-INF/maven/" + gav.getGroupId().replace(".", "/") + "/pom.xml");
-		Files.createDirectories(pomPath.getParent());
-		Util.writeString(pomPath, sb.toString());
-	}
-
-	private static String xml(String value) {
-		return value == null ? ""
-				: value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
 	}
 
 	private void findMain(Path compileDir) throws IOException {
@@ -235,24 +171,9 @@ public class AppBuilder {
 		if (!mains.isEmpty()) {
 			project.setMainClass(mains.get(0));
 			if (mains.size() > 1) {
-				Util.warnMsg("Could not locate unique main() method. Use --main to specify explicit main method. "
+				Util.warnMsg("Could not locate unique main() method. Use //MAIN to name the main class. "
 						+ "Falling back to use first found: " + String.join(",", mains));
 			}
-		}
-	}
-
-	/** For //JAVAAGENT scripts, records the premain and agentmain classes. */
-	private void findAgentMethods(Path compileDir) throws IOException {
-		if (!project.isAgent()) {
-			return;
-		}
-		List<String> premains = MainClassFinder.findAgentClasses(compileDir, "premain");
-		if (!premains.isEmpty()) {
-			project.setPreMainClass(premains.get(0));
-		}
-		List<String> agentmains = MainClassFinder.findAgentClasses(compileDir, "agentmain");
-		if (!agentmains.isEmpty()) {
-			project.setAgentMainClass(agentmains.get(0));
 		}
 	}
 

@@ -25,8 +25,6 @@ public final class MainClassFinder {
 
 	public static final String DESC_MAIN = "([Ljava/lang/String;)V";
 	public static final String DESC_NO_ARGS = "()V";
-	public static final String DESC_AGENT = "(Ljava/lang/String;)V";
-	public static final String DESC_AGENT_INSTRUMENTATION = "(Ljava/lang/String;Ljava/lang/instrument/Instrumentation;)V";
 
 	/** A method as found in a class file. */
 	public static final class Method {
@@ -58,10 +56,6 @@ public final class MainClassFinder {
 	 * Fully qualified names of the classes under dir declaring the given agent
 	 * method, with or without the Instrumentation parameter.
 	 */
-	public static List<String> findAgentClasses(Path dir, String method) throws IOException {
-		Set<String> wanted = new LinkedHashSet<>(Arrays.asList(DESC_AGENT, DESC_AGENT_INSTRUMENTATION));
-		return scan(dir, m -> method.equals(m.name) && wanted.contains(m.descriptor));
-	}
 
 	private static List<String> scan(Path dir, java.util.function.Predicate<Method> wanted) throws IOException {
 		try (Stream<Path> paths = Files.walk(dir)) {

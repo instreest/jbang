@@ -49,50 +49,34 @@ class TestRun extends AbstractScriptTest {
 	}
 
 	@Test
-	void scriptCanComeFromStdin() throws Exception {
-		Path source = tempDir.resolve("source.txt");
-		Files.write(source, SCRIPT.replace("stdin: ", "").getBytes(StandardCharsets.UTF_8));
-
-		RunResult result = runProcess(jbanglite("-", "x"), env(), source);
-
-		assertEquals(7, result.exitCode, result.stderr);
-		assertTrue(result.stdout.contains("null"), result.stdout); // stdin was consumed by jbanglite
-		assertTrue(result.stdout.contains("args: x"), result.stdout);
-	}
-
-	@Test
-	void scriptCanComeFromAProcessSubstitution() throws Exception {
-		requireBash();
-		Path script = tempDir.resolve("Echo.java");
-		Files.write(script, SCRIPT.getBytes(StandardCharsets.UTF_8));
-		Path stdin = tempDir.resolve("stdin.txt");
-		Files.write(stdin, "piped\n".getBytes(StandardCharsets.UTF_8));
-
-		String cmd = String.join(" ", jbanglite("<(cat " + script + ")", "y"));
-		RunResult result = runProcess(Arrays.asList("bash", "-c", cmd), env(), stdin);
-
-		assertEquals(7, result.exitCode, result.stderr);
-		assertTrue(result.stdout.contains("stdin: piped"), result.stdout);
-		assertTrue(result.stdout.contains("args: y"), result.stdout);
-	}
-
-	@Test
 	void optionsAreAcceptedAnywhereBeforeTheScriptAndNeverAfterIt() throws Exception {
 		Path script = tempDir.resolve("Echo.java");
 		Files.write(script, SCRIPT.getBytes(StandardCharsets.UTF_8));
 		Path stdin = tempDir.resolve("stdin.txt");
 		Files.write(stdin, "in\n".getBytes(StandardCharsets.UTF_8));
 
-		// options in any order before the script; -ea and --verbose after the
+		// options in any order before the script; -R and --verbose after the
 		// script are the script's, and so is everything after --
 		List<String> cmd = new ArrayList<>(java());
-		cmd.addAll(Arrays.asList("--offline", "--quiet", "-Dk=v", "--", script.toString(), "-ea", "--verbose",
-				"--", "-"));
+		cmd.addAll(Arrays.asList("--offline", "--quiet", "-Dk=v", "-R-Xmx64m", "--", script.toString(), "-Rx",
+				"--verbose", "--", "-"));
 		RunResult result = runProcess(cmd, env(), stdin);
 
 		assertEquals(7, result.exitCode, result.stderr);
-		assertTrue(result.stdout.contains("args: -ea,--verbose,--,-"), result.stdout);
+		assertTrue(result.stdout.contains("args: -Rx,--verbose,--,-"), result.stdout);
 		assertFalse(result.stderr.contains("[jbanglite]"), result.stderr); // --quiet took effect
+	}
+
+	@Test
+	void anOptionThatOverridesTheScriptsDirectivesIsRefused() throws Exception {
+		Path script = tempDir.resolve("Echo.java");
+		Files.write(script, SCRIPT.getBytes(StandardCharsets.UTF_8));
+
+		// what a script needs is declared in the script, not on the command line
+		RunResult result = runProcess(jbanglite("--java", "17", script.toString()), env());
+
+		assertEquals(2, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("Unknown option: --java"), result.stderr);
 	}
 
 	@Test
