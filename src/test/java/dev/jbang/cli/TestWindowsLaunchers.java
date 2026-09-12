@@ -51,9 +51,21 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void cmdIgnoresOldJavaHome() throws Exception {
-		// With JAVA_HOME rejected and no JDK of its own, jbanglite.cmd tries to
-		// download one; an unreachable JVM index makes that fail quickly.
+		// JAVA_HOME is rejected and the javac on the PATH is taken instead, so
+		// the jar still runs: the exit code is the one the jar was asked for.
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("older than Java 11"), result.stderr);
+	}
+
+	@Test
+	void cmdDownloadsAJdkWhenNothingOnTheMachineWillDo() throws Exception {
+		// Nothing usable anywhere: JAVA_HOME too old and a PATH without javac,
+		// so jbanglite.cmd has jbanglite-bootstrap-jdk.cmd download one. An
+		// unreachable JVM index makes that fail quickly instead of fetching
+		// 200 MB.
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"),
+				"PATH", System.getenv("SystemRoot") + "\\System32",
 				"JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
 		assertTrue(result.exitCode != 0, result.stderr);
 		assertTrue(result.stderr.contains("older than Java 11"), result.stderr);
@@ -71,9 +83,10 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	@Test
 	void cmdIgnoresJavaHomeOfUnknownVersion() throws Exception {
-		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk(null),
-				"JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
-		assertTrue(result.exitCode != 0, result.stderr);
+		// A JAVA_HOME without a 'release' file: its version cannot be read, so
+		// it is ignored and the javac on the PATH runs the jar.
+		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk(null), "exit", "3");
+		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("could not be determined"), result.stderr);
 	}
 
@@ -112,7 +125,8 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		env.put("JBANG_NO_VERSION_CHECK", "true");
 		int i = 0;
 		// leading "NAME", "value" pairs are environment variables
-		while (args.length - i > 2 && (args[i].startsWith("JBANG_") || args[i].equals("JAVA_HOME"))) {
+		while (args.length - i > 2
+				&& (args[i].startsWith("JBANG_") || args[i].equals("JAVA_HOME") || args[i].equals("PATH"))) {
 			env.put(args[i], args[i + 1]);
 			i += 2;
 		}
