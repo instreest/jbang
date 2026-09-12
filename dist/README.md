@@ -59,6 +59,6 @@ JBANGLITE_REF=v0.2.0 bash jbanglitew/install.sh   # a tag or commit instead
 ```
 
 `jbanglitew\install.cmd` does the same on Windows. Commit the changed files
-afterwards. `jbanglitew/jbanglite version` prints which version is installed,
+afterwards. `jbanglitew/jbanglite --version` prints which version is installed,
 as `0.1.0-lite+<commit>`, the commit of the JBangLite repository the jar was
 built from.

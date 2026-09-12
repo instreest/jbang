@@ -40,7 +40,7 @@ the only form JBangLite is distributed in. Whenever a change should reach the
 projects that installed JBangLite: commit the change, run `misc/update-dist.sh`
 (it rebuilds the jar and copies the launchers and `LICENSE` there) and commit
 `dist/` as well. The jar is stamped with the commit it was built from, which is
-what `jbanglite version` prints (`0.1.0-lite+<commit>`), so a project can tell
+what `jbanglite --version` prints (`0.1.0-lite+<commit>`), so a project can tell
 which revision it has; `misc/update-dist.sh --check` rebuilds the jar with the
 same stamp and reports whether `dist/` is up to date. The jar is committed, so
 every refresh adds about 4 MB to the history of this repository and of every
@@ -77,16 +77,18 @@ applied the same way:
 
 | Kept | Removed |
 | --- | --- |
-| `run` (the default), `info classpath`, `version` | `build`, `info jar`, `jdk default/install/list`, `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `info tools/docs` |
+| running a script (`jbanglite [options] <script.java> [args]`), `--version`, `--help` | every subcommand: `run` as a word, `build`, `info`, `jdk`, `edit`, `init`, `alias`, `template`, `catalog`, `trust`, `cache`, `completion`, `wrapper`, `app`, `export`, `config`, `deps`, `version` |
 | `.java` sources | `.jsh`, `.kt`, `.groovy`, `.md`, jars and GAVs as scripts |
 | local files | remote scripts, gists, catalogs and aliases |
 | plain jars | native images and the launchers' native mode, integrations (Quarkus and friends) |
 | `dist/`, committed into a project by `install.sh`/`install.cmd` | releases, `tar`/`zip` distributions, installers, packages, the update mechanism, CI |
 
-Global options are `--verbose`, `--quiet`, `--fresh` and `--offline`. Script
-options are `--java`, `--main`, `--module`, `--deps`, `--repos`,
-`-C<compiler option>`, `-R<jvm option>`, `-Dkey=value`, `--enable-preview`,
-`-ea`, `-esa` and `--cds`.
+There are no subcommands: JBangLite does one thing, which is to run the
+script, and `--help` and `--version` are the only options that do something
+else. The other options are `--verbose`, `--quiet`, `--fresh`, `--offline`,
+`--java`, `--main`, `--module`, `--deps`, `--repos`, `-C<compiler option>`,
+`-R<jvm option>`, `-Dkey=value`, `--enable-preview`, `-ea`, `-esa` and
+`--cds`.
 
 The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<name>.jar`,
 `~/.jbang/cache/jdks/<version>`), except that JBangLite never writes
@@ -94,7 +96,7 @@ The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<
 cache and nothing else, so one run never changes which JDK the next one picks.
 
 Options are read getopt style: every option is accepted anywhere before the
-script, whether before or after the command word, `--` ends them, and
+script, `--` ends them, and
 everything after the script is the script's. The script is a `.java` file, or
 `-` to read it from stdin; a path that is readable but not a regular file, such
 as a process substitution or a pipe, is read the same way. Relative `//SOURCES`
@@ -108,7 +110,7 @@ jbanglite <(sed 's/World/JBang/' Hello.java)
 ### How a script is started
 
 Full JBang prints the `java` command line to stdout and exits with status 255,
-and its launcher script `eval`s that line. JBangLite does not: `run` starts the
+and its launcher script `eval`s that line. JBangLite does not: it starts the
 `java` process itself, as a child that shares stdin, stdout and stderr, and
 exits with the script's exit status. So there is no protocol between the jar
 and the launchers, no exit code with a special meaning, nothing is captured
@@ -122,7 +124,7 @@ tunes that JVM.
 
 The launchers (`jbanglite` for POSIX shells, `jbanglite.cmd` for Windows) do
 one thing: find a JDK and `exec` `jbanglite.jar` with it. They never call a
-subcommand of the jar and set nothing in its environment. Which JVM runs
+command of the jar and set nothing in its environment. Which JVM runs
 `jbanglite.jar` hardly matters, so the search is deliberately short:
 
 1. `$JBANG_CACHE_DIR/jdks/bootstrap`

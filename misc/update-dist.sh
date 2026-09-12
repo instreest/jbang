@@ -10,7 +10,7 @@
 # installed JBangLite.
 #
 # The jar is stamped with the last commit that touched its inputs
-# (`jbanglite version` prints it, e.g. 0.1.0-lite+a1b2c3d), so a project can
+# (`jbanglite --version` prints it, e.g. 0.1.0-lite+a1b2c3d), so a project can
 # tell which revision it has. The build is reproducible, so with --check the
 # jar is rebuilt with the same stamp and compared byte for byte, and nothing is
 # written: the exit status says whether dist/ is up to date.

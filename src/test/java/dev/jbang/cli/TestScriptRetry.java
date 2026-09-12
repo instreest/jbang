@@ -125,7 +125,7 @@ class TestScriptRetry extends AbstractScriptTest {
 		void downloadSucceedsAfterTransientFailures() throws Exception {
 			stubFlakyEndpoint(METADATA_PATH, 3, METADATA);
 
-			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "version"), bashEnv(5));
+			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "--version"), bashEnv(5));
 
 			// the metadata was read after the retries; the index itself is not
 			// served, which is where the launcher gives up
@@ -138,7 +138,7 @@ class TestScriptRetry extends AbstractScriptTest {
 		void downloadFailsWhenRetriesExhausted() throws Exception {
 			stubFlakyEndpoint(METADATA_PATH, 10, METADATA);
 
-			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "version"), bashEnv(2));
+			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "--version"), bashEnv(2));
 
 			assertNotEquals(0, result.exitCode, "script should have failed");
 			assertTrue(result.stderr.contains("Download 2/3 failed"), result.stderr);
@@ -149,7 +149,7 @@ class TestScriptRetry extends AbstractScriptTest {
 		void downloadFailsWithZeroRetries() throws Exception {
 			stubFlakyEndpoint(METADATA_PATH, 1, METADATA);
 
-			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "version"), bashEnv(0));
+			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "--version"), bashEnv(0));
 
 			assertNotEquals(0, result.exitCode, "script should have failed");
 			assertFalse(result.stderr.contains("Retry in"), result.stderr);

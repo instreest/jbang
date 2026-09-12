@@ -83,10 +83,10 @@ class TestRun extends AbstractScriptTest {
 		Path stdin = tempDir.resolve("stdin.txt");
 		Files.write(stdin, "in\n".getBytes(StandardCharsets.UTF_8));
 
-		// --offline before and --quiet after the command word; -ea and --verbose
-		// after the script are the script's, and so is everything after --
+		// options in any order before the script; -ea and --verbose after the
+		// script are the script's, and so is everything after --
 		List<String> cmd = new ArrayList<>(java());
-		cmd.addAll(Arrays.asList("--offline", "run", "--quiet", "-Dk=v", "--", script.toString(), "-ea", "--verbose",
+		cmd.addAll(Arrays.asList("--offline", "--quiet", "-Dk=v", "--", script.toString(), "-ea", "--verbose",
 				"--", "-"));
 		RunResult result = runProcess(cmd, env(), stdin);
 

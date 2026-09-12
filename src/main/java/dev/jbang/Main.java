@@ -29,26 +29,24 @@ import dev.jbang.util.Util;
  * JBangLite command line.
  *
  * <pre>
- * jbanglite [options] [run] [options] &lt;script.java&gt; [args...]
- * jbanglite [options] info classpath [options] &lt;script.java&gt;
- * jbanglite version
+ * jbanglite [options] &lt;script.java&gt; [args...]
  * </pre>
  *
- * Options are read, getopt style, up to the script: every option is accepted
- * anywhere before it, whether before or after the command word, <code>--</code>
+ * There are no subcommands: JBangLite does one thing, which is to build the
+ * script and run it, and <code>--help</code> and <code>--version</code> are
+ * the only options that do something else. Options are read, getopt style, up
+ * to the script: every option is accepted anywhere before it, <code>--</code>
  * ends them, and everything after the script belongs to the script. The script
  * is a <code>.java</code> file, or <code>-</code> for stdin; a path that is
  * not a regular file but can be read (a process substitution, a pipe) is read
  * like stdin.
  *
- * <code>run</code> builds the script and then runs it as a child process with
- * this process's stdin, stdout and stderr; the script's exit status becomes
- * this process's exit status. The launcher scripts (jbanglite, jbanglite.cmd)
- * only find a JDK and exec the jar; there is no protocol between them and the
- * jar.
+ * The script runs as a child process with this process's stdin, stdout and
+ * stderr; its exit status becomes this process's exit status. The launcher
+ * scripts (jbanglite, jbanglite.cmd) only find a JDK and exec the jar; there is
+ * no protocol between them and the jar.
  */
 public final class Main {
-	private static final List<String> COMMANDS = Arrays.asList("run", "info", "version", "help");
 
 	/** Always the real stdout, even if something redirected System.out. */
 	private static final PrintStream realOut = new PrintStream(new FileOutputStream(FileDescriptor.out), true);
@@ -78,64 +76,22 @@ public final class Main {
 	}
 
 	static int run(List<String> args) throws IOException {
-		// options in front of the command word; ScriptOptions takes the same
-		// ones after it, so their position does not matter
-		while (!args.isEmpty() && args.get(0).startsWith("-") && !args.get(0).equals("-")) {
-			String opt = args.remove(0);
-			switch (opt) {
-			case "--verbose":
-				Util.setVerbose(true);
-				break;
-			case "--quiet":
-				Util.setQuiet(true);
-				break;
-			case "--fresh":
-				Util.setFresh(true);
-				break;
-			case "-o":
-			case "--offline":
-				Util.setOffline(true);
-				break;
-			case "-h":
-			case "--help":
-				printHelp();
-				return ExitException.EXIT_OK;
-			case "-V":
-			case "--version":
-				realOut.println(Util.getJBangVersion());
-				return ExitException.EXIT_OK;
-			default:
-				// not a global option: it belongs to the implicit "run" command
-				args.add(0, opt);
-				return runScript(args);
-			}
-		}
+		ScriptOptions opts = ScriptOptions.parse(args);
 		Util.verboseMsg("jbanglite version " + Util.getJBangVersion());
-		if (args.isEmpty()) {
-			printHelp();
-			return ExitException.EXIT_INVALID_INPUT;
-		}
-		String cmd = args.get(0);
-		if (!COMMANDS.contains(cmd)) {
-			// implicit run
-			return runScript(args);
-		}
-		args.remove(0);
-		switch (cmd) {
-		case "run":
-			return runScript(args);
-		case "info":
-			return info(args);
-		case "version":
-			realOut.println(Util.getJBangVersion());
-			return ExitException.EXIT_OK;
-		default:
-			printHelp();
-			return ExitException.EXIT_OK;
-		}
+		Project prj = opts.project();
+		Path jar = new AppBuilder(prj).build();
+		List<String> cmd = new CmdGenerator(prj, jar)
+			.arguments(opts.userArgs)
+			.runtimeOptions(opts.runtimeOptions)
+			.assertions(opts.enableAssertions)
+			.systemAssertions(opts.enableSystemAssertions)
+			.classDataSharing(opts.cds)
+			.generate();
+		Util.verboseMsg("run: " + CommandBuffer.of(cmd).asCommandLine());
+		return execute(cmd);
 	}
 
-	/** Options shared by run, build and info. */
+	/** The options, all of them; there is no command word to split them by. */
 	private static final class ScriptOptions {
 		String javaVersion;
 		String mainClass;
@@ -149,7 +105,6 @@ public final class Main {
 		boolean enableAssertions;
 		boolean enableSystemAssertions;
 		boolean cds;
-		boolean depsOnly;
 		String script;
 		final List<String> userArgs = new ArrayList<>();
 
@@ -209,9 +164,6 @@ public final class Main {
 				case "-R":
 					o.runtimeOptions.add(value != null ? value : next(args, i++, key));
 					break;
-				case "--deps-only":
-					o.depsOnly = true;
-					break;
 				case "--verbose":
 					Util.setVerbose(true);
 					break;
@@ -228,6 +180,10 @@ public final class Main {
 				case "-h":
 				case "--help":
 					printHelp();
+					throw new ExitException(ExitException.EXIT_OK);
+				case "-V":
+				case "--version":
+					realOut.println(Util.getJBangVersion());
 					throw new ExitException(ExitException.EXIT_OK);
 				case "--":
 					// the getopt convention: what follows is never an option
@@ -252,7 +208,12 @@ public final class Main {
 				}
 			}
 			if (o.script == null) {
-				throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Missing required parameter: '<scriptOrFile>'");
+				if (args.isEmpty()) {
+					// no arguments at all: the help says it all
+					printHelp();
+					throw new ExitException(ExitException.EXIT_INVALID_INPUT);
+				}
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Missing required parameter: '<script.java>'");
 			}
 			return o;
 		}
@@ -296,21 +257,6 @@ public final class Main {
 		}
 	}
 
-	private static int runScript(List<String> args) throws IOException {
-		ScriptOptions opts = ScriptOptions.parse(args);
-		Project prj = opts.project();
-		Path jar = new AppBuilder(prj).build();
-		List<String> cmd = new CmdGenerator(prj, jar)
-			.arguments(opts.userArgs)
-			.runtimeOptions(opts.runtimeOptions)
-			.assertions(opts.enableAssertions)
-			.systemAssertions(opts.enableSystemAssertions)
-			.classDataSharing(opts.cds)
-			.generate();
-		Util.verboseMsg("run: " + CommandBuffer.of(cmd).asCommandLine());
-		return execute(cmd);
-	}
-
 	/**
 	 * Runs the command as a child process sharing this process's standard
 	 * streams and returns its exit status. A signal that ends this process
@@ -341,29 +287,6 @@ public final class Main {
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();
 			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Interrupted while waiting for the script");
-		}
-	}
-
-	private static int info(List<String> args) throws IOException {
-		if (args.isEmpty()) {
-			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-					"Missing required subcommand for 'info' (classpath)");
-		}
-		String sub = args.remove(0);
-		ScriptOptions opts = ScriptOptions.parse(args);
-		Project prj = opts.project();
-		switch (sub) {
-		case "classpath": {
-			List<String> cp = new ArrayList<>();
-			if (!opts.depsOnly) {
-				cp.add(prj.getJarFile().toAbsolutePath().toString());
-			}
-			prj.resolveClassPath().forEach(a -> cp.add(a.getFile().toAbsolutePath().toString()));
-			realOut.println(String.join(Settings.CP_SEPARATOR, cp));
-			return ExitException.EXIT_OK;
-		}
-		default:
-			throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Unknown info subcommand: " + sub);
 		}
 	}
 
@@ -420,25 +343,23 @@ public final class Main {
 	private static void printHelp() {
 		realOut.println("jbanglite " + Util.getJBangVersion());
 		realOut.println();
-		realOut.println("Builds and runs single-file Java programs that declare their needs with");
+		realOut.println("Builds and runs a single-file Java program that declares its needs with");
 		realOut.println("//DEPS, //JAVA and //SOURCES comment directives.");
 		realOut.println();
 		realOut.println("Usage:");
-		realOut.println("  jbanglite [<options>] [run] <script.java> [<args>...]");
-		realOut.println("  jbanglite [<options>] info classpath [--deps-only] <script.java>");
-		realOut.println("  jbanglite version");
+		realOut.println("  jbanglite [<options>] <script.java> [<args>...]");
 		realOut.println();
 		realOut.println("Options may appear anywhere before the script, '--' ends them, and");
 		realOut.println("everything after the script is passed to it. The script is a .java");
 		realOut.println("file, or '-' to read it from stdin.");
 		realOut.println();
 		realOut.println("Options:");
-		realOut.println("  --verbose        Print what is being done");
-		realOut.println("  --quiet          Only print errors");
-		realOut.println("  --fresh          Ignore caches and rebuild/re-resolve everything");
-		realOut.println("  -o, --offline    Never access the network");
-		realOut.println();
-		realOut.println("Script options:");
+		realOut.println("  -h, --help           Print this help and exit");
+		realOut.println("  -V, --version        Print the version and exit");
+		realOut.println("  --verbose            Print what is being done");
+		realOut.println("  --quiet              Only print errors");
+		realOut.println("  --fresh              Ignore caches and rebuild/re-resolve everything");
+		realOut.println("  -o, --offline        Never access the network");
 		realOut.println("  -j, --java <v>       Use the given Java version (e.g. 17 or 17+)");
 		realOut.println("  -m, --main <c>       Main class to run");
 		realOut.println("  --module[=<name>]    Run as a module, optionally with the given name");
