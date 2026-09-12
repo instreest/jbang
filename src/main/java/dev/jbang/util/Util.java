@@ -2,6 +2,7 @@ package dev.jbang.util;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -30,6 +31,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import dev.jbang.ExitException;
+import dev.jbang.Settings;
 
 /**
  * Small collection of helpers: messages, OS detection, file globbing, hashing
@@ -98,6 +100,64 @@ public final class Util {
 
 	public static boolean isOffline() {
 		return offline;
+	}
+
+	/**
+	 * Stops the run unless the operator agrees that <code>what</code> may be
+	 * downloaded. The launcher asks about the jar and the JDK, which it can see
+	 * for itself; this is for what only the jar knows it needs, above all a
+	 * script's dependencies. When the launcher has already asked, it passes the
+	 * answer on in {@link Settings#ENV_NETWORK} so one run never asks twice.
+	 *
+	 * @param what what would be fetched, named so the answer is an informed one
+	 * @throws ExitException when the download is refused, or cannot be offered
+	 */
+	public static void confirmNetwork(String what) {
+		String mode = System.getenv(Settings.ENV_NETWORK);
+		mode = (mode == null || mode.isEmpty()) ? "ask" : mode.trim().toLowerCase(Locale.ROOT);
+		if ("allow".equals(mode)) {
+			return;
+		}
+		if ("deny".equals(mode)) {
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
+					"Refusing to download " + what + ": " + Settings.ENV_NETWORK + "=deny");
+		}
+		if (!"ask".equals(mode)) {
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+					Settings.ENV_NETWORK + " is '" + mode + "'; it has to be ask, allow or deny");
+		}
+		String answer = askOnTerminal("JBangLite has to download " + what + ". Go ahead? [y/N]: ");
+		if (answer == null) {
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
+					"JBangLite has to download " + what + ", and there is no terminal to ask on. "
+							+ "Set " + Settings.ENV_NETWORK + "=allow to permit it.");
+		}
+		answer = answer.trim().toLowerCase(Locale.ROOT);
+		if (!answer.equals("y") && !answer.equals("yes")) {
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Stopped. Nothing was downloaded.");
+		}
+	}
+
+	/**
+	 * Puts <code>prompt</code> on stderr and reads one line from the terminal,
+	 * or null when there is no terminal to read from.
+	 *
+	 * The terminal is opened directly rather than read through
+	 * <code>System.in</code>, because stdin belongs to the script that is about
+	 * to run and taking a line from it would lose that line. It is not taken
+	 * from {@link System#console()} either: since Java 22 that is non-null even
+	 * when stdin is a pipe, which would put us back on stdin.
+	 */
+	private static String askOnTerminal(String prompt) {
+		String device = isWindows() ? "CON" : "/dev/tty";
+		try (BufferedReader tty = new BufferedReader(
+				new InputStreamReader(new FileInputStream(device), StandardCharsets.UTF_8))) {
+			System.err.print(prompt);
+			System.err.flush();
+			return tty.readLine();
+		} catch (IOException e) {
+			return null;
+		}
 	}
 
 	public static void setFresh(boolean f) {

@@ -160,6 +160,7 @@ tool needs, not whoever runs it.
 
 | Variable | |
 | --- | --- |
+| `JBANGLITE_NETWORK` | whether anything may be downloaded: `ask` (default), `allow`, `deny` |
 | `JBANGLITE_DIR` | base directory (default `~/.jbanglite`) |
 | `JBANGLITE_CACHE_DIR` | cache directory (default `$JBANGLITE_DIR/cache`) |
 | `JBANGLITE_MAVEN_REPO` | local Maven repository to use instead of `~/.m2/repository` |
@@ -176,6 +177,38 @@ Everything JBangLite writes goes under `JBANGLITE_DIR`; nothing is written into
 the project. Several runs at once are safe: each download is taken by one run
 while the others wait, and every file is renamed into place only once it is
 complete, so a build matrix never trips over a half-written file.
+
+## Downloads ask first
+
+JBangLite fetches three kinds of thing, and none of them without being told it
+may: its own jar, a JDK to run that jar with, and the dependencies a script
+declares. When something has to be fetched it says what, and stops unless the
+answer is yes.
+
+```
+JBangLite has to download:
+  - jbanglite.jar 0.2.0
+  - a JDK to run it with (Temurin 25.0.3); this machine has none
+
+Go ahead? [y/N]:
+```
+
+A run that needs nothing asks nothing, so this is a first-run question and not
+a per-run one. The launcher asks about the jar and the JDK, which it can see for
+itself, and passes the answer on to the jar so one run never asks twice; the jar
+asks about a script's dependencies, which only it knows about. `--update` asks
+before replacing an installation.
+
+Set `JBANGLITE_NETWORK=allow` where there is nobody to ask, which is what CI
+needs, and `deny` to keep a machine off the network. Without a terminal and
+without that variable JBangLite fetches nothing and says so, rather than
+downloading on its own say-so.
+
+```yaml
+- run: jbanglite/jbanglite tools/Report.java
+  env:
+    JBANGLITE_NETWORK: allow
+```
 
 ## Requirements
 

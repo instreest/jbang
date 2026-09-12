@@ -107,6 +107,12 @@ public final class DependencyResolver {
 				return cached;
 			}
 		}
+		// Nothing was cached, so this goes to the repositories. Offline runs never
+		// do, so they are not worth asking about.
+		if (!Util.isOffline()) {
+			Util.confirmNetwork(depIds.size() == 1 ? "the dependency " + depIds.get(0)
+					: depIds.size() + " dependencies (" + String.join(", ", depIds) + ") and whatever they need");
+		}
 		Util.infoMsg("Resolving dependencies...");
 		try (Session resolver = new Session(Util.isOffline(), Util.isFresh(), repos)) {
 			List<ArtifactInfo> artifacts = resolver.doResolve(depIds);

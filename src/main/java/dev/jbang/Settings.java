@@ -26,6 +26,8 @@ public final class Settings {
 	public static final String ENV_CACHE_DIR = "JBANGLITE_CACHE_DIR";
 	public static final String ENV_MAVEN_REPO = "JBANGLITE_MAVEN_REPO";
 	public static final String ENV_DEFAULT_JAVA_VERSION = "JBANGLITE_DEFAULT_JAVA_VERSION";
+	/** ask / allow / deny: whether anything may be downloaded. Empty means ask. */
+	public static final String ENV_NETWORK = "JBANGLITE_NETWORK";
 	public static final String ENV_DOWNLOAD_RETRY = "JBANGLITE_DOWNLOAD_RETRY";
 	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JBANGLITE_DOWNLOAD_RETRY_DELAY";
 

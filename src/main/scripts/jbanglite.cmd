@@ -40,6 +40,20 @@ rem nothing is downloaded. Otherwise the bootstrap script installs the version
 rem jbanglite.properties pins into the cache, shared by every project on this
 rem machine, and prints where it put it; everything else goes to stderr.
 set "jar_path=%script_dir%jbanglite.jar"
+
+rem Nothing is fetched without the operator agreeing to it. What the two
+rem bootstrap scripts would have to fetch is asked about at once, so a first run
+rem asks a single question rather than one per download.
+set "net_items="
+if not exist "%jar_path%" call :add_net_item_jar
+call :find_existing_java 2>nul || call :add_net_item_jdk
+if not defined net_items goto :net_done
+call :confirm_network || exit /b 1
+rem The jar resolves the script's dependencies later in this same run. The
+rem operator has just said yes, so it is told rather than asked again.
+set "JBANGLITE_NETWORK=allow"
+:net_done
+
 if not exist "%jar_path%" (
   for /f "usebackq delims=" %%J in (`"%script_dir%jbanglite-bootstrap-jar.cmd"`) do set "jar_path=%%J"
 )
@@ -128,6 +142,8 @@ if not exist "%script_dir%install.cmd" (
   echo %script_dir%install.cmd not found, so this installation cannot update itself. 1>&2
   exit /b 1
 )
+set "net_items=  - a new JBangLite installation into %script_dir%"
+call :confirm_network || exit /b 1
 if not "%~2"=="" set "JBANGLITE_REF=%~2"
 call "%script_dir%install.cmd" "%script_dir%." || exit /b 1
 if not exist "%script_dir%jbanglite.jar" exit /b 0
@@ -274,3 +290,74 @@ for /f "tokens=1,2 delims=." %%A in ("%java_major%") do (
 )
 exit /b 0
 
+rem --- Asking before going to the network ------------------------------------
+rem
+rem JBangLite downloads three kinds of thing: its own jar, a JDK to run that jar
+rem with, and the dependencies a script declares. This script can see the first
+rem two; the dependencies only the jar knows about, so it asks for those itself,
+rem and the answer given here is passed on so one run never asks twice.
+rem
+rem   JBANGLITE_NETWORK=ask    the default: ask when something has to be fetched
+rem   JBANGLITE_NETWORK=allow  never ask (for CI, where there is nothing to ask on)
+rem   JBANGLITE_NETWORK=deny   never fetch
+
+:add_net_item_jar
+call :property distributionVersion
+set "net_items=%net_items%  - jbanglite.jar %property_value%|"
+exit /b 0
+
+:add_net_item_jdk
+call :property bootstrapJdkVersion
+set "net_items=%net_items%  - a JDK to run it with (Temurin %property_value%); this machine has none|"
+exit /b 0
+
+rem Prints the things in net_items, one per line
+:print_net_items
+setlocal enabledelayedexpansion
+set "rest=%net_items%"
+:print_net_items_loop
+if not defined rest goto :print_net_items_done
+for /f "tokens=1* delims=|" %%A in ("!rest!") do (
+  echo %%A
+  set "rest=%%B"
+)
+goto :print_net_items_loop
+:print_net_items_done
+endlocal
+exit /b 0
+
+rem Asks whether the things in net_items may be downloaded. 0 to go ahead, 1 to stop.
+:confirm_network
+set "net_mode=%JBANGLITE_NETWORK%"
+if not defined net_mode set "net_mode=ask"
+if /i "%net_mode%"=="allow" exit /b 0
+if /i "%net_mode%"=="deny" goto :net_deny
+if /i "%net_mode%"=="ask" goto :net_ask
+echo JBANGLITE_NETWORK is '%JBANGLITE_NETWORK%'; it has to be ask, allow or deny 1>&2
+exit /b 1
+
+:net_deny
+echo JBangLite has to download something, and JBANGLITE_NETWORK=deny forbids it: 1>&2
+call :print_net_items 1>&2
+exit /b 1
+
+:net_ask
+rem timeout fails when stdin is redirected, which is how this tells a terminal
+rem from a pipe. Without one there is nobody to ask.
+2>nul >nul timeout /t 0 || goto :net_no_terminal
+echo.
+echo JBangLite has to download:
+call :print_net_items
+echo.
+set "net_answer=n"
+set /p "net_answer=Go ahead? [y/N]: "
+if /i "%net_answer%"=="y" exit /b 0
+if /i "%net_answer%"=="yes" exit /b 0
+echo Stopped. Nothing was downloaded. 1>&2
+exit /b 1
+
+:net_no_terminal
+echo JBangLite has to download: 1>&2
+call :print_net_items 1>&2
+echo There is no terminal to ask on. Set JBANGLITE_NETWORK=allow to permit it. 1>&2
+exit /b 1

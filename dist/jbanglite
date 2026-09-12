@@ -70,6 +70,61 @@ print_version() {
   fi
 }
 
+# --- Asking before going to the network ------------------------------------
+#
+# JBangLite downloads three kinds of thing: its own jar, a JDK to run that jar
+# with, and the dependencies a script declares. Nothing is fetched without the
+# operator agreeing to it.
+#
+#   JBANGLITE_NETWORK=ask    the default: ask when something has to be fetched
+#   JBANGLITE_NETWORK=allow  never ask (for CI, where there is nothing to ask on)
+#   JBANGLITE_NETWORK=deny   never fetch
+#
+# This script can see two of the three: whether the jar is here and whether a
+# JDK is. The dependencies only the jar knows about, so it asks for those
+# itself; when the answer has already been given here it is passed on in the
+# environment, so one run never asks twice.
+
+# Asks whether the things listed in $1 may be downloaded. 0 to go ahead, 1 to stop.
+confirm_network() {
+  local items=$1 mode answer
+  mode=$(printf '%s' "${JBANGLITE_NETWORK:-ask}" | tr 'A-Z' 'a-z')
+  case "$mode" in
+    allow) return 0 ;;
+    ask) ;;
+    deny)
+      echo "JBangLite has to download something, and JBANGLITE_NETWORK=deny forbids it:" 1>&2
+      printf '%s' "$items" 1>&2
+      return 1 ;;
+    *)
+      echo "JBANGLITE_NETWORK is '$JBANGLITE_NETWORK'; it has to be ask, allow or deny" 1>&2
+      return 1 ;;
+  esac
+  # Read from the terminal rather than from stdin: stdin belongs to the script
+  # that is about to run, and taking a line from it would lose that line.
+  if ! { exec 3<>/dev/tty; } 2>/dev/null; then
+    echo "JBangLite has to download:" 1>&2
+    printf '%s' "$items" 1>&2
+    echo "There is no terminal to ask on. Set JBANGLITE_NETWORK=allow to permit it." 1>&2
+    return 1
+  fi
+  {
+    echo
+    echo "JBangLite has to download:"
+    printf '%s' "$items"
+    echo
+    printf 'Go ahead? [y/N]: '
+  } >&3
+  IFS= read -r answer <&3 || answer=
+  echo >&3
+  exec 3>&-
+  case "$answer" in
+    y|Y|yes|YES|Yes) return 0 ;;
+  esac
+  echo "Stopped. Nothing was downloaded." 1>&2
+  return 1
+}
+
 # Replaces this installation with the one from $1 (a branch, tag or commit of
 # the JBangLite repository; the default is whatever install.sh defaults to) by
 # running the install.sh that sits next to this script. Needs no Java and no
@@ -80,6 +135,8 @@ run_update() {
     echo "$installer not found, so this installation cannot update itself." 1>&2
     exit 1
   fi
+  confirm_network "  - a new JBangLite installation into $abs_jbang_dir
+" || exit 1
   if [ -n "$1" ]; then export JBANGLITE_REF=$1; fi
   bash "$installer" "$abs_jbang_dir" || exit $?
   if [ -f "$abs_jbang_dir/jbanglite.jar" ]; then
@@ -232,6 +289,25 @@ esac
 # execute bit (core.fileMode=false, a zip download) still works, as it does
 # for this script itself.
 jarPath=$abs_jbang_dir/jbanglite.jar
+
+# What the two bootstrap scripts would have to fetch. Both are asked about at
+# once, so a first run asks a single question rather than one per download.
+netItems=
+if [ ! -f "$jarPath" ]; then
+  netItems="$netItems  - jbanglite.jar $(property distributionVersion)
+"
+fi
+if ! find_existing_java 2> /dev/null; then
+  netItems="$netItems  - a JDK to run it with (Temurin $(property bootstrapJdkVersion)); this machine has none
+"
+fi
+if [ -n "$netItems" ]; then
+  confirm_network "$netItems" || exit 1
+  # The jar resolves the script's dependencies later in this same run. The
+  # operator has just said yes, so it is told rather than asked again.
+  export JBANGLITE_NETWORK=allow
+fi
+
 if [ ! -f "$jarPath" ]; then
   jarPath=$(bash "$abs_jbang_dir/jbanglite-bootstrap-jar") || exit 1
 fi

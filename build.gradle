@@ -48,6 +48,10 @@ dependencies {
 
 test {
 	useJUnitPlatform()
+	// Downloads need the operator's consent (JBANGLITE_NETWORK). Tests have no
+	// terminal to give it on, so it is given here; the tests that are about the
+	// consent itself set the variable themselves.
+	environment 'JBANGLITE_NETWORK', 'allow'
 	testLogging {
 		events "failed"
 		exceptionFormat "full"
