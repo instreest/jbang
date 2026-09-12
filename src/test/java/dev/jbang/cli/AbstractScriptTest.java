@@ -178,9 +178,21 @@ abstract class AbstractScriptTest {
 
 	/** Writes a jar whose main class is {@link FakeJBang}. */
 	protected static void createFakeJar(Path jar) throws IOException {
+		createFakeJar(jar, null);
+	}
+
+	/**
+	 * Writes a jar whose main class is {@link FakeJBang}, stamped with the given
+	 * JBang-Version when one is given, as a real jbanglite.jar is. That is the
+	 * attribute the launchers read out of the manifest for --version.
+	 */
+	protected static void createFakeJar(Path jar, String jbangVersion) throws IOException {
 		Manifest manifest = new Manifest();
 		manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
 		manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, FakeJBang.class.getName());
+		if (jbangVersion != null) {
+			manifest.getMainAttributes().putValue("JBang-Version", jbangVersion);
+		}
 		String classResource = FakeJBang.class.getName().replace('.', '/') + ".class";
 		try (InputStream input = FakeJBang.class.getClassLoader().getResourceAsStream(classResource);
 				JarOutputStream output = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
@@ -266,6 +278,21 @@ abstract class AbstractScriptTest {
 		List<String> cmd = new ArrayList<>();
 		cmd.add("bash");
 		cmd.add(launcher.toString());
+		for (String arg : args) {
+			cmd.add(arg);
+		}
+		return cmd;
+	}
+
+	/**
+	 * Builds a command list for running a .cmd script, the way a user would from
+	 * a command prompt.
+	 */
+	protected List<String> cmdCmd(Path script, String... args) {
+		List<String> cmd = new ArrayList<>();
+		cmd.add("cmd.exe");
+		cmd.add("/c");
+		cmd.add(script.toString());
 		for (String arg : args) {
 			cmd.add(arg);
 		}

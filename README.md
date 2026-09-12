@@ -339,9 +339,20 @@ to set the version; `misc/update-dist.sh <version>` does so and writes the
 matching `dist/jbanglite.properties`.
 
 `./gradlew test` runs the test suite: the mirrored `TestDirectives` from JBang
-and functional tests for the launcher scripts and the installer. There
-is no release pipeline or CI configuration in this fork; `misc/update-dist.sh`
-takes the place of a release.
+and functional tests for the launcher scripts and the installer.
+
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs that same command on
+`ubuntu-latest` and `windows-latest` for every push. Windows is why it exists:
+the launcher and the two bootstrap scripts are written twice, once for POSIX
+shells and once for `cmd.exe`, and `TestWindowsLaunchers` and
+`TestWindowsWrapperInstall` are `@EnabledOnOs(WINDOWS)`, so they are skipped in
+silence on any other machine. The Windows tests install from a local server the
+way `install.cmd` installs from GitHub, which serves the scripts with the LF
+line endings git stores, so they also answer whether `cmd.exe` runs the scripts
+as a project actually receives them.
+
+There is no release pipeline: publishing is `misc/update-dist.sh <version>` and
+a release with the jar attached.
 
 ## License
 

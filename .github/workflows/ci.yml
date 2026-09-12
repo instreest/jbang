@@ -1,0 +1,62 @@
+# Builds and tests JBangLite on Linux and Windows.
+#
+# Windows is the reason this workflow exists. The launcher and the two
+# bootstrap scripts are written twice, once for POSIX shells and once for
+# cmd.exe, and the cmd half cannot be run anywhere else: TestWindowsLaunchers
+# and TestWindowsWrapperInstall are annotated @EnabledOnOs(WINDOWS) and are
+# silently skipped on every other machine. This is where they actually run.
+#
+# `./gradlew build` runs the whole suite, so no test is named here and a new
+# one is picked up by being written.
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A new push replaces the run of the previous one on the same branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # one platform failing must not hide the result of the other
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      # A JDK to build with. JBangLite targets Java 11 (--release 11), so this
+      # only has to be new enough for Gradle.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # bash on both platforms (Git for Windows ships it), so the command is
+      # the same one a contributor runs
+      - name: Build and test
+        shell: bash
+        run: ./gradlew build --stacktrace
+
+      - name: Upload the test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.os }}
+          path: |
+            build/reports/tests/test
+            build/test-results/test
+          retention-days: 7
