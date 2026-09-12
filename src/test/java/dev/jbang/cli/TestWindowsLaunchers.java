@@ -66,7 +66,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		// 200 MB.
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"),
 				"PATH", System.getenv("SystemRoot") + "\\System32",
-				"JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANG_DOWNLOAD_RETRY", "0", "exit", "3");
+				"JBANGLITE_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANGLITE_DOWNLOAD_RETRY", "0", "exit", "3");
 		assertTrue(result.exitCode != 0, result.stderr);
 		assertTrue(result.stderr.contains("older than Java 11"), result.stderr);
 		assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
@@ -94,7 +94,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 
 	/**
-	 * Makes the running JDK available as JBANG_CACHE_DIR\jdks\bootstrap (as if
+	 * Makes the running JDK available as JBANGLITE_CACHE_DIR\jdks\bootstrap (as if
 	 * the launcher had downloaded it) so the launchers have a JDK to fall back
 	 * to when JAVA_HOME is rejected, without downloading one.
 	 */
@@ -120,9 +120,8 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		// the defaults come first, so that a test naming one of them overrides it
 		// rather than being overridden by it
 		env.put("JAVA_HOME", System.getProperty("java.home"));
-		env.put("JBANG_DIR", tempDir.resolve("jbang-home").toString());
-		env.put("JBANG_CACHE_DIR", tempDir.resolve("cache").toString());
-		env.put("JBANG_NO_VERSION_CHECK", "true");
+		env.put("JBANGLITE_DIR", tempDir.resolve("jbang-home").toString());
+		env.put("JBANGLITE_CACHE_DIR", tempDir.resolve("cache").toString());
 		int i = 0;
 		// leading "NAME", "value" pairs are environment variables
 		while (args.length - i > 2

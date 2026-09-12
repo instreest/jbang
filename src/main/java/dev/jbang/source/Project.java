@@ -44,7 +44,7 @@ import dev.jbang.util.Util;
  * //DESCRIPTION, //DOCS, //DEPS on a .java file) are parsed and ignored.
  *
  * The build output goes to
- * <code>$JBANG_CACHE_DIR/jars/&lt;file&gt;.&lt;hash&gt;/&lt;base&gt;.jar</code>,
+ * <code>$JBANGLITE_CACHE_DIR/jars/&lt;file&gt;.&lt;hash&gt;/&lt;base&gt;.jar</code>,
  * where the hash covers the contents of all sources and resources, so a change
  * in any of them triggers a rebuild.
  */

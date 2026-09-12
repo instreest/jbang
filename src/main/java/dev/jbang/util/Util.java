@@ -213,7 +213,7 @@ public final class Util {
 	}
 
 	/**
-	 * Upstream reads JBANG_RUNTIME_SHELL here; JBangLite never launches through
+	 * Upstream reads JBANGLITE_RUNTIME_SHELL here; JBangLite never launches through
 	 * a shell, so only the OS matters (CommandBuffer quotes for it).
 	 */
 	public static Shell getShell() {
@@ -546,7 +546,7 @@ public final class Util {
 		return null;
 	}
 
-	public static String getJBangVersion() {
+	public static String getVersion() {
 		String v = Util.class.getPackage() != null ? Util.class.getPackage().getImplementationVersion() : null;
 		if (v == null) {
 			try {
@@ -554,7 +554,7 @@ public final class Util {
 				if (res != null) {
 					try (InputStream is = res.openStream()) {
 						java.util.jar.Manifest mf = new java.util.jar.Manifest(is);
-						v = mf.getMainAttributes().getValue("JBang-Version");
+						v = mf.getMainAttributes().getValue("JBangLite-Version");
 					}
 				}
 			} catch (IOException e) {

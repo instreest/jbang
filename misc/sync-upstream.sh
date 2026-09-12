@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-UPSTREAM_URL=${JBANG_UPSTREAM_URL:-https://github.com/jbangdev/jbang}
+UPSTREAM_URL=${JBANGLITE_UPSTREAM_URL:-https://github.com/jbangdev/jbang}
 REF=${1:-upstream/main}
 MIRROR=misc/upstream-mirror.txt
 SHIMS=misc/upstream-shims.txt

@@ -12,8 +12,8 @@ import dev.jbang.util.Util;
  * (and tools such as java-call-hierarchy-exporter) keep working:
  *
  * <pre>
- * $JBANG_DIR (~/.jbang)
- *   cache/            ($JBANG_CACHE_DIR)
+ * $JBANGLITE_DIR (~/.jbanglite)
+ *   cache/            ($JBANGLITE_CACHE_DIR)
  *     jars/           compiled scripts
  *     jdks/           JDKs installed by JBang
  *     stdin/          scripts read from stdin, by content hash
@@ -22,12 +22,12 @@ import dev.jbang.util.Util;
  * </pre>
  */
 public final class Settings {
-	public static final String ENV_JBANG_DIR = "JBANG_DIR";
-	public static final String ENV_JBANG_CACHE_DIR = "JBANG_CACHE_DIR";
-	public static final String ENV_JBANG_REPO = "JBANG_REPO";
-	public static final String ENV_DEFAULT_JAVA_VERSION = "JBANG_DEFAULT_JAVA_VERSION";
-	public static final String ENV_DOWNLOAD_RETRY = "JBANG_DOWNLOAD_RETRY";
-	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JBANG_DOWNLOAD_RETRY_DELAY";
+	public static final String ENV_DIR = "JBANGLITE_DIR";
+	public static final String ENV_CACHE_DIR = "JBANGLITE_CACHE_DIR";
+	public static final String ENV_MAVEN_REPO = "JBANGLITE_MAVEN_REPO";
+	public static final String ENV_DEFAULT_JAVA_VERSION = "JBANGLITE_DEFAULT_JAVA_VERSION";
+	public static final String ENV_DOWNLOAD_RETRY = "JBANGLITE_DOWNLOAD_RETRY";
+	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JBANGLITE_DOWNLOAD_RETRY_DELAY";
 
 	public static final String CP_SEPARATOR = File.pathSeparator;
 	public static final String DEPENDENCY_CACHE_FILE = "dependency_cache.txt";
@@ -45,19 +45,19 @@ public final class Settings {
 	}
 
 	public static Path getConfigDir() {
-		String jd = System.getenv(ENV_JBANG_DIR);
-		Path dir = jd != null ? Paths.get(jd) : Paths.get(System.getProperty("user.home")).resolve(".jbang");
+		String jd = System.getenv(ENV_DIR);
+		Path dir = jd != null ? Paths.get(jd) : Paths.get(System.getProperty("user.home")).resolve(".jbanglite");
 		return mkdirs(dir);
 	}
 
 	public static Path getCacheDir() {
-		String v = System.getenv(ENV_JBANG_CACHE_DIR);
+		String v = System.getenv(ENV_CACHE_DIR);
 		Path dir = v != null ? Paths.get(v) : getConfigDir().resolve("cache");
 		return mkdirs(dir);
 	}
 
 	public static Path getCacheDir(CacheClass cclass) {
-		String v = System.getenv(ENV_JBANG_CACHE_DIR + "_" + cclass.name().toUpperCase());
+		String v = System.getenv(ENV_CACHE_DIR + "_" + cclass.name().toUpperCase());
 		Path dir = v != null ? Paths.get(v) : getCacheDir().resolve(cclass.name());
 		return mkdirs(dir);
 	}
@@ -66,9 +66,9 @@ public final class Settings {
 		return getCacheDir().resolve(DEPENDENCY_CACHE_FILE);
 	}
 
-	/** Optional override of the local Maven repository (JBANG_REPO). */
+	/** Optional override of the local Maven repository (JBANGLITE_MAVEN_REPO). */
 	public static Path getLocalMavenRepoOverride() {
-		String repo = System.getenv(ENV_JBANG_REPO);
+		String repo = System.getenv(ENV_MAVEN_REPO);
 		return repo != null ? Paths.get(repo) : null;
 	}
 

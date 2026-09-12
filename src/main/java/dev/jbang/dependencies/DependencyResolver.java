@@ -47,7 +47,7 @@ import dev.jbang.util.Util;
  * Resolves Maven coordinates (including their transitive dependencies) to
  * local files using Maven Resolver through MIMA. Only Maven Central is used
  * as remote repository (plus mirrors/proxies from ~/.m2/settings.xml); the
- * local repository is the standard ~/.m2/repository unless JBANG_REPO is set.
+ * local repository is the standard ~/.m2/repository unless JBANGLITE_MAVEN_REPO is set.
  */
 public final class DependencyResolver {
 	private final Set<MavenRepo> repositories = new LinkedHashSet<>();
@@ -145,7 +145,7 @@ public final class DependencyResolver {
 	private Session(boolean offline, boolean updateCache, List<MavenRepo> repositories) {
 		Map<String, String> userProperties = new HashMap<>();
 		// avoid being blocked by servers that reject the default "Java" user agent
-		userProperties.put("aether.connector.userAgent", "JBangLite/" + Util.getJBangVersion());
+		userProperties.put("aether.connector.userAgent", "JBangLite/" + Util.getVersion());
 
 		ContextOverrides.Builder overrides = ContextOverrides.create()
 			.userProperties(userProperties)

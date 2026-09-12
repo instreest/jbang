@@ -2,8 +2,8 @@
 rem ===========================================================================
 rem Installs jbanglite.jar, the JBangLite a project asked for: the version, URL
 rem and SHA-256 in the jbanglite.properties next to this script, downloaded
-rem into %JBANG_CACHE_DIR%\jbanglite\<version>
-rem (%userprofile%\.jbang\cache\jbanglite\<version>). It prints the jar's path
+rem into %JBANGLITE_CACHE_DIR%\jbanglite\<version>
+rem (%userprofile%\.jbanglite\cache\jbanglite\<version>). It prints the jar's path
 rem on stdout and says nothing else there; progress and errors go to stderr.
 rem When the jar is already installed it only prints.
 rem
@@ -17,14 +17,14 @@ rem
 rem   jbanglite-bootstrap-jar.cmd        install if needed, print the jar path
 rem
 rem Environment:
-rem   JBANG_DIR, JBANG_CACHE_DIR       where JBangLite keeps things (~\.jbang)
+rem   JBANGLITE_DIR, JBANGLITE_CACHE_DIR       where JBangLite keeps things (~\.jbanglite)
 rem   JBANGLITE_DIST_URL               where to fetch the jar from, overriding
 rem                                    distributionUrl (a corporate mirror)
-rem   JBANG_DOWNLOAD_RETRY, JBANG_DOWNLOAD_RETRY_DELAY
+rem   JBANGLITE_DOWNLOAD_RETRY, JBANGLITE_DOWNLOAD_RETRY_DELAY
 rem   JBANGLITE_LOCK_TIMEOUT           seconds to wait for another run's download
 rem
 rem Several JBangLite runs can be started at the same time (a build matrix, a
-rem multi-module build). They share ~\.jbang, so the download takes a directory
+rem multi-module build). They share ~\.jbanglite, so the download takes a directory
 rem lock (mkdir is atomic: :acquire_lock / :release_lock) and the jar is
 rem written to a file of this run's own that is renamed into place.
 rem
@@ -54,16 +54,15 @@ rem ===========================================================================
 rem How often a failed download is retried, and how long to wait in between
 rem (0 means an exponential backoff of 1, 2, 4, ... seconds)
 set "download_retry=5"
-if not "%JBANG_DOWNLOAD_RETRY%"=="" set "download_retry=%JBANG_DOWNLOAD_RETRY%"
+if not "%JBANGLITE_DOWNLOAD_RETRY%"=="" set "download_retry=%JBANGLITE_DOWNLOAD_RETRY%"
 set "download_retry_delay=0"
-if not "%JBANG_DOWNLOAD_RETRY_DELAY%"=="" set "download_retry_delay=%JBANG_DOWNLOAD_RETRY_DELAY%"
+if not "%JBANGLITE_DOWNLOAD_RETRY_DELAY%"=="" set "download_retry_delay=%JBANGLITE_DOWNLOAD_RETRY_DELAY%"
 
-rem The directories JBangLite keeps its JDKs, jars and caches in. The names are
-rem the ones JBang uses, so an existing ~\.jbang is picked up as it is.
-set "jbang_dir=%userprofile%\.jbang"
-if not "%JBANG_DIR%"=="" set "jbang_dir=%JBANG_DIR%"
-set "cache_dir=%jbang_dir%\cache"
-if not "%JBANG_CACHE_DIR%"=="" set "cache_dir=%JBANG_CACHE_DIR%"
+rem The directories JBangLite keeps its JDKs, jars and caches in.
+set "jbanglite_dir=%userprofile%\.jbanglite"
+if not "%JBANGLITE_DIR%"=="" set "jbanglite_dir=%JBANGLITE_DIR%"
+set "cache_dir=%jbanglite_dir%\cache"
+if not "%JBANGLITE_CACHE_DIR%"=="" set "cache_dir=%JBANGLITE_CACHE_DIR%"
 
 rem %~dp0 in a subroutine is the label, not this file, so remember where we are
 set "script_dir=%~dp0"
@@ -229,7 +228,7 @@ if %download_retry_delay% GTR 0 (
 )
 set /a attempts_total=%download_retry%+1
 call echo Download %attempt%/%attempts_total% failed. Retry in %%wait_seconds%% second(s)... 1>&2
-if %attempt% EQU 1 echo (Set JBANG_DOWNLOAD_RETRY=0 to disable retries^) 1>&2
+if %attempt% EQU 1 echo (Set JBANGLITE_DOWNLOAD_RETRY=0 to disable retries^) 1>&2
 call :sleep %%wait_seconds%%
 goto :download_attempt
 

@@ -47,7 +47,7 @@ if not exist "%jar_path%" exit /b 1
 
 rem --- 3. Which Java to use -------------------------------------------------
 call :find_java || exit /b 1
-set launch_cmd="%java_exec%" %JBANG_JAVA_OPTIONS% -jar "%jar_path%"
+set launch_cmd="%java_exec%" %JBANGLITE_JAVA_OPTIONS% -jar "%jar_path%"
 
 rem --- 4. Launch ------------------------------------------------------------
 rem The jar does the rest: it builds the script and runs it as a child process
@@ -165,12 +165,11 @@ rem The oldest Java that can run jbanglite.jar; anything newer is fine, and the
 rem JDK a script asks for with //JAVA is chosen by jbanglite.jar itself
 set "min_java_version=11"
 
-rem The directories JBangLite keeps its JDKs, jars and caches in. The names are
-rem the ones JBang uses, so an existing ~\.jbang is picked up as it is.
-set "jbang_dir=%userprofile%\.jbang"
-if not "%JBANG_DIR%"=="" set "jbang_dir=%JBANG_DIR%"
-set "cache_dir=%jbang_dir%\cache"
-if not "%JBANG_CACHE_DIR%"=="" set "cache_dir=%JBANG_CACHE_DIR%"
+rem The directories JBangLite keeps its JDKs, jars and caches in.
+set "jbanglite_dir=%userprofile%\.jbanglite"
+if not "%JBANGLITE_DIR%"=="" set "jbanglite_dir=%JBANGLITE_DIR%"
+set "cache_dir=%jbanglite_dir%\cache"
+if not "%JBANGLITE_CACHE_DIR%"=="" set "cache_dir=%JBANGLITE_CACHE_DIR%"
 
 rem %~dp0 in a subroutine is the label, not this file, so remember where we are
 set "script_dir=%~dp0"

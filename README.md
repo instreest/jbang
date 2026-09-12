@@ -41,7 +41,7 @@ distributionSha256Sum=db78...
 ```
 
 On the first run `jbanglite-bootstrap-jar` downloads that jar into
-`$JBANG_CACHE_DIR/jbanglite/<version>`, verifies the checksum and keeps it
+`$JBANGLITE_CACHE_DIR/jbanglite/<version>`, verifies the checksum and keeps it
 there. The cache is per machine, so several projects pinning the same version
 share one download, and moving to a new version changes three lines rather
 than a 2 MB binary. This is what the Gradle and Maven wrappers do, and for the
@@ -78,7 +78,7 @@ was decided. Nothing is downloaded:
 $ jbanglite/jbanglite --version
 jbanglite 0.3.0
   pinned 0.3.0 by /home/me/tool/jbanglite/jbanglite.properties
-  jar 0.3.0 at /home/me/.jbang/cache/jbanglite/0.3.0/jbanglite.jar
+  jar 0.3.0 at /home/me/.jbanglite/cache/jbanglite/0.3.0/jbanglite.jar
 ```
 
 A vendored jar overrides the pin, so it is the one named on the first line:
@@ -161,9 +161,9 @@ else. The other options are `--verbose`, `--quiet`, `--fresh`, `--offline`,
 `-R<jvm option>`, `-Dkey=value`, `--enable-preview`, `-ea`, `-esa` and
 `--cds`.
 
-The cache layout is the same as full JBang (`~/.jbang/cache/jars/<file>.<hash>/<name>.jar`,
-`~/.jbang/cache/jdks/<version>`), except that JBangLite never writes
-`~/.jbang/currentjdk`: running a script installs the JDK it asks for into the
+The cache layout is the same as full JBang (`~/.jbanglite/cache/jars/<file>.<hash>/<name>.jar`,
+`~/.jbanglite/cache/jdks/<version>`), except that JBangLite never writes
+`~/.jbanglite/currentjdk`: running a script installs the JDK it asks for into the
 cache and nothing else, so one run never changes which JDK the next one picks.
 
 Options are read getopt style: every option is accepted anywhere before the
@@ -188,7 +188,7 @@ and the launchers, no exit code with a special meaning, nothing is captured
 and nothing is re-parsed by a shell: `jbanglite Hello.java | sort` streams,
 `echo x | jbanglite Hello.java` reaches the script, and `$?` is the script's.
 The launchers only find a JDK and `exec` the jar. The price is that the
-jbanglite JVM stays around, idle, while the script runs; `JBANG_JAVA_OPTIONS`
+jbanglite JVM stays around, idle, while the script runs; `JBANGLITE_JAVA_OPTIONS`
 tunes that JVM.
 
 ### What the launcher scripts need
@@ -204,7 +204,7 @@ version `jbanglite.properties` pins.
 Which JVM runs `jbanglite.jar` hardly matters, so that search is deliberately
 short:
 
-1. `$JBANG_CACHE_DIR/jdks/bootstrap`
+1. `$JBANGLITE_CACHE_DIR/jdks/bootstrap`
 2. `JAVA_HOME`
 3. `javac` on the `PATH`, asked for its `java.home` (through
    `javac -J-XshowSettings:properties -version`) so that shims (jenv, SDKMAN,
@@ -213,7 +213,7 @@ short:
 Any JDK 11 or newer is accepted; a JRE is not, because scripts have to be
 compiled. If nothing is found, the launcher runs `jbanglite-bootstrap-jdk`
 (`jbanglite-bootstrap-jdk.cmd` on Windows), which sits next to it, downloads
-the newest Temurin 25 into `$JBANG_CACHE_DIR/jdks/bootstrap`, verifies its
+the newest Temurin 25 into `$JBANGLITE_CACHE_DIR/jdks/bootstrap`, verifies its
 published SHA-256 and prints that directory. The bootstrap script is a program
 of its own: it can be run by hand, tested alone, or replaced by anything else
 that puts a JDK there. The jar prefers the JVM it is running on when
@@ -236,7 +236,7 @@ instead, so nothing but Windows itself is needed there either.
 The download uses the very same JVM index the jar uses for `//JAVA`, the
 Coursier index published on Maven Central
 (`io.get-coursier.jvm.indices:index-<platform>`), so no JDK discovery service is
-involved, and `JBANG_JVM_INDEX_BASEURL` points both of them at a corporate mirror.
+involved, and `JBANGLITE_JVM_INDEX_BASEURL` points both of them at a corporate mirror.
 
 The JDK a script asks for with `//JAVA` is still provisioned by the jar; the
 bootstrap JDK only exists to get `jbanglite.jar` started. `jdk default`, `jdk
@@ -247,7 +247,7 @@ either: the launchers only ever run the jar.
 ### Several runs at once
 
 A build matrix or a multi-module build starts JBangLite many times at once
-against the same `~/.jbang`, so no download may fail just because another run
+against the same `~/.jbanglite`, so no download may fail just because another run
 got there first:
 
 | | |
@@ -320,7 +320,7 @@ without depending on a JDK discovery service:
 
 The default distribution is Eclipse Temurin (GPLv2 with Classpath Exception).
 Distributions with different licenses, such as the Oracle JDK, are never
-downloaded unless they are asked for explicitly with `JBANG_JDK_DISTRO`.
+downloaded unless they are asked for explicitly with `JBANGLITE_JDK_DISTRO`.
 
 Requesting a full version such as `//JAVA 25.0.3` installs and uses exactly that
 version, which is what to use when the result must be reproducible. A request
@@ -330,15 +330,15 @@ like `25` or `25+` accepts any matching patch release.
 
 | Variable | Meaning |
 | --- | --- |
-| `JBANG_DIR` | base directory (default `~/.jbang`) |
-| `JBANG_CACHE_DIR` | cache directory (default `$JBANG_DIR/cache`) |
-| `JBANG_REPO` | local Maven repository to use instead of `~/.m2/repository` |
-| `JBANG_DEFAULT_JAVA_VERSION` | JDK version to install when the script does not specify one (default 17) |
-| `JBANG_JVM_INDEX_BASEURL` | Maven repository to read the JVM index from (default `https://repo1.maven.org/maven2`) |
-| `JBANG_JDK_DISTRO` | distributions to install from, most preferred first (default `temurin`) |
-| `JBANG_JDK_INDEX` | path to a JDK index JSON file, or a Maven coordinate, replacing the default index |
-| `JBANG_DOWNLOAD_RETRY` | extra download attempts (default 5, `0` disables retries) |
-| `JBANG_DOWNLOAD_RETRY_DELAY` | seconds between attempts (default `0`, meaning exponential backoff) |
+| `JBANGLITE_DIR` | base directory (default `~/.jbanglite`) |
+| `JBANGLITE_CACHE_DIR` | cache directory (default `$JBANGLITE_DIR/cache`) |
+| `JBANGLITE_MAVEN_REPO` | local Maven repository to use instead of `~/.m2/repository` |
+| `JBANGLITE_DEFAULT_JAVA_VERSION` | JDK version to install when the script does not specify one (default 17) |
+| `JBANGLITE_JVM_INDEX_BASEURL` | Maven repository to read the JVM index from (default `https://repo1.maven.org/maven2`) |
+| `JBANGLITE_JDK_DISTRO` | distributions to install from, most preferred first (default `temurin`) |
+| `JBANGLITE_JDK_INDEX` | path to a JDK index JSON file, or a Maven coordinate, replacing the default index |
+| `JBANGLITE_DOWNLOAD_RETRY` | extra download attempts (default 5, `0` disables retries) |
+| `JBANGLITE_DOWNLOAD_RETRY_DELAY` | seconds between attempts (default `0`, meaning exponential backoff) |
 | `JBANGLITE_LOCK_TIMEOUT` | seconds to wait for another run that is downloading (default 600) |
 | `JBANGLITE_DIST_URL` | where to fetch `jbanglite.jar` from, overriding the `distributionUrl` in `jbanglite.properties` |
 

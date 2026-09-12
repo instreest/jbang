@@ -24,17 +24,17 @@ jbanglite\jbanglite.cmd src\Hello.java
 1. The launcher looks for `jbanglite.jar` next to it. There is none unless this
    project vendors one, so it runs `jbanglite-bootstrap-jar`, which downloads
    the version `jbanglite.properties` pins, checks it against the SHA-256 there
-   and keeps it in `~/.jbang/cache/jbanglite/<version>`.
+   and keeps it in `~/.jbanglite/cache/jbanglite/<version>`.
 2. It looks for a usable Java (`JAVA_HOME`, `javac` on the `PATH`, its own
    bootstrap JDK; a JDK 11 or newer). If none is found it runs
    `jbanglite-bootstrap-jdk`, which downloads a Temurin into
-   `~/.jbang/cache/jdks/bootstrap` and verifies its published SHA-256.
+   `~/.jbanglite/cache/jdks/bootstrap` and verifies its published SHA-256.
 3. It runs the jar with that Java.
 4. The JDK a script asks for with `//JAVA` is installed by `jbanglite.jar`
    itself.
 
 Nothing is written into the project; everything JBangLite downloads goes to
-`~/.jbang` (`JBANG_DIR`). Both caches are per machine, so other projects on
+`~/.jbanglite` (`JBANGLITE_DIR`). Both caches are per machine, so other projects on
 this machine that pin the same version download nothing at all.
 
 Several runs at once are fine: each download is taken by one run while the

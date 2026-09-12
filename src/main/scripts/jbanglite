@@ -53,7 +53,7 @@ print_version() {
     exit 1
   fi
   vendored=$abs_jbang_dir/jbanglite.jar
-  cached=$TDIR/jbanglite/$pinned/jbanglite.jar
+  cached=$CACHEDIR/jbanglite/$pinned/jbanglite.jar
   if [ -f "$vendored" ]; then
     actual=$(jar_version "$vendored")
     echo "jbanglite ${actual:-$pinned}"
@@ -135,8 +135,8 @@ usable_java() {
 find_existing_java() {
   unset JAVA_EXEC
   # The JDK jbanglite-bootstrap-jdk downloaded on an earlier run
-  if usable_java "$TDIR/jdks/bootstrap"; then
-    export JAVA_HOME="$TDIR/jdks/bootstrap"
+  if usable_java "$CACHEDIR/jdks/bootstrap"; then
+    export JAVA_HOME="$CACHEDIR/jdks/bootstrap"
     JAVA_EXEC="$JAVA_HOME/bin/java"
     return
   fi
@@ -187,8 +187,8 @@ setup_java_exec() {
 # with our stdin, stdout and stderr, and exits with the script's status. So
 # this is a plain exec: nothing is captured, nothing is interpreted.
 execute_jbanglite() {
-  # shellcheck disable=SC2086 # JBANG_JAVA_OPTIONS is a list of options
-  exec "${JAVA_EXEC}" ${JBANG_JAVA_OPTIONS} -jar "${jarPath}" "$@"
+  # shellcheck disable=SC2086 # JBANGLITE_JAVA_OPTIONS is a list of options
+  exec "${JAVA_EXEC}" ${JBANGLITE_JAVA_OPTIONS} -jar "${jarPath}" "$@"
 }
 
 abs_jbang_dir=$(script_dir)
@@ -206,8 +206,8 @@ case "$(uname -s)" in
     ;;
 esac
 
-if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
-if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
+if [[ -z "$JBANGLITE_DIR" ]]; then LITEDIR="$HOME/.jbanglite"; else LITEDIR="$JBANGLITE_DIR"; fi
+if [[ -z "$JBANGLITE_CACHE_DIR" ]]; then CACHEDIR="$LITEDIR/cache"; else CACHEDIR="$JBANGLITE_CACHE_DIR"; fi
 propertiesFile=$abs_jbang_dir/jbanglite.properties
 
 # The two options this script answers itself. Both are about the installation

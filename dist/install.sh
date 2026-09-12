@@ -10,7 +10,7 @@
 # jbanglite.jar itself is not installed and not committed: jbanglite.properties
 # pins its version, URL and SHA-256, and the launcher has
 # jbanglite-bootstrap-jar download it once per machine into
-# ~/.jbang/cache/jbanglite/<version>. So a project's history carries about
+# ~/.jbanglite/cache/jbanglite/<version>. So a project's history carries about
 # 50 kB of scripts rather than a 2 MB binary per update. A project that would
 # rather vendor the jar can drop it into jbanglite/ next to the launcher, and
 # then nothing is downloaded.

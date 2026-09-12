@@ -2,7 +2,7 @@
 rem ===========================================================================
 rem Installs the JDK that runs jbanglite.jar when the machine has none: the
 rem newest Temurin %bootstrap_java_version% from the JVM index on Maven Central,
-rem into %JBANG_CACHE_DIR%\jdks\bootstrap (%userprofile%\.jbang\cache\jdks\bootstrap).
+rem into %JBANGLITE_CACHE_DIR%\jdks\bootstrap (%userprofile%\.jbanglite\cache\jdks\bootstrap).
 rem It prints that directory on stdout and says nothing else there; progress
 rem and errors go to stderr. When the JDK is already installed it only prints.
 rem
@@ -14,13 +14,13 @@ rem
 rem   jbanglite-bootstrap-jdk.cmd        install if needed, print the JDK home
 rem
 rem Environment:
-rem   JBANG_DIR, JBANG_CACHE_DIR       where JBangLite keeps things (~\.jbang)
-rem   JBANG_JVM_INDEX_BASEURL          a mirror of Maven Central
-rem   JBANG_DOWNLOAD_RETRY, JBANG_DOWNLOAD_RETRY_DELAY
+rem   JBANGLITE_DIR, JBANGLITE_CACHE_DIR       where JBangLite keeps things (~\.jbanglite)
+rem   JBANGLITE_JVM_INDEX_BASEURL          a mirror of Maven Central
+rem   JBANGLITE_DOWNLOAD_RETRY, JBANGLITE_DOWNLOAD_RETRY_DELAY
 rem   JBANGLITE_LOCK_TIMEOUT           seconds to wait for another run's download
 rem
 rem Several JBangLite runs can be started at the same time (a build matrix, a
-rem multi-module build). They share ~\.jbang, so the download takes a
+rem multi-module build). They share ~\.jbanglite, so the download takes a
 rem directory lock (mkdir is atomic: :acquire_lock / :release_lock) and every
 rem other download goes to a file of this run's own that is renamed into place.
 rem
@@ -51,21 +51,20 @@ rem Where the JVM index lives. It is the same index jbanglite.jar uses to
 rem install the JDKs that scripts ask for with //JAVA, published on Maven
 rem Central, so no JDK discovery service is involved. Override for a mirror.
 set "jvm_index_base_url=https://repo1.maven.org/maven2"
-if not "%JBANG_JVM_INDEX_BASEURL%"=="" set "jvm_index_base_url=%JBANG_JVM_INDEX_BASEURL%"
+if not "%JBANGLITE_JVM_INDEX_BASEURL%"=="" set "jvm_index_base_url=%JBANGLITE_JVM_INDEX_BASEURL%"
 
 rem How often a failed download is retried, and how long to wait in between
 rem (0 means an exponential backoff of 1, 2, 4, ... seconds)
 set "download_retry=5"
-if not "%JBANG_DOWNLOAD_RETRY%"=="" set "download_retry=%JBANG_DOWNLOAD_RETRY%"
+if not "%JBANGLITE_DOWNLOAD_RETRY%"=="" set "download_retry=%JBANGLITE_DOWNLOAD_RETRY%"
 set "download_retry_delay=0"
-if not "%JBANG_DOWNLOAD_RETRY_DELAY%"=="" set "download_retry_delay=%JBANG_DOWNLOAD_RETRY_DELAY%"
+if not "%JBANGLITE_DOWNLOAD_RETRY_DELAY%"=="" set "download_retry_delay=%JBANGLITE_DOWNLOAD_RETRY_DELAY%"
 
-rem The directories JBangLite keeps its JDKs, jars and caches in. The names are
-rem the ones JBang uses, so an existing ~\.jbang is picked up as it is.
-set "jbang_dir=%userprofile%\.jbang"
-if not "%JBANG_DIR%"=="" set "jbang_dir=%JBANG_DIR%"
-set "cache_dir=%jbang_dir%\cache"
-if not "%JBANG_CACHE_DIR%"=="" set "cache_dir=%JBANG_CACHE_DIR%"
+rem The directories JBangLite keeps its JDKs, jars and caches in.
+set "jbanglite_dir=%userprofile%\.jbanglite"
+if not "%JBANGLITE_DIR%"=="" set "jbanglite_dir=%JBANGLITE_DIR%"
+set "cache_dir=%jbanglite_dir%\cache"
+if not "%JBANGLITE_CACHE_DIR%"=="" set "cache_dir=%JBANGLITE_CACHE_DIR%"
 
 rem The architecture, named the way the JVM index does
 set "index_arch=amd64"
@@ -334,7 +333,7 @@ if %download_retry_delay% GTR 0 (
 )
 set /a attempts_total=%download_retry%+1
 call echo Download %attempt%/%attempts_total% failed. Retry in %%wait_seconds%% second(s)... 1>&2
-if %attempt% EQU 1 echo (Set JBANG_DOWNLOAD_RETRY=0 to disable retries^) 1>&2
+if %attempt% EQU 1 echo (Set JBANGLITE_DOWNLOAD_RETRY=0 to disable retries^) 1>&2
 call :sleep %%wait_seconds%%
 goto :download_attempt
 

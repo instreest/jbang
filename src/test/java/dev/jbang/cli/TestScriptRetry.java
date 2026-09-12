@@ -22,7 +22,7 @@ import com.github.tomakehurst.wiremock.stubbing.Scenario;
 /**
  * Functional tests for download retry support in the launcher scripts. The
  * only download a launcher makes is the bootstrap JDK, so the launcher is run
- * without any usable Java and JBANG_JVM_INDEX_BASEURL points it at a WireMock
+ * without any usable Java and JBANGLITE_JVM_INDEX_BASEURL points it at a WireMock
  * server that simulates transient failures of the JVM index metadata.
  *
  * See https://github.com/jbangdev/jbang/issues/2459
@@ -57,9 +57,9 @@ class TestScriptRetry extends AbstractScriptTest {
 
 	private Map<String, String> bashEnv(int retryCount) {
 		Map<String, String> env = baseBashEnv("retry-" + retryCount);
-		env.put("JBANG_JVM_INDEX_BASEURL", wm.baseUrl());
-		env.put("JBANG_DOWNLOAD_RETRY", String.valueOf(retryCount));
-		env.put("JBANG_DOWNLOAD_RETRY_DELAY", "0");
+		env.put("JBANGLITE_JVM_INDEX_BASEURL", wm.baseUrl());
+		env.put("JBANGLITE_DOWNLOAD_RETRY", String.valueOf(retryCount));
+		env.put("JBANGLITE_DOWNLOAD_RETRY_DELAY", "0");
 		// neither JAVA_HOME nor the PATH offers a usable Java, so the launcher
 		// has to download one; JAVA_HOME points at a JDK that is too old so the
 		// launcher's rejection of it is exercised as well

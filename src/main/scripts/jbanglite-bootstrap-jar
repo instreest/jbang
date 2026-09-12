@@ -2,7 +2,7 @@
 #
 # Installs jbanglite.jar, the JBangLite a project asked for: the version, URL
 # and SHA-256 in the jbanglite.properties next to this script, downloaded into
-# $JBANG_CACHE_DIR/jbanglite/<version> (~/.jbang/cache/jbanglite/<version>).
+# $JBANGLITE_CACHE_DIR/jbanglite/<version> (~/.jbanglite/cache/jbanglite/<version>).
 # It prints the jar's path on stdout and says nothing else there; progress and
 # errors go to stderr. When the jar is already installed it only prints.
 #
@@ -14,16 +14,16 @@
 #   jbanglite-bootstrap-jar            install if needed, print the jar path
 #
 # Environment:
-#   JBANG_DIR, JBANG_CACHE_DIR       where JBangLite keeps things (~/.jbang)
+#   JBANGLITE_DIR, JBANGLITE_CACHE_DIR       where JBangLite keeps things (~/.jbanglite)
 #   JBANGLITE_DIST_URL               where to fetch the jar from, overriding
 #                                    distributionUrl (a corporate mirror)
-#   JBANG_DOWNLOAD_RETRY, JBANG_DOWNLOAD_RETRY_DELAY
+#   JBANGLITE_DOWNLOAD_RETRY, JBANGLITE_DOWNLOAD_RETRY_DELAY
 #   JBANGLITE_LOCK_TIMEOUT           seconds to wait for another run's download
 #
 # Needs curl or wget, and sha256sum or shasum.
 #
 # Several JBangLite runs can be started at the same time (a build matrix, a
-# multi-module build). They share ~/.jbang, so the download takes a directory
+# multi-module build). They share ~/.jbanglite, so the download takes a directory
 # lock (mkdir is atomic) and the jar is written to a file of this run's own
 # that is renamed into place.
 
@@ -38,11 +38,11 @@ lockTimeout=${JBANGLITE_LOCK_TIMEOUT:-600}
 
 # How often a failed download is retried, and how long to wait in between
 # (0 means an exponential backoff of 1, 2, 4, ... seconds)
-downloadRetry=${JBANG_DOWNLOAD_RETRY:-5}
-downloadRetryDelay=${JBANG_DOWNLOAD_RETRY_DELAY:-0}
+downloadRetry=${JBANGLITE_DOWNLOAD_RETRY:-5}
+downloadRetryDelay=${JBANGLITE_DOWNLOAD_RETRY_DELAY:-0}
 
-if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
-if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
+if [[ -z "$JBANGLITE_DIR" ]]; then LITEDIR="$HOME/.jbanglite"; else LITEDIR="$JBANGLITE_DIR"; fi
+if [[ -z "$JBANGLITE_CACHE_DIR" ]]; then CACHEDIR="$LITEDIR/cache"; else CACHEDIR="$JBANGLITE_CACHE_DIR"; fi
 
 script_dir() {
   local script dir
@@ -105,7 +105,7 @@ download() {
     fi
     echo "Download $attempt/$maxAttempts failed. Retry in $sleepSeconds second(s)..." 1>&2
     if [ $attempt -eq 1 ]; then
-      echo "(Set JBANG_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
+      echo "(Set JBANGLITE_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
     fi
     sleep $sleepSeconds
   done
@@ -121,7 +121,7 @@ sha256_of() {
 
 # --- Locking -----------------------------------------------------------------
 
-# Several JBangLite runs can share $JBANG_DIR, so the download takes a
+# Several JBangLite runs can share $JBANGLITE_DIR, so the download takes a
 # directory lock. mkdir is atomic, so exactly one run gets it; the others wait,
 # and stop waiting as soon as $2 shows the work they waited for is done.
 #   0 - the lock is ours, do the work and release_lock afterwards
@@ -211,7 +211,7 @@ abs_jbang_dir=$(script_dir)
 propertiesFile=$abs_jbang_dir/jbanglite.properties
 
 read_properties || exit 1
-jarDir="$TDIR/jbanglite/$distributionVersion"
+jarDir="$CACHEDIR/jbanglite/$distributionVersion"
 jarPath="$jarDir/jbanglite.jar"
 
 if [ ! -f "$jarPath" ]; then

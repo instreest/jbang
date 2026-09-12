@@ -14,8 +14,8 @@ import dev.jbang.util.Util;
 /**
  * Minimal HTTP(S) downloader. Redirects are followed (also across protocols and
  * hosts) and failed transfers are retried with the same backoff the launcher
- * scripts use, controlled by JBANG_DOWNLOAD_RETRY and
- * JBANG_DOWNLOAD_RETRY_DELAY.
+ * scripts use, controlled by JBANGLITE_DOWNLOAD_RETRY and
+ * JBANGLITE_DOWNLOAD_RETRY_DELAY.
  */
 final class Downloader {
 	private static final int MAX_REDIRECTS = 10;
@@ -82,7 +82,7 @@ final class Downloader {
 			conn.setInstanceFollowRedirects(false);
 			conn.setConnectTimeout(CONNECT_TIMEOUT);
 			conn.setReadTimeout(READ_TIMEOUT);
-			conn.setRequestProperty("User-Agent", "JBangLite/" + Util.getJBangVersion());
+			conn.setRequestProperty("User-Agent", "JBangLite/" + Util.getVersion());
 			int status = conn.getResponseCode();
 			if (status >= 300 && status < 400) {
 				String location = conn.getHeaderField("Location");

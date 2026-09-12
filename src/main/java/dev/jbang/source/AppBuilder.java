@@ -75,7 +75,7 @@ public class AppBuilder {
 
 	/** Keeps the compiled classes around for inspection. */
 	static boolean keepClasses() {
-		return "true".equals(System.getProperty("jbang.build.keepclasses"));
+		return "true".equals(System.getProperty("jbanglite.build.keepclasses"));
 	}
 
 	private boolean isUpToDate(Path jar) {

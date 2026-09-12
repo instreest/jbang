@@ -79,7 +79,7 @@ done
 cat > dist/jbanglite.properties <<EOF
 # The JBangLite this project runs. A project commits this file, not the jar:
 # jbanglite-bootstrap-jar downloads the jar once per machine into
-# ~/.jbang/cache/jbanglite/<version> and checks it against the SHA-256 below.
+# ~/.jbanglite/cache/jbanglite/<version> and checks it against the SHA-256 below.
 #
 # To move to another version, run install.sh again, or edit all three lines
 # together. JBANGLITE_DIST_URL overrides the URL for one run, for a mirror.

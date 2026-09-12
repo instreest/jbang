@@ -2,7 +2,7 @@
 #
 # Installs the JDK that runs jbanglite.jar when the machine has none: the
 # newest Temurin $bootstrapJavaVersion from the JVM index on Maven Central,
-# into $JBANG_CACHE_DIR/jdks/bootstrap (~/.jbang/cache/jdks/bootstrap). It
+# into $JBANGLITE_CACHE_DIR/jdks/bootstrap (~/.jbanglite/cache/jdks/bootstrap). It
 # prints that directory on stdout and says nothing else there; progress and
 # errors go to stderr. When the JDK is already installed it only prints.
 #
@@ -12,15 +12,15 @@
 #   jbanglite-bootstrap-jdk            install if needed, print the JDK home
 #
 # Environment:
-#   JBANG_DIR, JBANG_CACHE_DIR       where JBangLite keeps things (~/.jbang)
-#   JBANG_JVM_INDEX_BASEURL          a mirror of Maven Central
-#   JBANG_DOWNLOAD_RETRY, JBANG_DOWNLOAD_RETRY_DELAY
+#   JBANGLITE_DIR, JBANGLITE_CACHE_DIR       where JBangLite keeps things (~/.jbanglite)
+#   JBANGLITE_JVM_INDEX_BASEURL          a mirror of Maven Central
+#   JBANGLITE_DOWNLOAD_RETRY, JBANGLITE_DOWNLOAD_RETRY_DELAY
 #   JBANGLITE_LOCK_TIMEOUT           seconds to wait for another run's download
 #
 # Needs curl or wget, unzip (to read the JVM index) and tar with gzip.
 #
 # Several JBangLite runs can be started at the same time (a build matrix, a
-# multi-module build). They share ~/.jbang, so the download takes a directory
+# multi-module build). They share ~/.jbanglite, so the download takes a directory
 # lock (mkdir is atomic) and every other download goes to a file of this run's
 # own that is renamed into place.
 
@@ -33,7 +33,7 @@ bootstrapJavaVersion=25
 # Where the JVM index lives. It is the same index jbanglite.jar uses to install the
 # JDKs that scripts ask for with //JAVA, published on Maven Central, so no JDK
 # discovery service is involved. Override for a corporate mirror.
-jvmIndexBaseUrl=${JBANG_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
+jvmIndexBaseUrl=${JBANGLITE_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
 
 # Tells this run's temporary files apart from those of a JBangLite running at
 # the same time
@@ -45,12 +45,12 @@ lockTimeout=${JBANGLITE_LOCK_TIMEOUT:-600}
 
 # How often a failed download is retried, and how long to wait in between
 # (0 means an exponential backoff of 1, 2, 4, ... seconds)
-downloadRetry=${JBANG_DOWNLOAD_RETRY:-5}
-downloadRetryDelay=${JBANG_DOWNLOAD_RETRY_DELAY:-0}
+downloadRetry=${JBANGLITE_DOWNLOAD_RETRY:-5}
+downloadRetryDelay=${JBANGLITE_DOWNLOAD_RETRY_DELAY:-0}
 
-if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
-if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
-jdkDir="$TDIR/jdks/bootstrap"
+if [[ -z "$JBANGLITE_DIR" ]]; then LITEDIR="$HOME/.jbanglite"; else LITEDIR="$JBANGLITE_DIR"; fi
+if [[ -z "$JBANGLITE_CACHE_DIR" ]]; then CACHEDIR="$LITEDIR/cache"; else CACHEDIR="$JBANGLITE_CACHE_DIR"; fi
+jdkDir="$CACHEDIR/jdks/bootstrap"
 
 # --- Downloading -------------------------------------------------------------
 
@@ -80,7 +80,7 @@ download() {
     fi
     echo "Download $attempt/$maxAttempts failed. Retry in $sleepSeconds second(s)..." 1>&2
     if [ $attempt -eq 1 ]; then
-      echo "(Set JBANG_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
+      echo "(Set JBANGLITE_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
     fi
     sleep $sleepSeconds
   done
@@ -144,19 +144,19 @@ jvm_index_platform() {
 # $bootstrapJavaVersion in the JVM index of platform $1
 jvm_index_entry() {
   local base metaVersion
-  mkdir -p "$TDIR"
+  mkdir -p "$CACHEDIR"
   base="$jvmIndexBaseUrl/io/get-coursier/jvm/indices/index-$1"
-  download "$base/maven-metadata.xml" "$TDIR/jvm-index-$runId.xml"
+  download "$base/maven-metadata.xml" "$CACHEDIR/jvm-index-$runId.xml"
   if [ $retval -ne 0 ]; then echo "Could not read the JVM index from $base" 1>&2; return 1; fi
-  metaVersion=$(grep -o '<release>[^<]*' "$TDIR/jvm-index-$runId.xml" | head -1 | cut -d'>' -f2)
+  metaVersion=$(grep -o '<release>[^<]*' "$CACHEDIR/jvm-index-$runId.xml" | head -1 | cut -d'>' -f2)
   if [ -z "$metaVersion" ]; then echo "Could not determine the newest JVM index version" 1>&2; return 1; fi
-  download "$base/$metaVersion/index-$1-$metaVersion.jar" "$TDIR/jvm-index-$runId.jar"
+  download "$base/$metaVersion/index-$1-$metaVersion.jar" "$CACHEDIR/jvm-index-$runId.jar"
   if [ $retval -ne 0 ]; then echo "Could not download the JVM index" 1>&2; return 1; fi
   if [ ! -x "$(command -v unzip)" ]; then
     echo "unzip is needed to read the JVM index; install unzip or a JDK" 1>&2
     return 1
   fi
-  unzip -p "$TDIR/jvm-index-$runId.jar" "coursier/jvm/indices/v1/$1.json" > "$TDIR/jvm-index-$runId.json" 2>/dev/null
+  unzip -p "$CACHEDIR/jvm-index-$runId.jar" "coursier/jvm/indices/v1/$1.json" > "$CACHEDIR/jvm-index-$runId.json" 2>/dev/null
   # The index lists, per distribution, a version and a "<type>+<url>" value
   awk -v want="$bootstrapJavaVersion" '
     /^[[:space:]]*"temurin"[[:space:]]*:[[:space:]]*\{/ { inside = 1; next }
@@ -170,11 +170,11 @@ jvm_index_entry() {
         print version " " substr(value, 1, plus - 1) " " substr(value, plus + 1)
       }
     }
-  ' "$TDIR/jvm-index-$runId.json" | sort -V | tail -1
-  rm -f "$TDIR/jvm-index-$runId.xml" "$TDIR/jvm-index-$runId.jar" "$TDIR/jvm-index-$runId.json"
+  ' "$CACHEDIR/jvm-index-$runId.json" | sort -V | tail -1
+  rm -f "$CACHEDIR/jvm-index-$runId.xml" "$CACHEDIR/jvm-index-$runId.jar" "$CACHEDIR/jvm-index-$runId.json"
 }
 
-# Several JBangLite runs can share $JBANG_DIR, so a download either takes a
+# Several JBangLite runs can share $JBANGLITE_DIR, so a download either takes a
 # directory lock or writes to a file of its own and renames it into place.
 # mkdir is atomic, so exactly one run gets the lock; the others wait, and stop
 # waiting as soon as $2 shows the work they waited for is done.
@@ -205,10 +205,10 @@ release_lock() {
   rm -rf "$1"
 }
 
-# Downloads the newest Temurin $bootstrapJavaVersion into $TDIR/jdks/bootstrap,
+# Downloads the newest Temurin $bootstrapJavaVersion into $CACHEDIR/jdks/bootstrap,
 # one run at a time; the others wait and then use what it installed.
 install_bootstrap_jdk() {
-  mkdir -p "$TDIR/jdks"
+  mkdir -p "$CACHEDIR/jdks"
   acquire_lock "$jdkDir.lock" "$jdkDir/bin/java"
   case $? in
     2) return 0 ;;
@@ -236,9 +236,9 @@ install_bootstrap_jdk_locked() {
   if [ "$type" = "tgz" ]; then type=tar.gz; fi
   # this run's own files, so nothing is shared with a JBangLite running at the
   # same time
-  archive="$TDIR/bootstrap-jdk-$runId.$type"
-  shafile="$TDIR/bootstrap-jdk-$runId.sha256"
-  unpackdir="$TDIR/jdks/bootstrap-$runId.tmp"
+  archive="$CACHEDIR/bootstrap-jdk-$runId.$type"
+  shafile="$CACHEDIR/bootstrap-jdk-$runId.sha256"
+  unpackdir="$CACHEDIR/jdks/bootstrap-$runId.tmp"
 
   echo "No Java found. Downloading Temurin $version. Be patient, this can take several minutes..." 1>&2
   download "$url" "$archive"

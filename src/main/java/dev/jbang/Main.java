@@ -71,7 +71,7 @@ public final class Main {
 
 	static int run(List<String> args) throws IOException {
 		ScriptOptions opts = ScriptOptions.parse(args);
-		Util.verboseMsg("jbanglite version " + Util.getJBangVersion());
+		Util.verboseMsg("jbanglite version " + Util.getVersion());
 		Project prj = opts.project();
 		Path jar = new AppBuilder(prj).build();
 		List<String> cmd = new CmdGenerator(prj, jar)
@@ -129,7 +129,7 @@ public final class Main {
 					throw new ExitException(ExitException.EXIT_OK);
 				case "-V":
 				case "--version":
-					realOut.println(Util.getJBangVersion());
+					realOut.println(Util.getVersion());
 					throw new ExitException(ExitException.EXIT_OK);
 				case "--":
 					// the getopt convention: what follows is never an option
@@ -227,7 +227,7 @@ public final class Main {
 	}
 
 	private static void printHelp() {
-		realOut.println("jbanglite " + Util.getJBangVersion());
+		realOut.println("jbanglite " + Util.getVersion());
 		realOut.println();
 		realOut.println("Builds and runs a single-file Java program. What it needs - its Java version,");
 		realOut.println("dependencies, sources - is declared in the program with //JAVA, //DEPS and");

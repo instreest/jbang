@@ -97,8 +97,8 @@ class TestRun extends AbstractScriptTest {
 		// script, which fails fast at an unreachable index
 		env.remove("JAVA_HOME");
 		env.put("PATH", pathWithoutJava());
-		env.put("JBANG_JVM_INDEX_BASEURL", "http://localhost:1/nowhere");
-		env.put("JBANG_DOWNLOAD_RETRY", "0");
+		env.put("JBANGLITE_JVM_INDEX_BASEURL", "http://localhost:1/nowhere");
+		env.put("JBANGLITE_DOWNLOAD_RETRY", "0");
 		env.put("no_proxy", "localhost,127.0.0.1");
 		env.put("NO_PROXY", "localhost,127.0.0.1");
 		RunResult result = runProcess(bashCmd(launcher, "exit", "3"), env);
