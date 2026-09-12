@@ -29,7 +29,7 @@ import dev.jbang.source.parser.Directives;
 import dev.jbang.source.parser.KeyValue;
 import dev.jbang.util.JavaUtil;
 import dev.jbang.util.OsDetector;
-import dev.jbang.util.PropertiesValueResolver;
+import dev.jbang.util.Placeholders;
 import dev.jbang.util.Util;
 
 /**
@@ -121,7 +121,7 @@ public class Project {
 	}
 
 	private String replaceProperties(String item) {
-		return PropertiesValueResolver.replaceProperties(item, contextProperties);
+		return Placeholders.replace(item, contextProperties);
 	}
 
 	private Function<String, String> propertyReplacer() {

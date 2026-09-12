@@ -73,11 +73,50 @@ jar {
 	}
 }
 
+/**
+ * Collects the LICENSE and NOTICE files of every bundled dependency into one
+ * directory per artifact. A shadow jar otherwise has them all land on
+ * META-INF/LICENSE and META-INF/NOTICE, where the last one written wins and
+ * the rest are lost - and Apache-2.0 asks for the NOTICE of every work it
+ * covers to travel with the distribution.
+ */
+tasks.register('collectNotices') {
+	def outDir = layout.buildDirectory.dir('notices')
+	def runtime = configurations.runtimeClasspath
+	inputs.files(runtime)
+	outputs.dir(outDir)
+	inputs.dir('misc/notices')
+	doLast {
+		def root = outDir.get().asFile
+		root.deleteDir()
+		root.mkdirs()
+		// texts we have to ship for artifacts that put none in their own jar
+		copy { from 'misc/notices'; into root }
+		runtime.resolvedConfiguration.resolvedArtifacts.each { artifact ->
+			def id = artifact.moduleVersion.id
+			def name = "${id.group}-${id.name}-${id.version}"
+			zipTree(artifact.file).matching {
+				include 'META-INF/LICENSE*', 'META-INF/NOTICE*', 'META-INF/COPYRIGHT*',
+						'META-INF/licenses/**', 'about.html'
+			}.files.each { f ->
+				if (f.isFile() && f.length() > 0) {
+					def target = new File(root, name)
+					target.mkdirs()
+					new File(target, f.name).bytes = f.bytes
+				}
+			}
+		}
+	}
+}
+
 shadowJar {
+	dependsOn 'collectNotices'
 	mergeServiceFiles()
-	// keep the license notices next to the bundled code
-	from('LICENSE') { into 'META-INF'; rename { 'LICENSE-jbang.txt' } }
-	from('THIRD-PARTY.md') { into 'META-INF'; rename { 'THIRD-PARTY-jbang.md' } }
+	// keep the license notices next to the bundled code: JBangLite's own, and
+	// one directory per dependency so that none overwrites another
+	from('LICENSE') { into 'META-INF'; rename { 'LICENSE-jbanglite.txt' } }
+	from('THIRD-PARTY.md') { into 'META-INF'; rename { 'THIRD-PARTY.md' } }
+	from(layout.buildDirectory.dir('notices')) { into 'META-INF/notices' }
 	manifest {
 		attributes(
 			'Main-Class': 'dev.jbang.Main',

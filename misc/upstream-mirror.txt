@@ -5,7 +5,6 @@
 # here, so a fix upstream reaches JBangLite by re-syncing these files.
 src/main/java/dev/jbang/ExitException.java
 src/main/java/dev/jbang/util/CommandBuffer.java
-src/main/java/dev/jbang/util/PropertiesValueResolver.java
 src/main/java/dev/jbang/dependencies/MavenRepo.java
 src/main/java/dev/jbang/dependencies/MavenCoordinate.java
 src/main/java/dev/jbang/dependencies/JitPackUtil.java
