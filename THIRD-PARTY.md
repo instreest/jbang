@@ -6,6 +6,9 @@ Copyright (c) 2020 Max Rydahl Andersen, distributed under the MIT License
 unchanged; the modifications made for JBangLite are contributed under the same
 MIT License.
 
+JBangLite is not affiliated with, endorsed by, or supported by the JBang
+project. The name says where the code comes from, nothing more.
+
 ## Code derived from other projects
 
 | Files | Origin | License |
