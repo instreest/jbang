@@ -61,18 +61,32 @@ directory; the launcher prefers it and downloads nothing.
 In the JBangLite repository the same files live in `dist/`; the installer
 copies that directory as it is.
 
-## Updating
-
-Re-run the installer; it replaces every file here, `jbanglite.properties`
-included, with the one from the chosen revision:
+## Which version am I on
 
 ```bash
-bash jbanglite/install.sh                        # newest, from main
-JBANGLITE_REF=v0.2.0 bash jbanglite/install.sh   # a tag or commit instead
+jbanglite/jbanglite --version
 ```
 
-`jbanglite\install.cmd` does the same on Windows. Commit the changed files
-afterwards. `jbanglite/jbanglite --version` prints which version is installed.
+It prints the version this project pins and the jar that is actually installed,
+and downloads nothing.
+
+## Updating
+
+Which JBangLite this project runs is committed here, so the usual way to get a
+newer one is `git pull`: the project's author updates it and commits, exactly
+as with a Gradle or Maven wrapper.
+
+To update this directory yourself:
+
+```bash
+jbanglite/jbanglite --update            # the newest release
+jbanglite/jbanglite --update v0.3.0     # or a tag, branch or commit
+```
+
+`jbanglite\jbanglite.cmd --update` does the same on Windows. It replaces every
+file here, `jbanglite.properties` included, and needs neither the jar nor a JDK.
+Commit the changed files afterwards, and remember that this makes the project
+run a JBangLite its author has not tried.
 
 `JBANGLITE_DIST_URL` points the jar download at a mirror for one run, for a
 machine that cannot reach GitHub releases.

@@ -366,6 +366,7 @@ public final class Main {
 		realOut.println("Options:");
 		realOut.println("  -h, --help           Print this help and exit");
 		realOut.println("  -V, --version        Print the version and exit");
+		realOut.println("  --update [<ref>]     Update this JBangLite installation and exit");
 		realOut.println("  --verbose            Print what is being done");
 		realOut.println("  --quiet              Only print errors");
 		realOut.println("  --fresh              Ignore caches and rebuild/re-resolve everything");
@@ -381,5 +382,8 @@ public final class Main {
 		realOut.println("  --enable-preview     Activate Java preview features");
 		realOut.println("  -ea, -esa            Enable (system) assertions");
 		realOut.println("  --cds                Use class data sharing");
+		realOut.println();
+		realOut.println("--version and --update are answered by the launcher script, which needs");
+		realOut.println("neither this jar nor a JDK for them.");
 	}
 }

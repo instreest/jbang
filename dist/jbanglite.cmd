@@ -5,14 +5,16 @@ rem
 rem It runs jbanglite.jar, so a checkout needs nothing installed, not even a
 rem JDK. What it does, in order:
 rem
-rem   1. Which jar to run  - a jbanglite.jar next to this script when a project
+rem   1. Its own options   - --version and --update, answered here without
+rem                          running the jar or needing a JDK
+rem   2. Which jar to run  - a jbanglite.jar next to this script when a project
 rem                          vendors one, otherwise the one that
 rem                          jbanglite-bootstrap-jar.cmd installs from the
 rem                          version pinned in jbanglite.properties
-rem   2. Which Java to use - the bootstrap JDK, JAVA_HOME, javac on the PATH,
+rem   3. Which Java to use - the bootstrap JDK, JAVA_HOME, javac on the PATH,
 rem                          or the JDK that jbanglite-bootstrap-jdk.cmd (next
 rem                          to this script) downloads when there is none
-rem   3. Launch            - run the jar; it builds the script and runs it
+rem   4. Launch            - run the jar; it builds the script and runs it
 rem
 rem That is all it does. Fetching the jar and fetching a JDK belong to the two
 rem bootstrap scripts, so each can be run, tested and replaced on its own.
@@ -25,7 +27,14 @@ setlocal
 
 call :init_settings
 
-rem --- 1. Which jar to run --------------------------------------------------
+rem --- 1. This script's own options ------------------------------------------
+rem Both are about the installation rather than about a script, so neither runs
+rem the jar and neither needs a JDK.
+if /i "%~1"=="--version" goto :print_version
+if /i "%~1"=="-V" goto :print_version
+if /i "%~1"=="--update" goto :run_update
+
+rem --- 2. Which jar to run --------------------------------------------------
 rem A project may vendor the jar by dropping it next to this script, and then
 rem nothing is downloaded. Otherwise the bootstrap script installs the version
 rem jbanglite.properties pins into the cache, shared by every project on this
@@ -36,15 +45,110 @@ if not exist "%jar_path%" (
 )
 if not exist "%jar_path%" exit /b 1
 
-rem --- 2. Which Java to use -------------------------------------------------
+rem --- 3. Which Java to use -------------------------------------------------
 call :find_java || exit /b 1
 set launch_cmd="%java_exec%" %JBANG_JAVA_OPTIONS% -jar "%jar_path%"
 
-rem --- 3. Launch ------------------------------------------------------------
+rem --- 4. Launch ------------------------------------------------------------
 rem The jar does the rest: it builds the script and runs it as a child process
 rem with our stdin, stdout and stderr, and exits with the script's status.
 %launch_cmd% %*
 exit /b %ERRORLEVEL%
+
+rem ===========================================================================
+rem This script's own options
+rem ===========================================================================
+
+rem Prints which JBangLite this project pins and which jar is actually
+rem installed. Nothing is downloaded: when the jar is not there yet it is only
+rem reported as missing, and a vendored jar of another version is called out,
+rem because that is the jar that would run.
+:print_version
+call :property distributionVersion
+if "%property_value%"=="" (
+  echo No distributionVersion in %properties_file% 1>&2
+  exit /b 1
+)
+set "pinned=%property_value%"
+echo jbanglite %pinned%
+echo   pinned by %properties_file%
+set "vendored=%script_dir%jbanglite.jar"
+set "cached=%cache_dir%\jbanglite\%pinned%\jbanglite.jar"
+if exist "%vendored%" goto :print_vendored_jar
+if exist "%cached%" goto :print_cached_jar
+echo   jar not installed yet, it is downloaded on the first run
+exit /b 0
+
+:print_cached_jar
+call :jar_version "%cached%"
+if "%jar_version_value%"=="" set "jar_version_value=unknown"
+echo   jar %jar_version_value% at %cached%
+exit /b 0
+
+:print_vendored_jar
+call :jar_version "%vendored%"
+if "%jar_version_value%"=="" set "jar_version_value=unknown"
+if /i "%jar_version_value%"=="%pinned%" goto :print_vendored_match
+echo   jar %jar_version_value% at %vendored% (vendored, so %jar_version_value% runs and not the pinned %pinned%)
+exit /b 0
+:print_vendored_match
+echo   jar %jar_version_value% at %vendored% (vendored)
+exit /b 0
+
+rem Sets jar_version_value to the JBang-Version in the manifest of the jar %1,
+rem empty when it cannot be read. The jar is a zip and Windows tar reads those.
+:jar_version
+setlocal enabledelayedexpansion
+set "found="
+set "manifest_dir=%TEMP%\jbanglite-%run_id%-manifest"
+if exist "%manifest_dir%" rmdir /s /q "%manifest_dir%" 2>nul
+mkdir "%manifest_dir%" 2>nul
+tar -xf "%~1" -C "%manifest_dir%" META-INF/MANIFEST.MF >nul 2>&1
+if exist "%manifest_dir%\META-INF\MANIFEST.MF" (
+  for /f "usebackq tokens=1,* delims=: " %%A in ("%manifest_dir%\META-INF\MANIFEST.MF") do (
+    if /i "%%A"=="JBang-Version" if not defined found set "found=%%B"
+  )
+)
+rmdir /s /q "%manifest_dir%" 2>nul
+endlocal & set "jar_version_value=%found%"
+exit /b 0
+
+rem Replaces this installation with the one from %2 (a branch, tag or commit of
+rem the JBangLite repository; the default is whatever install.cmd defaults to)
+rem by running the install.cmd that sits next to this script. Needs no Java and
+rem no jar, so it works even when the pinned jar can no longer be downloaded.
+:run_update
+if not exist "%script_dir%install.cmd" (
+  echo %script_dir%install.cmd not found, so this installation cannot update itself. 1>&2
+  exit /b 1
+)
+if not "%~2"=="" set "JBANGLITE_REF=%~2"
+call "%script_dir%install.cmd" "%script_dir%." || exit /b 1
+if not exist "%script_dir%jbanglite.jar" exit /b 0
+echo. 1>&2
+echo Warning: %script_dir%jbanglite.jar was not touched, and a jar next to 1>&2
+echo the launcher wins over jbanglite.properties, so that old jar still runs. 1>&2
+echo Remove it, or replace it with the jar of the version just installed. 1>&2
+exit /b 0
+
+rem Sets property_value to the value of the key %1 in jbanglite.properties next
+rem to this script, empty when it is not there.
+:property
+setlocal enabledelayedexpansion
+set "found="
+if exist "%properties_file%" (
+  for /f "usebackq eol=# tokens=1,* delims==" %%K in ("%properties_file%") do (
+    if /i "%%K"=="%~1" if not defined found set "found=%%L"
+  )
+)
+:trim_found
+if not defined found goto :property_done
+if not "!found:~-1!"==" " if not "!found:~-1!"=="	" goto :property_done
+set "found=!found:~0,-1!"
+goto :trim_found
+:property_done
+endlocal & set "property_value=%found%"
+exit /b 0
 
 rem ===========================================================================
 rem Settings
@@ -64,6 +168,7 @@ if not "%JBANG_CACHE_DIR%"=="" set "cache_dir=%JBANG_CACHE_DIR%"
 
 rem %~dp0 in a subroutine is the label, not this file, so remember where we are
 set "script_dir=%~dp0"
+set "properties_file=%~dp0jbanglite.properties"
 
 rem Tells this run's temporary files apart from those of a JBangLite running at
 rem the same time

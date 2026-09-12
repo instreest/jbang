@@ -52,10 +52,42 @@ A project that would rather not depend on the download can vendor the jar by
 dropping a `jbanglite.jar` into `jbanglite/` next to the launcher: it wins over
 the properties, and then nothing but a JDK is ever fetched.
 
-Re-running the installer updates an installation in place by replacing every
-file with the one from the chosen revision. `JBANGLITE_REF=<tag|commit>` pins
-another revision, `JBANGLITE_REPO` another fork, `JBANGLITE_DIST_URL` points
-the jar download at a mirror.
+## Updating
+
+Which JBangLite a project runs is a property of the project, the way it is for
+the Gradle and Maven wrappers: it is what `jbanglite/jbanglite.properties` says,
+it is committed, and a user who clones the project gets it. So the tool's author
+updates it and commits, and users receive the new version with `git pull`.
+
+```bash
+jbanglite/jbanglite --update            # the newest release
+jbanglite/jbanglite --update v0.3.0     # or a tag, branch or commit
+git add jbanglite && git commit -m "Update JBangLite to 0.3.0"
+```
+
+`--update` re-runs the `install.sh` next to it, which replaces every file with
+the one from the chosen revision, `jbanglite.properties` included. It is
+answered by the launcher script, so it needs neither the jar nor a JDK: an
+installation whose pinned jar can no longer be downloaded can still update
+itself out of that state. `JBANGLITE_REPO` installs from another fork.
+
+`--version` says which version the project pins and which jar is actually
+installed, and downloads nothing:
+
+```
+$ jbanglite/jbanglite --version
+jbanglite 0.3.0
+  pinned by /home/me/tool/jbanglite/jbanglite.properties
+  jar 0.3.0 at /home/me/.jbang/cache/jbanglite/0.3.0/jbanglite.jar
+```
+
+A vendored jar is reported as such, with its own version, because that is the
+jar that would run. `--update` does not touch it and warns that it still wins,
+rather than deleting a file the project committed.
+
+There is deliberately no version check on ordinary runs: nothing reaches the
+network unless a jar or a JDK is actually missing, and telling users about a
+new version is the tool author's job, not JBangLite's.
 
 [`dist/`](dist) in this repository is exactly what a project gets. Releasing
 means building the jar, refreshing `dist/` for its version, publishing the jar

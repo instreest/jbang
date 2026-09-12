@@ -5,19 +5,93 @@
 # It runs jbanglite.jar, so a checkout needs nothing installed, not even a
 # JDK. What it does, in order:
 #
-#   1. Which jar to run  - a jbanglite.jar next to this script when a project
+#   1. Its own options   - --version and --update, answered here without
+#                          running the jar or needing a JDK
+#   2. Which jar to run  - a jbanglite.jar next to this script when a project
 #                          vendors one, otherwise the one that
 #                          jbanglite-bootstrap-jar installs from the version
 #                          pinned in jbanglite.properties
-#   2. Which Java to use - the bootstrap JDK, JAVA_HOME, javac on the PATH, or
+#   3. Which Java to use - the bootstrap JDK, JAVA_HOME, javac on the PATH, or
 #                          the JDK that jbanglite-bootstrap-jdk (next to this
 #                          script) downloads when there is none
-#   3. Launch            - exec the jar; it builds the script and runs it
+#   4. Launch            - exec the jar; it builds the script and runs it
 #
 # That is all it does. Fetching the jar and fetching a JDK belong to the two
 # bootstrap scripts, so each can be run, tested and replaced on its own.
 
-# --- 2. Which Java to use ----------------------------------------------------
+# --- 1. This script's own options --------------------------------------------
+
+# The value of key $1 in jbanglite.properties, empty when it is not there
+property() {
+  [ -f "$propertiesFile" ] || return 0
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$propertiesFile" | head -1 | tr -d '\r'
+}
+
+# The JBang-Version recorded in the manifest of the jar $1, empty when it
+# cannot be read (the jar is a zip, so this needs unzip; without it the version
+# is simply not shown)
+jar_version() {
+  [ -x "$(command -v unzip)" ] || return 0
+  unzip -p "$1" META-INF/MANIFEST.MF 2>/dev/null | tr -d '\r' | sed -n 's/^JBang-Version: //p' | head -1
+}
+
+# Prints which JBangLite this project pins and which jar is actually installed.
+# Nothing is downloaded: when the jar is not there yet it is only reported as
+# missing, and a vendored jar of another version is called out, because that is
+# the jar that would run.
+print_version() {
+  local pinned vendored cached jar actual
+  pinned=$(property distributionVersion)
+  if [ -z "$pinned" ]; then
+    echo "No distributionVersion in $propertiesFile" 1>&2
+    exit 1
+  fi
+  echo "jbanglite $pinned"
+  echo "  pinned by $propertiesFile"
+  vendored=$abs_jbang_dir/jbanglite.jar
+  cached=$TDIR/jbanglite/$pinned/jbanglite.jar
+  if [ -f "$vendored" ]; then
+    jar=$vendored
+  elif [ -f "$cached" ]; then
+    jar=$cached
+  else
+    echo "  jar not installed yet, it is downloaded on the first run"
+    return
+  fi
+  actual=$(jar_version "$jar")
+  if [ "$jar" = "$vendored" ]; then
+    if [ -n "$actual" ] && [ "$actual" != "$pinned" ]; then
+      echo "  jar $actual at $jar (vendored, so $actual runs and not the pinned $pinned)"
+    else
+      echo "  jar ${actual:-unknown} at $jar (vendored)"
+    fi
+  else
+    echo "  jar ${actual:-unknown} at $jar"
+  fi
+}
+
+# Replaces this installation with the one from $1 (a branch, tag or commit of
+# the JBangLite repository; the default is whatever install.sh defaults to) by
+# running the install.sh that sits next to this script. Needs no Java and no
+# jar, so it works even when the pinned jar can no longer be downloaded.
+run_update() {
+  local installer=$abs_jbang_dir/install.sh
+  if [ ! -f "$installer" ]; then
+    echo "$installer not found, so this installation cannot update itself." 1>&2
+    exit 1
+  fi
+  if [ -n "$1" ]; then export JBANGLITE_REF=$1; fi
+  bash "$installer" "$abs_jbang_dir" || exit $?
+  if [ -f "$abs_jbang_dir/jbanglite.jar" ]; then
+    echo 1>&2
+    echo "Warning: $abs_jbang_dir/jbanglite.jar was not touched, and a jar next to" 1>&2
+    echo "the launcher wins over jbanglite.properties, so that old jar still runs." 1>&2
+    echo "Remove it, or replace it with the jar of the version just installed." 1>&2
+  fi
+  exit 0
+}
+
+# --- 3. Which Java to use ----------------------------------------------------
 
 # The oldest Java that can run jbanglite.jar
 minJavaVersion=11
@@ -98,7 +172,7 @@ setup_java_exec() {
   JAVA_EXEC="$JAVA_HOME/bin/java"
 }
 
-# --- 3. Launch ---------------------------------------------------------------
+# --- 4. Launch ---------------------------------------------------------------
 
 # The jar does the rest: it builds the script and runs it as a child process
 # with our stdin, stdout and stderr, and exits with the script's status. So
@@ -125,8 +199,21 @@ esac
 
 if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
 if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
+propertiesFile=$abs_jbang_dir/jbanglite.properties
 
-# --- 1. Which jar to run -----------------------------------------------------
+# The two options this script answers itself. Both are about the installation
+# rather than about a script, so neither runs the jar and neither needs a JDK.
+case "${1:-}" in
+  -V|--version)
+    print_version
+    exit 0
+    ;;
+  --update)
+    run_update "${2:-}"
+    ;;
+esac
+
+# --- 2. Which jar to run -----------------------------------------------------
 
 # A project may vendor the jar by dropping it next to this script, and then
 # nothing is downloaded. Otherwise the bootstrap script installs the version

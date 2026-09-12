@@ -105,13 +105,16 @@ exit /b 1
 
 rem Keeps the key %1 with the value %2 when it is one we know. The value may
 rem carry trailing whitespace from the file, which FOR does not strip.
+rem The trimming is a plain loop because in CMD the GOTO of
+rem `if cond set ... & goto ...` runs whether or not the condition held.
 :set_property
 set "prop_key=%~1"
 set "prop_value=%~2"
 :trim_property_value
 if "%prop_value%"=="" goto :store_property
-if "%prop_value:~-1%"==" " set "prop_value=%prop_value:~0,-1%" & goto :trim_property_value
-if "%prop_value:~-1%"=="	" set "prop_value=%prop_value:~0,-1%" & goto :trim_property_value
+if not "%prop_value:~-1%"==" " if not "%prop_value:~-1%"=="	" goto :store_property
+set "prop_value=%prop_value:~0,-1%"
+goto :trim_property_value
 :store_property
 if /i "%prop_key%"=="distributionVersion" set "distribution_version=%prop_value%"
 if /i "%prop_key%"=="distributionUrl" set "distribution_url=%prop_value%"
