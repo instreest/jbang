@@ -85,6 +85,14 @@ print_version() {
 # itself; when the answer has already been given here it is passed on in the
 # environment, so one run never asks twice.
 
+# Says what JBangLite wanted to download and how to permit it, for when there is
+# nobody to ask.
+no_terminal() {
+  echo "JBangLite has to download:" 1>&2
+  printf '%s' "$1" 1>&2
+  echo "There is no terminal to ask on. Set JBANGLITE_NETWORK=allow to permit it." 1>&2
+}
+
 # Asks whether the things listed in $1 may be downloaded. 0 to go ahead, 1 to stop.
 confirm_network() {
   local items=$1 mode answer
@@ -103,9 +111,7 @@ confirm_network() {
   # Read from the terminal rather than from stdin: stdin belongs to the script
   # that is about to run, and taking a line from it would lose that line.
   if ! { exec 3<>/dev/tty; } 2>/dev/null; then
-    echo "JBangLite has to download:" 1>&2
-    printf '%s' "$items" 1>&2
-    echo "There is no terminal to ask on. Set JBANGLITE_NETWORK=allow to permit it." 1>&2
+    no_terminal "$items"
     return 1
   fi
   {
@@ -115,7 +121,15 @@ confirm_network() {
     echo
     printf 'Go ahead? [y/N]: '
   } >&3
-  IFS= read -r answer <&3 || answer=
+  # A terminal device can open with nobody behind it: Git Bash gives every
+  # process a /dev/tty even when its input is a pipe, and the read then ends
+  # at once. That is the same situation as having no terminal at all.
+  if ! IFS= read -r answer <&3; then
+    exec 3>&-
+    echo 1>&2
+    no_terminal "$items"
+    return 1
+  fi
   echo >&3
   exec 3>&-
   case "$answer" in
