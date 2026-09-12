@@ -12,10 +12,11 @@ import dev.jbang.Settings;
 import dev.jbang.util.Util;
 
 /**
- * Minimal HTTP(S) downloader. Redirects are followed (also across protocols and
- * hosts) and failed transfers are retried with the same backoff the launcher
- * scripts use, controlled by JBANGLITE_DOWNLOAD_RETRY and
- * JBANGLITE_DOWNLOAD_RETRY_DELAY.
+ * Minimal HTTPS downloader. Only https is accepted, both for the URL asked for
+ * and for every redirect it follows, so that a redirect cannot quietly move a
+ * download onto a plaintext connection. Failed transfers are retried with the
+ * same backoff the launcher scripts use, controlled by
+ * JBANGLITE_DOWNLOAD_RETRY and JBANGLITE_DOWNLOAD_RETRY_DELAY.
  */
 final class Downloader {
 	private static final int MAX_REDIRECTS = 10;
@@ -75,8 +76,22 @@ final class Downloader {
 		}
 	}
 
+	/**
+	 * Everything JBangLite downloads here is a JDK archive or its checksum, and
+	 * both are published over https; anything else is refused rather than
+	 * fetched over a connection that can be read or rewritten in transit.
+	 */
+	private static URL requireHttps(String url, String what) throws IOException {
+		URL parsed = new URL(url);
+		if (!"https".equalsIgnoreCase(parsed.getProtocol())) {
+			throw new IOException("Refusing to " + what + " over " + parsed.getProtocol() + ": " + url);
+		}
+		return parsed;
+	}
+
 	private static void transfer(String url, Path target) throws IOException {
 		String current = url;
+		requireHttps(current, "download");
 		for (int i = 0; i < MAX_REDIRECTS; i++) {
 			HttpURLConnection conn = (HttpURLConnection) new URL(current).openConnection();
 			conn.setInstanceFollowRedirects(false);
@@ -91,6 +106,7 @@ final class Downloader {
 				}
 				current = new URL(new URL(current), location).toString();
 				conn.disconnect();
+				requireHttps(current, "follow a redirect");
 				continue;
 			}
 			if (status < 200 || status >= 300) {

@@ -261,9 +261,12 @@ class TestWrapperInstall extends AbstractScriptTest {
 			byte[] body = name.equals("jbanglite.properties")
 					? ("distributionVersion=" + version + "\n"
 							+ "distributionUrl=" + wm.baseUrl() + JAR_PATH + "\n"
-							+ "distributionSha256Sum=" + sha256 + "\n").getBytes(StandardCharsets.UTF_8)
+							+ "distributionSha256Sum=" + sha256 + "\n"
+							+ "bootstrapJdkVersion=99.0.0\n"
+							+ "bootstrapJdkUrl." + indexPlatform() + "=https://127.0.0.1:1/nowhere/jdk\n"
+							+ "bootstrapJdkSha256Sum." + indexPlatform() + "=00\n").getBytes(StandardCharsets.UTF_8)
 					: Files.readAllBytes(DIST.resolve(name));
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/instreest/jbanglite/main/dist/" + name))
+			wm.stubFor(WireMock.get(WireMock.urlEqualTo("/releases/latest/download/" + name))
 				.willReturn(WireMock.aResponse().withStatus(200).withBody(body)));
 		}
 		wm.stubFor(WireMock.get(WireMock.urlEqualTo(JAR_PATH))
@@ -289,7 +292,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 
 	private Map<String, String> env() {
 		Map<String, String> env = baseBashEnv("wrapper");
-		env.put("JBANGLITE_RAW_BASEURL", wm.baseUrl());
+		env.put("JBANGLITE_DIST_BASEURL", wm.baseUrl() + "/releases/latest/download");
 		env.put("JAVA_HOME", System.getProperty("java.home"));
 		env.put("no_proxy", "localhost,127.0.0.1");
 		env.put("NO_PROXY", "localhost,127.0.0.1");

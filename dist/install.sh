@@ -5,42 +5,57 @@
 # can be built and run without JBangLite (or a JDK) being installed on the
 # machine.
 #
-#   curl -Ls https://raw.githubusercontent.com/instreest/jbanglite/main/dist/install.sh | bash
+#   curl -fsSL https://github.com/instreest/jbanglite/releases/latest/download/install.sh | bash
 #
-# jbanglite.jar itself is not installed and not committed: jbanglite.properties
-# pins its version, URL and SHA-256, and the launcher has
-# jbanglite-bootstrap-jar download it once per machine into
-# ~/.jbanglite/cache/jbanglite/<version>. So a project's history carries about
-# 50 kB of scripts rather than a 2 MB binary per update. A project that would
-# rather vendor the jar can drop it into jbanglite/ next to the launcher, and
-# then nothing is downloaded.
+# Everything comes from a GitHub release, over https. jbanglite.jar and a JDK
+# are not installed here: jbanglite.properties pins the version, URL and
+# SHA-256 of each, and the launcher downloads and verifies them once per
+# machine, into ~/.jbanglite. So a project's history carries about 50 kB of
+# scripts rather than binaries. A project that would rather vendor the jar can
+# drop a jbanglite.jar into jbanglite/ next to the launcher, and then only a
+# JDK is ever fetched.
 #
 # Running it again updates an existing installation: every file, the properties
-# included, is replaced by the one from the chosen revision.
+# included, is replaced by the one from the chosen release.
 #
 # Usage: install.sh [<target directory>]   (default: ./jbanglite, or the directory
 #                                           this script was installed in)
 #
 # Environment:
 #   JBANGLITE_REPO          GitHub repository to install from (default instreest/jbanglite)
-#   JBANGLITE_REF           branch, tag or commit to install (default main)
-#   JBANGLITE_RAW_BASEURL   where raw files are served from
-#                           (default https://raw.githubusercontent.com)
+#   JBANGLITE_REF           release tag to install (default: the latest release)
+#   JBANGLITE_DIST_BASEURL  install from here instead of from a GitHub release
 set -eu
 
 repo=${JBANGLITE_REPO:-instreest/jbanglite}
-ref=${JBANGLITE_REF:-main}
-rawBaseUrl=${JBANGLITE_RAW_BASEURL:-https://raw.githubusercontent.com}
-base="$rawBaseUrl/$repo/$ref/dist"
+ref=${JBANGLITE_REF:-}
+if [ -n "${JBANGLITE_DIST_BASEURL:-}" ]; then
+  base=$JBANGLITE_DIST_BASEURL
+elif [ -n "$ref" ]; then
+  base="https://github.com/$repo/releases/download/$ref"
+else
+  # GitHub redirects this to the newest release, so no release has to be looked
+  # up and no API has to be called
+  base="https://github.com/$repo/releases/latest/download"
+fi
 
-# dist/ in the repository is exactly what a project gets
+# A plaintext install would let anyone on the path replace the scripts a
+# project is about to commit. A loopback address is allowed so that the tests
+# can serve a release locally.
+case "$base" in
+  https://*) ;;
+  http://127.0.0.1[:/]*|http://localhost[:/]*) ;;
+  *) echo "Refusing to install over anything but https: $base" 1>&2; exit 1;;
+esac
+
+# what a project gets; dist/ in the repository holds the same set
 files="jbanglite jbanglite.cmd jbanglite-bootstrap-jdk jbanglite-bootstrap-jdk.cmd
        jbanglite-bootstrap-jar jbanglite-bootstrap-jar.cmd jbanglite.properties
        install.sh install.cmd README.md LICENSE"
 
-fetch() {  # $1 = file in dist/, $2 = file to write
+fetch() {  # $1 = file to fetch, $2 = file to write
   if command -v curl > /dev/null 2>&1; then
-    curl -fsSL "$base/$1" -o "$2"
+    curl -fsSL --proto '=https,http' --proto-redir '=https' "$base/$1" -o "$2"
   elif command -v wget > /dev/null 2>&1; then
     wget -q "$base/$1" -O "$2"
   else
@@ -63,7 +78,7 @@ fi
 staging=$(mktemp -d "${TMPDIR:-/tmp}/jbanglite.XXXXXX")
 trap 'rm -rf "$staging"' EXIT
 
-echo "Installing JBangLite from $repo ($ref) into $dir" 1>&2
+echo "Installing JBangLite from $base into $dir" 1>&2
 for f in $files; do
   fetch "$f" "$staging/$f"
 done

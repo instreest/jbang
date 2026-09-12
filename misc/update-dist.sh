@@ -17,11 +17,11 @@
 #   misc/update-dist.sh <version>     build the jar, refresh dist/ for it
 #   misc/update-dist.sh --check       report whether dist/ is up to date
 #
-# Publish build/libs/jbanglite.jar as the asset of the release tagged
-# v<version>, then commit dist/:
+# Publish dist/ and the jar as the assets of the release tagged v<version> -
+# install.sh fetches the scripts from there too - then commit dist/:
 #
 #   misc/update-dist.sh 0.2.0
-#   gh release create v0.2.0 build/libs/jbanglite.jar
+#   gh release create v0.2.0 dist/* build/libs/jbanglite.jar
 #   git add dist && git commit -m 'Release 0.2.0'
 #
 # --check rebuilds nothing and only compares the copied scripts; the jar and
@@ -177,4 +177,4 @@ EOF
 } > dist/jbanglite.properties
 
 echo "dist/ refreshed for $version (bootstrap JDK $jdkVersion)" 1>&2
-echo "Now publish build/libs/jbanglite.jar as the asset of release v$version, then commit dist/" 1>&2
+echo "Now: gh release create v$version dist/* build/libs/jbanglite.jar && git add dist && git commit" 1>&2
