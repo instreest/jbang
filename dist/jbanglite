@@ -244,6 +244,10 @@ find_existing_java() {
 # that lost the execute bit (core.fileMode=false, a zip download) still works,
 # as it does for this script itself.
 setup_java_exec() {
+  # The search already ran before the download was agreed to; reuse what it found
+  if [ -n "${JAVA_EXEC:-}" ]; then
+    return
+  fi
   if find_existing_java; then
     return
   fi
@@ -311,7 +315,11 @@ if [ ! -f "$jarPath" ]; then
   netItems="$netItems  - jbanglite.jar $(property distributionVersion)
 "
 fi
-if ! find_existing_java 2> /dev/null; then
+# This is the real search, not a dry run: it prints why a JAVA_HOME was turned
+# down and leaves JAVA_EXEC set, and setup_java_exec below reuses it. Searching
+# twice would hide those messages, because the first pass leaves JAVA_HOME
+# pointing at whatever it settled on.
+if ! find_existing_java; then
   netItems="$netItems  - a JDK to run it with (Temurin $(property bootstrapJdkVersion)); this machine has none
 "
 fi

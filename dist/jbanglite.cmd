@@ -46,7 +46,12 @@ rem bootstrap scripts would have to fetch is asked about at once, so a first run
 rem asks a single question rather than one per download.
 set "net_items="
 if not exist "%jar_path%" call :add_net_item_jar
-call :find_existing_java 2>nul || call :add_net_item_jdk
+rem This is the real search, not a dry run: it prints why a JAVA_HOME was turned
+rem down and leaves java_exec set, and :find_java below reuses it. Searching twice
+rem would hide those messages, because the first pass leaves JAVA_HOME pointing at
+rem whatever it settled on.
+call :find_existing_java
+if errorlevel 1 call :add_net_item_jdk
 if not defined net_items goto :net_done
 call :confirm_network || exit /b 1
 rem The jar resolves the script's dependencies later in this same run. The
@@ -206,12 +211,15 @@ rem the JDK a script asks for with //JAVA is chosen by jbanglite.jar itself.
 rem The java to run jbanglite.jar with, installing one when the machine has
 rem none.
 :find_java
+rem The search already ran before the download was agreed to; reuse what it found
+if defined java_exec exit /b 0
 call :find_existing_java && exit /b 0
 goto :install_bootstrap_jdk
 
 rem Looks for a JDK that is already on this machine and sets java_exec to its
 rem java, without installing anything; exits 1 when there is none.
 :find_existing_java
+set "java_exec="
 rem The JDK jbanglite-bootstrap-jdk.cmd downloaded on an earlier run
 call :usable_java "%cache_dir%\jdks\bootstrap" && (
   set "JAVA_HOME=%cache_dir%\jdks\bootstrap"
