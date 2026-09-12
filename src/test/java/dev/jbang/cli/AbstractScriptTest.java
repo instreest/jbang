@@ -88,14 +88,6 @@ abstract class AbstractScriptTest {
 		assumeTrue(isCommandAvailable("bash"), "bash is not available");
 	}
 
-	/** For tests that need the launcher to look up a JVM index of a known platform. */
-	protected void requireLinuxAmd64() {
-		assumeTrue(System.getProperty("os.name").toLowerCase().contains("linux")
-				&& Arrays.asList("amd64", "x86_64").contains(System.getProperty("os.arch")),
-				"not linux-amd64");
-	}
-
-
 	// -------------------------------------------------------------------------
 	// Process execution
 	// -------------------------------------------------------------------------
@@ -172,8 +164,24 @@ abstract class AbstractScriptTest {
 		Files.copy(BASH_SCRIPT, launcher, StandardCopyOption.REPLACE_EXISTING);
 		Files.copy(BASH_SCRIPT.resolveSibling("jbanglite-bootstrap-jdk"), dir.resolve("jbanglite-bootstrap-jdk"),
 				StandardCopyOption.REPLACE_EXISTING);
+		// the JDK the bootstrap script would install, pinned at an address that
+		// nothing answers, so a test that reaches it fails fast instead of
+		// fetching 200 MB
+		Files.write(dir.resolve("jbanglite.properties"),
+				("bootstrapJdkVersion=99.0.0\n"
+						+ "bootstrapJdkUrl." + indexPlatform() + "=https://127.0.0.1:1/nowhere/jdk.tar.gz\n"
+						+ "bootstrapJdkSha256Sum." + indexPlatform() + "=0000000000000000000000000000000000000000000000000000000000000000\n")
+					.getBytes(StandardCharsets.UTF_8));
 		createFakeJar(dir.resolve("jbanglite.jar"));
 		return launcher;
+	}
+
+	/** The name this platform has in jbanglite.properties, e.g. linux-amd64. */
+	protected static String indexPlatform() {
+		String os = System.getProperty("os.name").toLowerCase();
+		String name = os.contains("mac") ? "darwin" : os.contains("win") ? "windows" : "linux";
+		String arch = Arrays.asList("aarch64", "arm64").contains(System.getProperty("os.arch")) ? "arm64" : "amd64";
+		return name + "-" + arch;
 	}
 
 	/** Writes a jar whose main class is {@link FakeJBang}. */

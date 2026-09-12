@@ -75,6 +75,14 @@ read_properties() {
     echo "$propertiesFile needs a distributionVersion and a distributionUrl" 1>&2
     return 1
   fi
+  # Only https, so that neither a tampered properties file nor JBANGLITE_DIST_URL
+  # can point the download at a plaintext host. A loopback address is allowed so
+  # that the tests can serve the jar locally.
+  case "$distributionUrl" in
+    https://*) ;;
+    http://127.0.0.1[:/]*|http://localhost[:/]*) ;;
+    *) echo "Refusing to download the jar over anything but https: $distributionUrl" 1>&2; return 1;;
+  esac
 }
 
 # --- Downloading -------------------------------------------------------------
@@ -85,7 +93,7 @@ download() {
   while true; do
     attempt=$((attempt + 1))
     if [ -x "$(command -v curl)" ]; then
-      curl -sLf -o "$2" "$1"
+      curl -sLf --proto '=https,http' --proto-redir '=https' -o "$2" "$1"
       retval=$?
     elif [ -x "$(command -v wget)" ]; then
       wget -q -O "$2" "$1"

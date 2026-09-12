@@ -1,130 +1,133 @@
 package dev.jbang.cli;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.Map;
 
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.stubbing.Scenario;
 
 /**
- * Functional tests for download retry support in the launcher scripts. The
- * only download a launcher makes is the bootstrap JDK, so the launcher is run
- * without any usable Java and JBANGLITE_JVM_INDEX_BASEURL points it at a WireMock
- * server that simulates transient failures of the JVM index metadata.
+ * Download retries in the bootstrap scripts, exercised on the jar download
+ * because it is the one every platform makes. A WireMock server fails the
+ * request a few times before serving the jar, and JBANGLITE_DOWNLOAD_RETRY says
+ * how many attempts the script may make.
  *
  * See https://github.com/jbangdev/jbang/issues/2459
  */
 class TestScriptRetry extends AbstractScriptTest {
 
-	private static final String METADATA_PATH = "/io/get-coursier/jvm/indices/index-linux-amd64/maven-metadata.xml";
-	private static final byte[] METADATA = "<metadata><versioning><release>0.0.1</release></versioning></metadata>\n"
-		.getBytes(StandardCharsets.UTF_8);
+	private static final String JAR_PATH = "/releases/download/v9.9.9/jbanglite.jar";
 
-	/**
-	 * Configures WireMock to fail {@code failCount} times with a 500 error, then
-	 * return 200 with the given body.
-	 */
-	private void stubFlakyEndpoint(String path, int failCount, byte[] body) {
-		String scenarioName = "flaky";
-		for (int i = 0; i < failCount; i++) {
-			String currentState = (i == 0) ? Scenario.STARTED : "attempt-" + i;
-			String nextState = "attempt-" + (i + 1);
-			wm.stubFor(WireMock.get(WireMock.urlEqualTo(path))
-				.inScenario(scenarioName)
-				.whenScenarioStateIs(currentState)
-				.willReturn(WireMock.aResponse().withStatus(500).withBody("Server Error"))
-				.willSetStateTo(nextState));
+	private Path wrapper;
+	private byte[] jar;
+
+	@BeforeEach
+	void installTheScripts() throws Exception {
+		requireBash();
+		wrapper = Files.createDirectories(tempDir.resolve("jbanglite"));
+		for (String name : Arrays.asList("jbanglite", "jbanglite-bootstrap-jar")) {
+			Files.copy(BASH_SCRIPT.resolveSibling(name), wrapper.resolve(name));
 		}
-		String finalState = failCount == 0 ? Scenario.STARTED : "attempt-" + failCount;
-		wm.stubFor(WireMock.get(WireMock.urlEqualTo(path))
-			.inScenario(scenarioName)
-			.whenScenarioStateIs(finalState)
-			.willReturn(WireMock.aResponse().withStatus(200).withBody(body)));
+		Path fakeJar = tempDir.resolve("fake.jar");
+		createFakeJar(fakeJar, "9.9.9");
+		jar = Files.readAllBytes(fakeJar);
 	}
 
-	private Map<String, String> bashEnv(int retryCount) {
+	/** Fails {@code failCount} times with a 500, then serves the jar. */
+	private void stubFlakyJar(int failCount) throws Exception {
+		Files.write(wrapper.resolve("jbanglite.properties"),
+				("distributionVersion=9.9.9\n"
+						+ "distributionUrl=" + wm.baseUrl() + JAR_PATH + "\n"
+						+ "distributionSha256Sum=" + sha256(jar) + "\n").getBytes(StandardCharsets.UTF_8));
+		for (int i = 0; i < failCount; i++) {
+			wm.stubFor(WireMock.get(WireMock.urlEqualTo(JAR_PATH))
+				.inScenario("flaky")
+				.whenScenarioStateIs(i == 0 ? Scenario.STARTED : "attempt-" + i)
+				.willReturn(WireMock.aResponse().withStatus(500).withBody("Server Error"))
+				.willSetStateTo("attempt-" + (i + 1)));
+		}
+		wm.stubFor(WireMock.get(WireMock.urlEqualTo(JAR_PATH))
+			.inScenario("flaky")
+			.whenScenarioStateIs(failCount == 0 ? Scenario.STARTED : "attempt-" + failCount)
+			.willReturn(WireMock.aResponse().withStatus(200).withBody(jar)));
+	}
+
+	private static String sha256(byte[] bytes) throws Exception {
+		StringBuilder hex = new StringBuilder();
+		for (byte b : MessageDigest.getInstance("SHA-256").digest(bytes)) {
+			hex.append(String.format("%02x", b));
+		}
+		return hex.toString();
+	}
+
+	private Map<String, String> env(int retryCount) {
 		Map<String, String> env = baseBashEnv("retry-" + retryCount);
-		env.put("JBANGLITE_JVM_INDEX_BASEURL", wm.baseUrl());
 		env.put("JBANGLITE_DOWNLOAD_RETRY", String.valueOf(retryCount));
 		env.put("JBANGLITE_DOWNLOAD_RETRY_DELAY", "0");
-		// neither JAVA_HOME nor the PATH offers a usable Java, so the launcher
-		// has to download one; JAVA_HOME points at a JDK that is too old so the
-		// launcher's rejection of it is exercised as well
-		env.put("JAVA_HOME", tooOldJdk());
-		env.put("PATH", pathWithoutJava());
+		env.put("JAVA_HOME", System.getProperty("java.home"));
 		env.put("no_proxy", "localhost,127.0.0.1");
 		env.put("NO_PROXY", "localhost,127.0.0.1");
 		return env;
 	}
 
-	/** A directory that looks like a Java 8 JDK, which the launcher must reject. */
-	private String tooOldJdk() {
-		try {
-			Path jdk = Files.createDirectories(tempDir.resolve("oldjdk/bin")).getParent();
-			Files.write(jdk.resolve("bin/java"), new byte[0]);
-			Files.write(jdk.resolve("release"), "JAVA_VERSION=\"1.8.0_292\"\n".getBytes(StandardCharsets.UTF_8));
-			return jdk.toString();
-		} catch (IOException e) {
-			throw new UncheckedIOException(e);
-		}
+	@Test
+	void theDownloadSucceedsAfterTransientFailures() throws Exception {
+		stubFlakyJar(3);
+
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env(5));
+
+		assertEquals(0, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("Retry in"), result.stderr);
+		assertTrue(result.stdout.contains("some output"), result.stdout);
+		wm.verify(4, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
-	@Nested
-	class BashDownloadRetry {
+	@Test
+	void theDownloadFailsWhenTheRetriesAreExhausted() throws Exception {
+		stubFlakyJar(10);
 
-		@BeforeEach
-		void checkBash() {
-			requireBash();
-			requireLinuxAmd64();
-		}
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env(2));
 
-		@Test
-		void downloadSucceedsAfterTransientFailures() throws Exception {
-			stubFlakyEndpoint(METADATA_PATH, 3, METADATA);
-
-			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "exit", "0"), bashEnv(5));
-
-			// the metadata was read after the retries; the index itself is not
-			// served, which is where the launcher gives up
-			assertTrue(result.stderr.contains("Retry in"), result.stderr);
-			assertFalse(result.stderr.contains("Could not read the JVM index"), result.stderr);
-			assertTrue(result.stderr.contains("Could not download the JVM index"), result.stderr);
-		}
-
-		@Test
-		void downloadFailsWhenRetriesExhausted() throws Exception {
-			stubFlakyEndpoint(METADATA_PATH, 10, METADATA);
-
-			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "exit", "0"), bashEnv(2));
-
-			assertNotEquals(0, result.exitCode, "script should have failed");
-			assertTrue(result.stderr.contains("Download 2/3 failed"), result.stderr);
-			assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
-		}
-
-		@Test
-		void downloadFailsWithZeroRetries() throws Exception {
-			stubFlakyEndpoint(METADATA_PATH, 1, METADATA);
-
-			RunResult result = runProcess(bashCmd(bashLauncherWithJar(), "exit", "0"), bashEnv(0));
-
-			assertNotEquals(0, result.exitCode, "script should have failed");
-			assertFalse(result.stderr.contains("Retry in"), result.stderr);
-			assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
-		}
+		assertNotEquals(0, result.exitCode, "the script should have failed");
+		assertTrue(result.stderr.contains("Download 2/3 failed"), result.stderr);
+		assertTrue(result.stderr.contains("Error downloading JBangLite"), result.stderr);
+		wm.verify(3, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
+	@Test
+	void zeroRetriesMeansASingleAttempt() throws Exception {
+		stubFlakyJar(1);
+
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env(0));
+
+		assertNotEquals(0, result.exitCode, "the script should have failed");
+		assertFalse(result.stderr.contains("Retry in"), result.stderr);
+		wm.verify(1, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
+	}
+
+	@Test
+	void aPlaintextDownloadUrlIsRefused() throws Exception {
+		Files.write(wrapper.resolve("jbanglite.properties"),
+				("distributionVersion=9.9.9\n"
+						+ "distributionUrl=http://example.invalid/jbanglite.jar\n"
+						+ "distributionSha256Sum=" + sha256(jar) + "\n").getBytes(StandardCharsets.UTF_8));
+
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env(0));
+
+		assertNotEquals(0, result.exitCode, "the script should have failed");
+		assertTrue(result.stderr.contains("anything but https"), result.stderr);
+	}
 }

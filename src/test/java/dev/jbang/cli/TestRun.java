@@ -94,15 +94,14 @@ class TestRun extends AbstractScriptTest {
 		bootstrap.toFile().setExecutable(false);
 		Map<String, String> env = env();
 		// no usable JDK anywhere, so the launcher has to run the bootstrap
-		// script, which fails fast at an unreachable index
+		// script, which fails fast at the unreachable address it is pinned to
 		env.remove("JAVA_HOME");
 		env.put("PATH", pathWithoutJava());
-		env.put("JBANGLITE_JVM_INDEX_BASEURL", "http://localhost:1/nowhere");
 		env.put("JBANGLITE_DOWNLOAD_RETRY", "0");
 		env.put("no_proxy", "localhost,127.0.0.1");
 		env.put("NO_PROXY", "localhost,127.0.0.1");
 		RunResult result = runProcess(bashCmd(launcher, "exit", "3"), env);
-		assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
+		assertTrue(result.stderr.contains("Error downloading the JDK"), result.stderr);
 		assertFalse(result.stderr.contains("Permission denied"), result.stderr);
 	}
 

@@ -1,10 +1,15 @@
 @echo off
 rem ===========================================================================
 rem Installs the JDK that runs jbanglite.jar when the machine has none: the
-rem newest Temurin %bootstrap_java_version% from the JVM index on Maven Central,
-rem into %JBANGLITE_CACHE_DIR%\jdks\bootstrap (%userprofile%\.jbanglite\cache\jdks\bootstrap).
-rem It prints that directory on stdout and says nothing else there; progress
-rem and errors go to stderr. When the JDK is already installed it only prints.
+rem Temurin that jbanglite.properties pins for this platform, into
+rem %JBANGLITE_CACHE_DIR%\jdks\bootstrap
+rem (%userprofile%\.jbanglite\cache\jdks\bootstrap). It prints that directory
+rem on stdout and says nothing else there; progress and errors go to stderr.
+rem When the JDK is already installed it only prints.
+rem
+rem The version, URL and SHA-256 were resolved when JBangLite was released and
+rem are committed with the project, so there is no index to read and nothing to
+rem decide here: download, verify, unpack.
 rem
 rem The launcher (jbanglite.cmd) runs it when it finds no usable JDK; it can
 rem just as well be run by hand, or replaced by anything else that puts a JDK
@@ -14,15 +19,14 @@ rem
 rem   jbanglite-bootstrap-jdk.cmd        install if needed, print the JDK home
 rem
 rem Environment:
-rem   JBANGLITE_DIR, JBANGLITE_CACHE_DIR       where JBangLite keeps things (~\.jbanglite)
-rem   JBANGLITE_JVM_INDEX_BASEURL          a mirror of Maven Central
+rem   JBANGLITE_DIR, JBANGLITE_CACHE_DIR   where JBangLite keeps things
 rem   JBANGLITE_DOWNLOAD_RETRY, JBANGLITE_DOWNLOAD_RETRY_DELAY
-rem   JBANGLITE_LOCK_TIMEOUT           seconds to wait for another run's download
+rem   JBANGLITE_LOCK_TIMEOUT               seconds to wait for another run's download
 rem
 rem Several JBangLite runs can be started at the same time (a build matrix, a
 rem multi-module build). They share ~\.jbanglite, so the download takes a
-rem directory lock (mkdir is atomic: :acquire_lock / :release_lock) and every
-rem other download goes to a file of this run's own that is renamed into place.
+rem directory lock (mkdir is atomic: :acquire_lock / :release_lock) and the JDK
+rem is unpacked into a directory of this run's own that is renamed into place.
 rem
 rem Two CMD rules shape the code below and are easy to trip over:
 rem   - a variable set inside a parenthesized block cannot be read in that same
@@ -34,8 +38,11 @@ rem ===========================================================================
 setlocal
 
 call :init_settings
-call :download_bootstrap_jdk || exit /b 1
-echo %cache_dir%\jdks\bootstrap
+if not exist "%jdk_dir%\bin\java.exe" (
+  call :read_properties || exit /b 1
+  call :install_jdk || exit /b 1
+)
+echo %jdk_dir%
 exit /b 0
 
 rem ===========================================================================
@@ -43,16 +50,6 @@ rem Settings
 rem ===========================================================================
 
 :init_settings
-rem JBangLite itself only needs a JVM to run; which one hardly matters, so we
-rem simply fetch the newest Temurin of this version.
-set "bootstrap_java_version=25"
-
-rem Where the JVM index lives. It is the same index jbanglite.jar uses to
-rem install the JDKs that scripts ask for with //JAVA, published on Maven
-rem Central, so no JDK discovery service is involved. Override for a mirror.
-set "jvm_index_base_url=https://repo1.maven.org/maven2"
-if not "%JBANGLITE_JVM_INDEX_BASEURL%"=="" set "jvm_index_base_url=%JBANGLITE_JVM_INDEX_BASEURL%"
-
 rem How often a failed download is retried, and how long to wait in between
 rem (0 means an exponential backoff of 1, 2, 4, ... seconds)
 set "download_retry=5"
@@ -65,218 +62,127 @@ set "jbanglite_dir=%userprofile%\.jbanglite"
 if not "%JBANGLITE_DIR%"=="" set "jbanglite_dir=%JBANGLITE_DIR%"
 set "cache_dir=%jbanglite_dir%\cache"
 if not "%JBANGLITE_CACHE_DIR%"=="" set "cache_dir=%JBANGLITE_CACHE_DIR%"
+set "jdk_dir=%cache_dir%\jdks\bootstrap"
 
-rem The architecture, named the way the JVM index does
-set "index_arch=amd64"
-if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "index_arch=arm64"
+rem %~dp0 in a subroutine is the label, not this file, so remember where we are
+set "script_dir=%~dp0"
+set "properties_file=%~dp0jbanglite.properties"
+
+rem The name this platform has in jbanglite.properties
+set "platform=windows-amd64"
+if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "platform=windows-arm64"
 
 rem Tells this run's temporary files apart from those of a JBangLite running at
 rem the same time
 set "run_id=%RANDOM%%RANDOM%"
 
-rem How long to wait (in seconds) for another JBangLite that is downloading
-rem into the same directory
+rem How long to wait (in seconds) for another run that is downloading the JDK
 set "lock_timeout=600"
 if not "%JBANGLITE_LOCK_TIMEOUT%"=="" set "lock_timeout=%JBANGLITE_LOCK_TIMEOUT%"
 exit /b 0
 
 rem ===========================================================================
-rem The JDK
+rem The properties
 rem ===========================================================================
 
-rem Downloads the newest Temurin %bootstrap_java_version% from the JVM index
-rem into %cache_dir%\jdks\bootstrap. Only one run does this at a time; the
-rem others wait and then use what it installed.
-:download_bootstrap_jdk
+rem Reads jbanglite.properties next to this script into jdk_version, jdk_url
+rem and jdk_sha256.
+rem
+rem The values are never handed to CALL: CALL expands %% a second time and the
+rem Temurin URLs contain %%2B, which would turn into CALL's second argument. A
+rem FOR variable is safe, so the whole file is read in one loop here. The file
+rem is written by misc/update-dist.sh and is not meant to be edited by hand, so
+rem no whitespace around the values is trimmed.
+:read_properties
+if not exist "%properties_file%" (
+  echo %properties_file% not found. Re-run %script_dir%install.cmd to restore it. 1>&2
+  exit /b 1
+)
+setlocal enabledelayedexpansion
+set "found_version="
+set "found_url="
+set "found_sha="
+for /f "usebackq eol=# tokens=1,* delims==" %%K in ("%properties_file%") do (
+  if /i "%%K"=="bootstrapJdkVersion" set "found_version=%%L"
+  if /i "%%K"=="bootstrapJdkUrl.%platform%" set "found_url=%%L"
+  if /i "%%K"=="bootstrapJdkSha256Sum.%platform%" set "found_sha=%%L"
+)
+endlocal & set "jdk_version=%found_version%" & set "jdk_url=%found_url%" & set "jdk_sha256=%found_sha%"
+if "%jdk_url%"=="" (
+  echo %properties_file% pins no JDK for %platform% 1>&2
+  exit /b 1
+)
+rem Only https, so that a tampered properties file cannot point the download
+rem at a plaintext host
+if "%jdk_url:~0,8%"=="https://" exit /b 0
+echo Refusing to download a JDK over anything but https: %jdk_url% 1>&2
+exit /b 1
+
+rem ===========================================================================
+rem Installing
+rem ===========================================================================
+
+rem Downloads the JDK into %jdk_dir%, one run at a time; the others wait and
+rem then use what it installed.
+:install_jdk
 if not exist "%cache_dir%\jdks" mkdir "%cache_dir%\jdks" 2>nul
-set "lock_dir=%cache_dir%\jdks\bootstrap.lock"
-set "lock_done=%cache_dir%\jdks\bootstrap\bin\java.exe"
+set "lock_dir=%jdk_dir%.lock"
+set "lock_done=%jdk_dir%\bin\java.exe"
 call :acquire_lock
 if errorlevel 2 exit /b 0
 if errorlevel 1 exit /b 1
-call :download_bootstrap_jdk_locked
+call :install_jdk_locked
 set "jdk_result=%ERRORLEVEL%"
 call :release_lock
 exit /b %jdk_result%
 
-:download_bootstrap_jdk_locked
+:install_jdk_locked
 rem another run may have installed it while we waited for the lock
-if exist "%cache_dir%\jdks\bootstrap\bin\java.exe" exit /b 0
-call :jvm_index_entry "windows-%index_arch%" || exit /b 1
-if "%index_url%"=="" (
-  echo No Temurin %bootstrap_java_version% found in the JVM index for windows-%index_arch% 1>&2
-  exit /b 1
-)
-rem The index says how the archive is packed; keep its extension so the file on
-rem disk matches what was downloaded, as jbanglite.jar does
-if "%index_type%"=="tgz" (set "archive_ext=tar.gz") else (set "archive_ext=%index_type%")
-set "jdk_archive=%cache_dir%\bootstrap-jdk-%run_id%.%archive_ext%"
-set "jdk_sha_file=%cache_dir%\bootstrap-jdk-%run_id%.sha256"
+if exist "%jdk_dir%\bin\java.exe" exit /b 0
+rem this run's own names, so the JDK only appears under its real name once it
+rem is complete
+set "jdk_archive=%cache_dir%\bootstrap-jdk-%run_id%.zip"
 set "jdk_unpack_dir=%cache_dir%\jdks\bootstrap-%run_id%.tmp"
 
-echo No Java found. Downloading Temurin %index_version%. Be patient, this can take several minutes... 1>&2
-set "dl_url=%index_url%"
+echo No Java found. Downloading Temurin %jdk_version%. Be patient, this can take several minutes... 1>&2
+set "dl_url=%jdk_url%"
 set "dl_out=%jdk_archive%"
 call :download
 if errorlevel 1 (
-  echo Error downloading JDK from %index_url% 1>&2
+  del /f /q "%jdk_archive%" 2>nul
+  echo Error downloading the JDK from %jdk_url% 1>&2
   exit /b 1
 )
-call :verify_jdk_archive || exit /b 1
 
-echo Installing Temurin %index_version%... 1>&2
+call :sha256 "%jdk_archive%"
+if /i not "%jdk_sha256%"=="%sha256_result%" goto :jdk_sha_mismatch
+
+echo Installing Temurin %jdk_version%... 1>&2
 if exist "%jdk_unpack_dir%" rmdir /s /q "%jdk_unpack_dir%"
 mkdir "%jdk_unpack_dir%"
+rem the archive is a .zip on Windows, which the tar Windows ships with reads
 tar -xf "%jdk_archive%" -C "%jdk_unpack_dir%"
 if errorlevel 1 goto :bootstrap_jdk_broken
 rem the archive holds a single root folder, which becomes the JDK directory
-set "jdk_root=%jdk_unpack_dir%"
+set "jdk_root="
 for /d %%D in ("%jdk_unpack_dir%\*") do if exist "%%D\bin\java.exe" set "jdk_root=%%D"
-if not exist "%jdk_root%\bin\java.exe" goto :bootstrap_jdk_broken
-if exist "%cache_dir%\jdks\bootstrap" rmdir /s /q "%cache_dir%\jdks\bootstrap"
-move "%jdk_root%" "%cache_dir%\jdks\bootstrap" >nul
+if not defined jdk_root goto :bootstrap_jdk_broken
+if exist "%jdk_dir%" rmdir /s /q "%jdk_dir%"
+move "%jdk_root%" "%jdk_dir%" >nul
 if exist "%jdk_unpack_dir%" rmdir /s /q "%jdk_unpack_dir%"
-del /f /q "%jdk_archive%" "%jdk_sha_file%" 2>nul
+del /f /q "%jdk_archive%" 2>nul
 exit /b 0
+
+:jdk_sha_mismatch
+del /f /q "%jdk_archive%" 2>nul
+echo SHA-256 mismatch for %jdk_url%: expected %jdk_sha256% but got %sha256_result% 1>&2
+exit /b 1
 
 :bootstrap_jdk_broken
 if exist "%jdk_unpack_dir%" rmdir /s /q "%jdk_unpack_dir%"
-del /f /q "%jdk_archive%" "%jdk_sha_file%" 2>nul
-echo Error installing JDK 1>&2
-exit /b 1
-
-rem Checks %jdk_archive% against the SHA-256 Temurin publishes next to it. A
-rem missing checksum only warns; a wrong one deletes the archive and fails.
-:verify_jdk_archive
-set "dl_url=%index_url%.sha256.txt"
-set "dl_out=%jdk_sha_file%"
-call :download
-if errorlevel 1 (
-  echo No published SHA-256 found for %index_url%, skipping verification 1>&2
-  exit /b 0
-)
-set "expected_sha="
-for /f "usebackq tokens=1" %%S in ("%jdk_sha_file%") do if not defined expected_sha set "expected_sha=%%S"
-call :sha256 "%jdk_archive%"
-if /i "%expected_sha%"=="%sha256_result%" exit /b 0
 del /f /q "%jdk_archive%" 2>nul
-echo SHA-256 mismatch for %index_url%: expected %expected_sha% but got %sha256_result% 1>&2
+echo Error installing the JDK 1>&2
 exit /b 1
-
-rem Sets index_version, index_type and index_url to the newest Temurin
-rem %bootstrap_java_version% in the JVM index for the platform %1
-:jvm_index_entry
-setlocal enabledelayedexpansion
-set "platform=%~1"
-if not exist "%cache_dir%" mkdir "%cache_dir%"
-set "index_base=%jvm_index_base_url%/io/get-coursier/jvm/indices/index-%platform%"
-
-rem the newest published index, from the Maven metadata
-set "dl_url=!index_base!/maven-metadata.xml"
-set "dl_out=%cache_dir%\jvm-index-%run_id%.xml"
-call :download || (
-  echo Could not read the JVM index from !index_base! 1>&2
-  endlocal & exit /b 1
-)
-set "index_release="
-for /f "usebackq delims=" %%L in (`findstr "<release>" "%cache_dir%\jvm-index-%run_id%.xml"`) do (
-  set "line=%%L"
-  set "line=!line:*<release>=!"
-  for /f "delims=<" %%V in ("!line!") do set "index_release=%%V"
-)
-if "!index_release!"=="" (
-  echo Could not determine the newest JVM index version 1>&2
-  endlocal & exit /b 1
-)
-
-rem the index itself, a jar holding one JSON file per platform
-set "dl_url=!index_base!/!index_release!/index-%platform%-!index_release!.jar"
-set "dl_out=%cache_dir%\jvm-index-%run_id%.jar"
-call :download || (
-  echo Could not download the JVM index 1>&2
-  endlocal & exit /b 1
-)
-if exist "%cache_dir%\jvm-index-%run_id%" rmdir /s /q "%cache_dir%\jvm-index-%run_id%"
-mkdir "%cache_dir%\jvm-index-%run_id%"
-tar -xf "%cache_dir%\jvm-index-%run_id%.jar" -C "%cache_dir%\jvm-index-%run_id%" "coursier/jvm/indices/v1/%platform%.json" >nul 2>&1
-set "index_json=%cache_dir%\jvm-index-%run_id%\coursier\jvm\indices\v1\%platform%.json"
-if not exist "!index_json!" (
-  echo The JVM index has no data for %platform% 1>&2
-  endlocal & exit /b 1
-)
-
-rem The index is a pretty-printed JSON object per distribution, whose entries
-rem read  "<version>": "<zip|tgz>+<url>" . Lines are read whole and split on the
-rem quote character here, so no line has to be matched with a pattern: a line
-rem without a quoted field is the } that ends the temurin object.
-set "in_temurin=" & set "best_key=" & set "best_version=" & set "best_type=" & set "best_url="
-for /f "usebackq delims=" %%L in ("!index_json!") do (
-  if not "!in_temurin!"=="done" (
-    set "line=%%L"
-    set "entry_key=" & set "entry_value="
-    for /f tokens^=2^,4^ delims^=^" %%V in ("!line!") do (
-      set "entry_key=%%V"
-      set "entry_value=%%W"
-    )
-    if defined in_temurin (
-      if not defined entry_key (
-        set "in_temurin=done"
-      ) else (
-        set "candidate_version=!entry_key!"
-        set "candidate_value=!entry_value!"
-        call :keep_newest_candidate
-      )
-    ) else (
-      if "!entry_key!"=="temurin" set "in_temurin=1"
-    )
-  )
-)
-rem the index was only needed to pick an entry
-del /f /q "%cache_dir%\jvm-index-%run_id%.xml" "%cache_dir%\jvm-index-%run_id%.jar" 2>nul
-rmdir /s /q "%cache_dir%\jvm-index-%run_id%" 2>nul
-endlocal & (
-  set "index_version=%best_version%"
-  set "index_type=%best_type%"
-  set "index_url=%best_url%"
-)
-exit /b 0
-
-rem Keeps %candidate_version% / %candidate_value% ("<type>+<url>") when it is a
-rem newer Temurin %bootstrap_java_version% than the best one so far. Both are
-rem passed in variables, not as arguments, because CALL would expand the %2B in
-rem the URL.
-:keep_newest_candidate
-for /f "delims=." %%M in ("%candidate_version%") do set "candidate_major=%%M"
-if not "%candidate_major%"=="%bootstrap_java_version%" exit /b 0
-set "candidate_type=" & set "candidate_url="
-for /f "tokens=1,* delims=+" %%T in ("%candidate_value%") do (
-  set "candidate_type=%%T"
-  set "candidate_url=%%U"
-)
-if not defined candidate_url exit /b 0
-call :version_key "%candidate_version%"
-if not "%version_key%" GTR "%best_key%" exit /b 0
-set "best_key=%version_key%"
-set "best_version=%candidate_version%"
-set "best_type=%candidate_type%"
-set "best_url=%candidate_url%"
-exit /b 0
-
-rem Sets version_key to a zero-padded form of the dotted version %1, so that two
-rem versions can be compared as strings
-:version_key
-setlocal
-set "part1=0" & set "part2=0" & set "part3=0" & set "part4=0"
-for /f "tokens=1-4 delims=." %%A in ("%~1") do (
-  if not "%%A"=="" set "part1=%%A"
-  if not "%%B"=="" set "part2=%%B"
-  if not "%%C"=="" set "part3=%%C"
-  if not "%%D"=="" set "part4=%%D"
-)
-set "pad1=00000%part1%" & set "pad2=00000%part2%"
-set "pad3=00000%part3%" & set "pad4=00000%part4%"
-endlocal & set "version_key=%pad1:~-5%%pad2:~-5%%pad3:~-5%%pad4:~-5%"
-exit /b 0
 
 rem ===========================================================================
 rem Locking
@@ -322,7 +228,7 @@ setlocal
 set /a attempt=0
 :download_attempt
 set /a attempt+=1
-curl -fsSL "%dl_url%" -o "%dl_out%" 2>nul && (endlocal & exit /b 0)
+curl -fsSL --proto "=https" --proto-redir "=https" "%dl_url%" -o "%dl_out%" 2>nul && (endlocal & exit /b 0)
 if %attempt% GTR %download_retry% (endlocal & exit /b 1)
 if %download_retry_delay% GTR 0 (
   set /a wait_seconds=%download_retry_delay%

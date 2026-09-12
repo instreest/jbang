@@ -81,44 +81,44 @@ rem The properties
 rem ===========================================================================
 
 rem Reads jbanglite.properties next to this script into distribution_version,
-rem distribution_url and distribution_sha256. The file is ours, so this reads
-rem what we write: 'key=value' lines, '#' comments.
+rem distribution_url and distribution_sha256.
+rem
+rem The values are never handed to CALL: CALL expands %% a second time, and a
+rem URL that contains one (a Temurin one contains %%2B) would turn into CALL's
+rem second argument. A FOR variable is safe, so the whole file is read in one
+rem loop here. The file is written by misc/update-dist.sh and is not meant to
+rem be edited by hand, so no whitespace around the values is trimmed.
 :read_properties
 set "properties_file=%script_dir%jbanglite.properties"
 if not exist "%properties_file%" (
   echo %properties_file% not found. Re-run %script_dir%install.cmd to restore it. 1>&2
   exit /b 1
 )
-set "distribution_version="
-set "distribution_url="
-set "distribution_sha256="
-for /f "usebackq eol=# tokens=1,* delims==" %%K in ("%properties_file%") do call :set_property "%%K" "%%L"
+setlocal enabledelayedexpansion
+set "found_version="
+set "found_url="
+set "found_sha="
+for /f "usebackq eol=# tokens=1,* delims==" %%K in ("%properties_file%") do (
+  if /i "%%K"=="distributionVersion" set "found_version=%%L"
+  if /i "%%K"=="distributionUrl" set "found_url=%%L"
+  if /i "%%K"=="distributionSha256Sum" set "found_sha=%%L"
+)
+endlocal & set "distribution_version=%found_version%" & set "distribution_url=%found_url%" & set "distribution_sha256=%found_sha%"
 if not "%JBANGLITE_DIST_URL%"=="" set "distribution_url=%JBANGLITE_DIST_URL%"
 if "%distribution_version%"=="" goto :properties_incomplete
 if "%distribution_url%"=="" goto :properties_incomplete
-exit /b 0
+rem Only https, so that neither a tampered properties file nor
+rem JBANGLITE_DIST_URL can point the download at a plaintext host. A loopback
+rem address is allowed so that the tests can serve the jar locally.
+if "%distribution_url:~0,8%"=="https://" exit /b 0
+if "%distribution_url:~0,17%"=="http://127.0.0.1:" exit /b 0
+if "%distribution_url:~0,17%"=="http://localhost:" exit /b 0
+echo Refusing to download the jar over anything but https: %distribution_url% 1>&2
+exit /b 1
 
 :properties_incomplete
 echo %properties_file% needs a distributionVersion and a distributionUrl 1>&2
 exit /b 1
-
-rem Keeps the key %1 with the value %2 when it is one we know. The value may
-rem carry trailing whitespace from the file, which FOR does not strip.
-rem The trimming is a plain loop because in CMD the GOTO of
-rem `if cond set ... & goto ...` runs whether or not the condition held.
-:set_property
-set "prop_key=%~1"
-set "prop_value=%~2"
-:trim_property_value
-if "%prop_value%"=="" goto :store_property
-if not "%prop_value:~-1%"==" " if not "%prop_value:~-1%"=="	" goto :store_property
-set "prop_value=%prop_value:~0,-1%"
-goto :trim_property_value
-:store_property
-if /i "%prop_key%"=="distributionVersion" set "distribution_version=%prop_value%"
-if /i "%prop_key%"=="distributionUrl" set "distribution_url=%prop_value%"
-if /i "%prop_key%"=="distributionSha256Sum" set "distribution_sha256=%prop_value%"
-exit /b 0
 
 rem ===========================================================================
 rem Installing
@@ -217,7 +217,7 @@ setlocal
 set /a attempt=0
 :download_attempt
 set /a attempt+=1
-curl -fsSL "%dl_url%" -o "%dl_out%" 2>nul && (endlocal & exit /b 0)
+curl -fsSL --proto "=https,http" --proto-redir "=https" "%dl_url%" -o "%dl_out%" 2>nul && (endlocal & exit /b 0)
 if %attempt% GTR %download_retry% (endlocal & exit /b 1)
 if %download_retry_delay% GTR 0 (
   set /a wait_seconds=%download_retry_delay%
