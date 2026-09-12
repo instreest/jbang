@@ -132,9 +132,12 @@ if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACH
 # nothing is downloaded. Otherwise the bootstrap script installs the version
 # jbanglite.properties pins into the cache, shared by every project on this
 # machine, and prints where it put it; everything else it says goes to stderr.
+# It is run through bash rather than executed, so a checkout that lost the
+# execute bit (core.fileMode=false, a zip download) still works, as it does
+# for this script itself.
 jarPath=$abs_jbang_dir/jbanglite.jar
 if [ ! -f "$jarPath" ]; then
-  jarPath=$("$abs_jbang_dir/jbanglite-bootstrap-jar") || exit 1
+  jarPath=$(bash "$abs_jbang_dir/jbanglite-bootstrap-jar") || exit 1
 fi
 
 setup_java_exec
