@@ -160,8 +160,7 @@ class TestWindowsWrapperInstall extends AbstractScriptTest {
 
 		assertEquals(0, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("jbanglite 9.9.9"), result.stdout);
-		assertTrue(result.stdout.contains("jar 8.8.8"), result.stdout);
-		assertTrue(result.stdout.contains("vendored, so 8.8.8 runs and not the pinned 9.9.9"), result.stdout);
+		assertTrue(result.stdout.contains("vendored, so this jar runs and not the pinned 9.9.9"), result.stdout);
 		wm.verify(0, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 

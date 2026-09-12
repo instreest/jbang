@@ -59,10 +59,16 @@ rem ===========================================================================
 rem This script's own options
 rem ===========================================================================
 
-rem Prints which JBangLite this project pins and which jar is actually
-rem installed. Nothing is downloaded: when the jar is not there yet it is only
-rem reported as missing, and a vendored jar of another version is called out,
-rem because that is the jar that would run.
+rem Prints which JBangLite this project pins and which jar actually runs,
+rem without downloading anything.
+rem
+rem The cached jar needs no inspection to be named: jbanglite-bootstrap-jar.cmd
+rem puts it under the version it pinned and only after its SHA-256 matched, so
+rem the directory it sits in is its version. A jar a project vendored next to
+rem the launcher is a different matter - naming its version would mean reading
+rem the manifest out of a zip, which needs a tool that is not dependably there
+rem - so it is reported as what it is: the jar that runs instead of the pinned
+rem one.
 :print_version
 call :property distributionVersion
 if "%property_value%"=="" (
@@ -80,37 +86,11 @@ echo   jar not installed yet, it is downloaded on the first run
 exit /b 0
 
 :print_cached_jar
-call :jar_version "%cached%"
-if "%jar_version_value%"=="" set "jar_version_value=unknown"
-echo   jar %jar_version_value% at %cached%
+echo   jar %pinned% at %cached%
 exit /b 0
 
 :print_vendored_jar
-call :jar_version "%vendored%"
-if "%jar_version_value%"=="" set "jar_version_value=unknown"
-if /i "%jar_version_value%"=="%pinned%" goto :print_vendored_match
-echo   jar %jar_version_value% at %vendored% (vendored, so %jar_version_value% runs and not the pinned %pinned%)
-exit /b 0
-:print_vendored_match
-echo   jar %jar_version_value% at %vendored% (vendored)
-exit /b 0
-
-rem Sets jar_version_value to the JBang-Version in the manifest of the jar %1,
-rem empty when it cannot be read. The jar is a zip and Windows tar reads those.
-:jar_version
-setlocal enabledelayedexpansion
-set "found="
-set "manifest_dir=%TEMP%\jbanglite-%run_id%-manifest"
-if exist "%manifest_dir%" rmdir /s /q "%manifest_dir%" 2>nul
-mkdir "%manifest_dir%" 2>nul
-tar -xf "%~1" -C "%manifest_dir%" META-INF/MANIFEST.MF >nul 2>&1
-if exist "%manifest_dir%\META-INF\MANIFEST.MF" (
-  for /f "usebackq tokens=1,* delims=: " %%A in ("%manifest_dir%\META-INF\MANIFEST.MF") do (
-    if /i "%%A"=="JBang-Version" if not defined found set "found=%%B"
-  )
-)
-rmdir /s /q "%manifest_dir%" 2>nul
-endlocal & set "jar_version_value=%found%"
+echo   jar at %vendored% (vendored, so this jar runs and not the pinned %pinned%)
 exit /b 0
 
 rem Replaces this installation with the one from %2 (a branch, tag or commit of

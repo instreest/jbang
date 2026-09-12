@@ -104,6 +104,12 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 	private RunResult runLauncher(List<String> command, String... args) throws Exception {
 		Map<String, String> env = new HashMap<>(System.getenv());
+		// the defaults come first, so that a test naming one of them overrides it
+		// rather than being overridden by it
+		env.put("JAVA_HOME", System.getProperty("java.home"));
+		env.put("JBANG_DIR", tempDir.resolve("jbang-home").toString());
+		env.put("JBANG_CACHE_DIR", tempDir.resolve("cache").toString());
+		env.put("JBANG_NO_VERSION_CHECK", "true");
 		int i = 0;
 		// leading "NAME", "value" pairs are environment variables
 		while (args.length - i > 2 && (args[i].startsWith("JBANG_") || args[i].equals("JAVA_HOME"))) {
@@ -111,10 +117,6 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 			i += 2;
 		}
 		command.addAll(Arrays.asList(args).subList(i, args.length));
-		env.put("JAVA_HOME", System.getProperty("java.home"));
-		env.put("JBANG_DIR", tempDir.resolve("jbang-home").toString());
-		env.put("JBANG_CACHE_DIR", tempDir.resolve("cache").toString());
-		env.put("JBANG_NO_VERSION_CHECK", "true");
 		return runProcess(command, env);
 	}
 

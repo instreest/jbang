@@ -27,20 +27,17 @@ property() {
   sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$propertiesFile" | head -1 | tr -d '\r'
 }
 
-# The JBang-Version recorded in the manifest of the jar $1, empty when it
-# cannot be read (the jar is a zip, so this needs unzip; without it the version
-# is simply not shown)
-jar_version() {
-  [ -x "$(command -v unzip)" ] || return 0
-  unzip -p "$1" META-INF/MANIFEST.MF 2>/dev/null | tr -d '\r' | sed -n 's/^JBang-Version: //p' | head -1
-}
-
-# Prints which JBangLite this project pins and which jar is actually installed.
-# Nothing is downloaded: when the jar is not there yet it is only reported as
-# missing, and a vendored jar of another version is called out, because that is
-# the jar that would run.
+# Prints which JBangLite this project pins and which jar actually runs, without
+# downloading anything.
+#
+# The cached jar needs no inspection to be named: jbanglite-bootstrap-jar puts
+# it under the version it pinned and only after its SHA-256 matched, so the
+# directory it sits in is its version. A jar a project vendored next to the
+# launcher is a different matter - naming its version would mean reading the
+# manifest out of a zip, which needs a tool that is not dependably there - so
+# it is reported as what it is: the jar that runs instead of the pinned one.
 print_version() {
-  local pinned vendored cached jar actual
+  local pinned vendored cached
   pinned=$(property distributionVersion)
   if [ -z "$pinned" ]; then
     echo "No distributionVersion in $propertiesFile" 1>&2
@@ -51,22 +48,11 @@ print_version() {
   vendored=$abs_jbang_dir/jbanglite.jar
   cached=$TDIR/jbanglite/$pinned/jbanglite.jar
   if [ -f "$vendored" ]; then
-    jar=$vendored
+    echo "  jar at $vendored (vendored, so this jar runs and not the pinned $pinned)"
   elif [ -f "$cached" ]; then
-    jar=$cached
+    echo "  jar $pinned at $cached"
   else
     echo "  jar not installed yet, it is downloaded on the first run"
-    return
-  fi
-  actual=$(jar_version "$jar")
-  if [ "$jar" = "$vendored" ]; then
-    if [ -n "$actual" ] && [ "$actual" != "$pinned" ]; then
-      echo "  jar $actual at $jar (vendored, so $actual runs and not the pinned $pinned)"
-    else
-      echo "  jar ${actual:-unknown} at $jar (vendored)"
-    fi
-  else
-    echo "  jar ${actual:-unknown} at $jar"
   fi
 }
 

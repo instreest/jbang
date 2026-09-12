@@ -81,9 +81,13 @@ jbanglite 0.3.0
   jar 0.3.0 at /home/me/.jbang/cache/jbanglite/0.3.0/jbanglite.jar
 ```
 
-A vendored jar is reported as such, with its own version, because that is the
-jar that would run. `--update` does not touch it and warns that it still wins,
-rather than deleting a file the project committed.
+The cached jar can be named without being opened: the bootstrap script put it
+under the version it pinned, and only after its SHA-256 matched. A jar a
+project vendored next to the launcher is reported as the jar that runs instead
+of the pinned one; naming its version would mean reading a manifest out of a
+zip, which needs a tool that is not dependably present. `--update` does not
+touch such a jar and warns that it still wins, rather than deleting a file the
+project committed.
 
 There is deliberately no version check on ordinary runs: nothing reaches the
 network unless a jar or a JDK is actually missing, and telling users about a
