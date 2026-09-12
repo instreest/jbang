@@ -172,6 +172,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 		RunResult before = runProcess(bashCmd(wrapper.resolve("jbanglite"), "--version"), env());
 		assertEquals(0, before.exitCode, before.stderr);
 		assertTrue(before.stdout.contains("jbanglite 9.9.9"), before.stdout);
+		assertTrue(before.stdout.contains("pinned 9.9.9 by"), before.stdout);
 		assertTrue(before.stdout.contains("jar not installed yet"), before.stdout);
 		wm.verify(0, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 
@@ -180,6 +181,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 		RunResult after = runProcess(bashCmd(wrapper.resolve("jbanglite"), "--version"), env());
 		assertEquals(0, after.exitCode, after.stderr);
 		assertTrue(after.stdout.contains("jbanglite 9.9.9"), after.stdout);
+		assertTrue(after.stdout.contains("pinned 9.9.9 by"), after.stdout);
 		assertTrue(after.stdout.contains("jar 9.9.9 at"), after.stdout);
 		wm.verify(1, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
@@ -193,8 +195,11 @@ class TestWrapperInstall extends AbstractScriptTest {
 		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "--version"), env());
 
 		assertEquals(0, result.exitCode, result.stderr);
-		assertTrue(result.stdout.contains("jbanglite 9.9.9"), result.stdout);
-		assertTrue(result.stdout.contains("vendored, so this jar runs and not the pinned 9.9.9"), result.stdout);
+		// the vendored jar is the one that runs, so it names the version
+		assertTrue(result.stdout.contains("jbanglite 8.8.8"), result.stdout);
+		assertTrue(result.stdout.contains("pinned 9.9.9 by"), result.stdout);
+		assertTrue(result.stdout.contains("jar 8.8.8 at"), result.stdout);
+		assertTrue(result.stdout.contains("vendored, so this jar runs and not the pinned version"), result.stdout);
 		wm.verify(0, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 

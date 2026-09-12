@@ -27,31 +27,45 @@ property() {
   sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$propertiesFile" | head -1 | tr -d '\r'
 }
 
-# Prints which JBangLite this project pins and which jar actually runs, without
-# downloading anything.
+# The version the jar $1 reports for itself, empty when it cannot be asked.
+# The jar is the authority on its own version, and asking it needs no tool for
+# reading a zip; it only needs a JDK that is already here, so nothing is
+# downloaded to answer --version.
+jar_version() {
+  find_existing_java 2>/dev/null || return 0
+  "$JAVA_EXEC" -jar "$1" --version 2>/dev/null | head -1 | tr -d '\r'
+}
+
+# Prints the version that will actually run, and under it where that was
+# decided: the version jbanglite.properties pins, and the jar that will be
+# used. Nothing is downloaded.
 #
-# The cached jar needs no inspection to be named: jbanglite-bootstrap-jar puts
-# it under the version it pinned and only after its SHA-256 matched, so the
+# The cached jar needs no asking to be named: jbanglite-bootstrap-jar puts it
+# under the version it pinned and only after its SHA-256 matched, so the
 # directory it sits in is its version. A jar a project vendored next to the
-# launcher is a different matter - naming its version would mean reading the
-# manifest out of a zip, which needs a tool that is not dependably there - so
-# it is reported as what it is: the jar that runs instead of the pinned one.
+# launcher is asked, because it is the one that will run and its version is
+# whatever the project put there.
 print_version() {
-  local pinned vendored cached
+  local pinned vendored cached actual
   pinned=$(property distributionVersion)
   if [ -z "$pinned" ]; then
     echo "No distributionVersion in $propertiesFile" 1>&2
     exit 1
   fi
-  echo "jbanglite $pinned"
-  echo "  pinned by $propertiesFile"
   vendored=$abs_jbang_dir/jbanglite.jar
   cached=$TDIR/jbanglite/$pinned/jbanglite.jar
   if [ -f "$vendored" ]; then
-    echo "  jar at $vendored (vendored, so this jar runs and not the pinned $pinned)"
+    actual=$(jar_version "$vendored")
+    echo "jbanglite ${actual:-$pinned}"
+    echo "  pinned $pinned by $propertiesFile"
+    echo "  jar ${actual:-of an unknown version} at $vendored (vendored, so this jar runs and not the pinned version)"
   elif [ -f "$cached" ]; then
+    echo "jbanglite $pinned"
+    echo "  pinned $pinned by $propertiesFile"
     echo "  jar $pinned at $cached"
   else
+    echo "jbanglite $pinned"
+    echo "  pinned $pinned by $propertiesFile"
     echo "  jar not installed yet, it is downloaded on the first run"
   fi
 }
@@ -114,9 +128,11 @@ usable_java() {
   [ "$major" -ge "$minJavaVersion" ] 2>/dev/null
 }
 
-# Determines the java to run jbanglite.jar with. Any JDK $minJavaVersion or newer
-# will do; the JDK a script asks for with //JAVA is chosen by jbanglite.jar itself.
-setup_java_exec() {
+# Looks for a JDK that is already on this machine and sets JAVA_EXEC to its
+# java, without installing anything; 1 when there is none. Any JDK
+# $minJavaVersion or newer will do; the JDK a script asks for with //JAVA is
+# chosen by jbanglite.jar itself.
+find_existing_java() {
   unset JAVA_EXEC
   # The JDK jbanglite-bootstrap-jdk downloaded on an earlier run
   if usable_java "$TDIR/jdks/bootstrap"; then
@@ -148,11 +164,18 @@ setup_java_exec() {
       return
     fi
   fi
-  # Nothing usable found, so have a JDK of our own installed. The bootstrap
-  # script prints where it put the JDK; everything else it says goes to stderr.
-  # It is run through bash rather than executed, so a checkout that lost the
-  # execute bit (core.fileMode=false, a zip download) still works, as it does
-  # for this script itself.
+  return 1
+}
+
+# The java to run jbanglite.jar with, installing one when the machine has none.
+# The bootstrap script prints where it put the JDK; everything else it says
+# goes to stderr. It is run through bash rather than executed, so a checkout
+# that lost the execute bit (core.fileMode=false, a zip download) still works,
+# as it does for this script itself.
+setup_java_exec() {
+  if find_existing_java; then
+    return
+  fi
   JAVA_HOME=$(bash "$abs_jbang_dir/jbanglite-bootstrap-jdk") || exit 1
   export JAVA_HOME
   JAVA_EXEC="$JAVA_HOME/bin/java"

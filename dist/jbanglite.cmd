@@ -59,16 +59,15 @@ rem ===========================================================================
 rem This script's own options
 rem ===========================================================================
 
-rem Prints which JBangLite this project pins and which jar actually runs,
-rem without downloading anything.
+rem Prints the version that will actually run, and under it where that was
+rem decided: the version jbanglite.properties pins, and the jar that will be
+rem used. Nothing is downloaded.
 rem
-rem The cached jar needs no inspection to be named: jbanglite-bootstrap-jar.cmd
+rem The cached jar needs no asking to be named: jbanglite-bootstrap-jar.cmd
 rem puts it under the version it pinned and only after its SHA-256 matched, so
 rem the directory it sits in is its version. A jar a project vendored next to
-rem the launcher is a different matter - naming its version would mean reading
-rem the manifest out of a zip, which needs a tool that is not dependably there
-rem - so it is reported as what it is: the jar that runs instead of the pinned
-rem one.
+rem the launcher is asked, because it is the one that will run and its version
+rem is whatever the project put there.
 :print_version
 call :property distributionVersion
 if "%property_value%"=="" (
@@ -76,21 +75,48 @@ if "%property_value%"=="" (
   exit /b 1
 )
 set "pinned=%property_value%"
-echo jbanglite %pinned%
-echo   pinned by %properties_file%
 set "vendored=%script_dir%jbanglite.jar"
 set "cached=%cache_dir%\jbanglite\%pinned%\jbanglite.jar"
 if exist "%vendored%" goto :print_vendored_jar
 if exist "%cached%" goto :print_cached_jar
+echo jbanglite %pinned%
+echo   pinned %pinned% by %properties_file%
 echo   jar not installed yet, it is downloaded on the first run
 exit /b 0
 
 :print_cached_jar
+echo jbanglite %pinned%
+echo   pinned %pinned% by %properties_file%
 echo   jar %pinned% at %cached%
 exit /b 0
 
 :print_vendored_jar
-echo   jar at %vendored% (vendored, so this jar runs and not the pinned %pinned%)
+call :jar_version "%vendored%"
+if not defined jar_version_value goto :print_vendored_unknown
+echo jbanglite %jar_version_value%
+echo   pinned %pinned% by %properties_file%
+echo   jar %jar_version_value% at %vendored% (vendored, so this jar runs and not the pinned version)
+exit /b 0
+:print_vendored_unknown
+echo jbanglite %pinned%
+echo   pinned %pinned% by %properties_file%
+echo   jar of an unknown version at %vendored% (vendored, so this jar runs and not the pinned version)
+exit /b 0
+
+rem Sets jar_version_value to the version the jar %1 reports for itself, empty
+rem when it cannot be asked. The jar is the authority on its own version, and
+rem asking it needs no tool for reading a zip; it only needs a JDK that is
+rem already here, so nothing is downloaded to answer --version.
+:jar_version
+setlocal
+set "found="
+call :find_existing_java 2>nul || goto :jar_version_done
+set "probe=%TEMP%\jbanglite-%run_id%-jarversion.txt"
+"%java_exec%" -jar "%~1" --version > "%probe%" 2>nul
+for /f "usebackq delims=" %%V in ("%probe%") do if not defined found set "found=%%V"
+del /f /q "%probe%" 2>nul
+:jar_version_done
+endlocal & set "jar_version_value=%found%"
 exit /b 0
 
 rem Replaces this installation with the one from %2 (a branch, tag or commit of
@@ -162,7 +188,15 @@ rem ===========================================================================
 rem Sets java_exec (and JAVA_HOME) to the Java to run the jar with, downloading
 rem one when the machine has none. Any Java %min_java_version% or newer will do:
 rem the JDK a script asks for with //JAVA is chosen by jbanglite.jar itself.
+rem The java to run jbanglite.jar with, installing one when the machine has
+rem none.
 :find_java
+call :find_existing_java && exit /b 0
+goto :install_bootstrap_jdk
+
+rem Looks for a JDK that is already on this machine and sets java_exec to its
+rem java, without installing anything; exits 1 when there is none.
+:find_existing_java
 rem The JDK jbanglite-bootstrap-jdk.cmd downloaded on an earlier run
 call :usable_java "%cache_dir%\jdks\bootstrap" && (
   set "JAVA_HOME=%cache_dir%\jdks\bootstrap"
@@ -170,19 +204,19 @@ call :usable_java "%cache_dir%\jdks\bootstrap" && (
   exit /b 0
 )
 rem Then JAVA_HOME, but only when it points to a Java that is recent enough
-if "%JAVA_HOME%"=="" goto :find_path_java
+if "%JAVA_HOME%"=="" goto :find_path_javac
 if not exist "%JAVA_HOME%\bin\java.exe" (
   echo JAVA_HOME is set but does not seem to point to a Java runtime 1>&2
-  goto :find_path_java
+  goto :find_path_javac
 )
 call :java_major "%JAVA_HOME%"
 if "%java_major%"=="" (
   echo JAVA_HOME is set but the Java version could not be determined, ignoring it 1>&2
-  goto :find_path_java
+  goto :find_path_javac
 )
 if %java_major% LSS %min_java_version% (
   echo JAVA_HOME points to Java %java_major% which is older than Java %min_java_version%, ignoring it 1>&2
-  goto :find_path_java
+  goto :find_path_javac
 )
 set "java_exec=%JAVA_HOME%\bin\java.exe"
 exit /b 0
@@ -193,18 +227,18 @@ rem PATH is usually a stub (the Oracle javapath one, the App Execution alias)
 rem rather than the JDK's own bin directory. -J hands the option to javac's
 rem own JVM; it exists since Java 7, and an older javac just prints an error
 rem and no java.home, which leaves it ignored.
-:find_path_java
+:find_path_javac
 set "path_java="
 for /f "delims=" %%J in ('where javac 2^>nul') do if not defined path_java set "path_java=%%J"
-if not defined path_java goto :install_bootstrap_jdk
+if not defined path_java exit /b 1
 rem (through a file: a quoted path in front of a pipe is mangled by cmd /c)
 set "path_java_probe=%TEMP%\jbanglite-%run_id%-java.txt"
 "%path_java%" -J-XshowSettings:properties -version > "%path_java_probe%" 2>&1
 set "path_java_home="
 for /f "usebackq tokens=1,* delims== " %%A in (`findstr /r /c:"^ *java.home =" "%path_java_probe%"`) do set "path_java_home=%%B"
 del /f /q "%path_java_probe%" 2>nul
-if not defined path_java_home goto :install_bootstrap_jdk
-call :usable_java "%path_java_home%" || goto :install_bootstrap_jdk
+if not defined path_java_home exit /b 1
+call :usable_java "%path_java_home%" || exit /b 1
 set "JAVA_HOME=%path_java_home%"
 set "java_exec=%path_java_home%\bin\java.exe"
 exit /b 0

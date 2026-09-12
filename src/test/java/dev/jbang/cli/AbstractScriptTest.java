@@ -207,11 +207,18 @@ abstract class AbstractScriptTest {
 
 	/**
 	 * Stand-in for jbanglite.jar: writes to stdout and stderr and exits with the
-	 * given code ("exit N"). A launcher has nothing else to do with the jar than
-	 * to run it, so this is all a launcher test needs.
+	 * given code ("exit N"), and answers --version with the JBang-Version in its
+	 * own manifest, as the real jar does. A launcher has nothing else to do with
+	 * the jar than to run it, so this is all a launcher test needs.
 	 */
 	public static class FakeJBang {
-		public static void main(String[] args) {
+		public static void main(String[] args) throws IOException {
+			if (args.length > 0 && args[0].equals("--version")) {
+				try (InputStream in = FakeJBang.class.getResourceAsStream("/META-INF/MANIFEST.MF")) {
+					System.out.println(new Manifest(in).getMainAttributes().getValue("JBang-Version"));
+				}
+				return;
+			}
 			System.out.println("some output");
 			System.err.println("some error output");
 			System.exit(Integer.parseInt(args[1]));
