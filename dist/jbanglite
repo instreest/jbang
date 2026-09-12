@@ -2,19 +2,22 @@
 #
 # JBangLite launcher for POSIX shells (Linux, macOS, WSL, Git Bash, Cygwin).
 #
-# It runs the jbanglite.jar that sits next to it - committed to the project
-# together with this script, so a checkout needs nothing installed, not even a
+# It runs jbanglite.jar, so a checkout needs nothing installed, not even a
 # JDK. What it does, in order:
 #
-#   1. Which Java to use - the bootstrap JDK, JAVA_HOME, javac on the PATH, or
+#   1. Which jar to run  - a jbanglite.jar next to this script when a project
+#                          vendors one, otherwise the one that
+#                          jbanglite-bootstrap-jar installs from the version
+#                          pinned in jbanglite.properties
+#   2. Which Java to use - the bootstrap JDK, JAVA_HOME, javac on the PATH, or
 #                          the JDK that jbanglite-bootstrap-jdk (next to this
 #                          script) downloads when there is none
-#   2. Launch            - exec the jar; it builds the script and runs it
+#   3. Launch            - exec the jar; it builds the script and runs it
 #
-# That is all it does. Downloading a JDK is jbanglite-bootstrap-jdk's job, so
-# it can be run, tested and replaced on its own.
+# That is all it does. Fetching the jar and fetching a JDK belong to the two
+# bootstrap scripts, so each can be run, tested and replaced on its own.
 
-# --- 1. Which Java to use ----------------------------------------------------
+# --- 2. Which Java to use ----------------------------------------------------
 
 # The oldest Java that can run jbanglite.jar
 minJavaVersion=11
@@ -95,7 +98,7 @@ setup_java_exec() {
   JAVA_EXEC="$JAVA_HOME/bin/java"
 }
 
-# --- 2. Launch ---------------------------------------------------------------
+# --- 3. Launch ---------------------------------------------------------------
 
 # The jar does the rest: it builds the script and runs it as a child process
 # with our stdin, stdout and stderr, and exits with the script's status. So
@@ -123,11 +126,15 @@ esac
 if [[ -z "$JBANG_DIR" ]]; then JBDIR="$HOME/.jbang"; else JBDIR="$JBANG_DIR"; fi
 if [[ -z "$JBANG_CACHE_DIR" ]]; then TDIR="$JBDIR/cache"; else TDIR="$JBANG_CACHE_DIR"; fi
 
-# The jar is committed next to this script; there is nothing to download
+# --- 1. Which jar to run -----------------------------------------------------
+
+# A project may vendor the jar by dropping it next to this script, and then
+# nothing is downloaded. Otherwise the bootstrap script installs the version
+# jbanglite.properties pins into the cache, shared by every project on this
+# machine, and prints where it put it; everything else it says goes to stderr.
 jarPath=$abs_jbang_dir/jbanglite.jar
 if [ ! -f "$jarPath" ]; then
-  echo "$jarPath not found. Re-run $abs_jbang_dir/install.sh to restore it." 1>&2
-  exit 1
+  jarPath=$("$abs_jbang_dir/jbanglite-bootstrap-jar") || exit 1
 fi
 
 setup_java_exec

@@ -20,31 +20,56 @@ repository and commits it, so anyone who checks the project out can run its
 scripts without installing JBangLite — or a JDK — first.
 
 ```bash
-curl -Ls https://raw.githubusercontent.com/instreest/jbang/main/dist/install.sh | bash
-git add jbanglitew && git commit -m "Add JBangLite"
-jbanglitew/jbanglite src/Hello.java
+curl -Ls https://raw.githubusercontent.com/instreest/jbanglite/main/dist/install.sh | bash
+git add jbanglite && git commit -m "Add JBangLite"
+jbanglite/jbanglite src/Hello.java
 ```
 
 `install.cmd` does the same on Windows. The installer copies the launchers,
-their bootstrap-JDK scripts, `jbanglite.jar`, itself, `LICENSE` and a
-`README.md` into `jbanglitew/`, and all of it is committed, like a Gradle
-wrapper. Nothing is downloaded at run
-time except a JDK when the machine has none.
+their two bootstrap scripts, `jbanglite.properties`, itself, `LICENSE` and a
+`README.md` into `jbanglite/`, and all of it is committed, like a Gradle
+wrapper.
+
+**`jbanglite.jar` is not among them.** What a project commits is
+`jbanglite.properties`, which pins the version, the download URL and the
+SHA-256:
+
+```properties
+distributionVersion=0.2.0
+distributionUrl=https://github.com/instreest/jbanglite/releases/download/v0.2.0/jbanglite.jar
+distributionSha256Sum=db78...
+```
+
+On the first run `jbanglite-bootstrap-jar` downloads that jar into
+`$JBANG_CACHE_DIR/jbanglite/<version>`, verifies the checksum and keeps it
+there. The cache is per machine, so several projects pinning the same version
+share one download, and moving to a new version changes three lines rather
+than a 2 MB binary. This is what the Gradle and Maven wrappers do, and for the
+same reason: a 46 kB set of scripts in a project's history instead of a
+binary per update.
+
+A project that would rather not depend on the download can vendor the jar by
+dropping a `jbanglite.jar` into `jbanglite/` next to the launcher: it wins over
+the properties, and then nothing but a JDK is ever fetched.
 
 Re-running the installer updates an installation in place by replacing every
 file with the one from the chosen revision. `JBANGLITE_REF=<tag|commit>` pins
-another revision, `JBANGLITE_REPO` another fork.
+another revision, `JBANGLITE_REPO` another fork, `JBANGLITE_DIST_URL` points
+the jar download at a mirror.
 
-[`dist/`](dist) in this repository is exactly what a project gets, and it is
-the only form JBangLite is distributed in. Whenever a change should reach the
-projects that installed JBangLite: commit the change, run `misc/update-dist.sh`
-(it rebuilds the jar and copies the launchers and `LICENSE` there) and commit
-`dist/` as well. The jar is stamped with the commit it was built from, which is
-what `jbanglite --version` prints (`0.1.0-lite+<commit>`), so a project can tell
-which revision it has; `misc/update-dist.sh --check` rebuilds the jar with the
-same stamp and reports whether `dist/` is up to date. The jar is committed, so
-every refresh adds about 4 MB to the history of this repository and of every
-project that updates.
+[`dist/`](dist) in this repository is exactly what a project gets. Releasing
+means building the jar, refreshing `dist/` for its version, publishing the jar
+as a release asset and committing `dist/`:
+
+```bash
+misc/update-dist.sh 0.2.0
+gh release create v0.2.0 build/libs/jbanglite.jar
+git add dist && git commit -m "Release 0.2.0"
+```
+
+`misc/update-dist.sh --check` reports whether the scripts in `dist/` are up to
+date with the sources. The jar never enters git, so neither this repository nor
+the projects that install JBangLite grow by 2 MB per release.
 
 ## Directives
 
@@ -123,9 +148,15 @@ tunes that JVM.
 ### What the launcher scripts need
 
 The launchers (`jbanglite` for POSIX shells, `jbanglite.cmd` for Windows) do
-one thing: find a JDK and `exec` `jbanglite.jar` with it. They never call a
-command of the jar and set nothing in its environment. Which JVM runs
-`jbanglite.jar` hardly matters, so the search is deliberately short:
+two things: find the jar and find a JDK, then `exec` the one with the other.
+They never call a command of the jar and set nothing in its environment.
+
+The jar is a `jbanglite.jar` next to the launcher when a project vendors one,
+and otherwise whatever `jbanglite-bootstrap-jar` prints after installing the
+version `jbanglite.properties` pins.
+
+Which JVM runs `jbanglite.jar` hardly matters, so that search is deliberately
+short:
 
 1. `$JBANG_CACHE_DIR/jdks/bootstrap`
 2. `JAVA_HOME`
@@ -143,10 +174,16 @@ that puts a JDK there. The jar prefers the JVM it is running on when
 that satisfies a script's `//JAVA`, so a tool that asks for `//JAVA 25` costs
 one download on a machine without Java, not two.
 
-`jbanglite-bootstrap-jdk.cmd` is self-contained — it uses the `curl`, `tar`
+Both bootstrap scripts follow the same shape: they print the one path they
+found or installed on stdout, say everything else on stderr, verify a SHA-256
+before accepting a download, write to a file of their own that is renamed into
+place, and take a directory lock so parallel runs wait instead of colliding.
+
+The `.cmd` bootstrap scripts are self-contained — they use the `curl`, `tar`
 and `certutil` that Windows ships with, so no PowerShell is involved and there
-is no PowerShell launcher in this fork. `jbanglite-bootstrap-jdk` needs `curl`
-or `wget`, `unzip` (to read the JVM index) and `tar` with `gzip`; on Windows
+is no PowerShell launcher in this fork. `jbanglite-bootstrap-jar` needs `curl`
+or `wget` and `sha256sum` or `shasum`; `jbanglite-bootstrap-jdk` needs those
+plus `unzip` (to read the JVM index) and `tar` with `gzip`; on Windows
 shells (Git Bash, MSYS2, Cygwin) `jbanglite` hands over to `jbanglite.cmd`
 instead, so nothing but Windows itself is needed there either.
 
@@ -169,7 +206,7 @@ got there first:
 
 | | |
 | --- | --- |
-| the bootstrap JDK | a directory lock (`mkdir` is atomic) — one run installs, the others wait for it and then use what it installed, giving up after `JBANGLITE_LOCK_TIMEOUT` seconds with a message naming the lock to remove |
+| the jar and the bootstrap JDK | a directory lock (`mkdir` is atomic) — one run installs, the others wait for it and then use what it installed, giving up after `JBANGLITE_LOCK_TIMEOUT` seconds with a message naming the lock to remove |
 | the JVM index, every archive and unpack directory | a file of this run's own, renamed into place when it is complete; whoever gets there first wins and the loser keeps that copy |
 
 The JDKs the jar installs for `//JAVA` are locked by the jar itself, so the two
@@ -257,6 +294,7 @@ like `25` or `25+` accepts any matching patch release.
 | `JBANG_DOWNLOAD_RETRY` | extra download attempts (default 5, `0` disables retries) |
 | `JBANG_DOWNLOAD_RETRY_DELAY` | seconds between attempts (default `0`, meaning exponential backoff) |
 | `JBANGLITE_LOCK_TIMEOUT` | seconds to wait for another run that is downloading (default 600) |
+| `JBANGLITE_DIST_URL` | where to fetch `jbanglite.jar` from, overriding the `distributionUrl` in `jbanglite.properties` |
 
 ## Building
 
@@ -265,7 +303,8 @@ like `25` or `25+` accepts any matching patch release.
 ```
 
 produces `build/libs/jbanglite.jar` (self-contained). Pass `-PjbangVersion=x.y.z`
-to set the version; `misc/update-dist.sh` does so with the source commit.
+to set the version; `misc/update-dist.sh <version>` does so and writes the
+matching `dist/jbanglite.properties`.
 
 `./gradlew test` runs the test suite: the mirrored `TestDirectives` from JBang
 and functional tests for the launcher scripts and the installer. There

@@ -1,64 +1,78 @@
 # JBangLite
 
-This directory is [JBangLite](https://github.com/instreest/jbang) as installed
-into a project: the launchers, `jbanglite.jar` and the installer that put them
-here. All of it is committed, so anyone who checks the project out can run its
-`.java` scripts without installing anything first — not even a JDK.
+This directory is [JBangLite](https://github.com/instreest/jbanglite) as
+installed into a project: the launcher scripts, the two bootstrap scripts,
+`jbanglite.properties` and the installer that put them here. All of it is
+committed, so anyone who checks the project out can run its `.java` scripts
+without installing anything first — not even a JDK.
 
 On macOS, Linux and WSL (and in Git Bash, which hands over to the Windows
 launcher):
 
 ```bash
-jbanglitew/jbanglite src/Hello.java
+jbanglite/jbanglite src/Hello.java
 ```
 
 On Windows:
 
 ```bat
-jbanglitew\jbanglite.cmd src\Hello.java
+jbanglite\jbanglite.cmd src\Hello.java
 ```
 
 ## What happens on the first run
 
-1. The launcher looks for a usable JDK (its own bootstrap JDK, `JAVA_HOME`,
-   `javac` on the `PATH`; a JDK 11 or newer). If none is found it runs
-   `jbanglite-bootstrap-jdk`, which downloads a Temurin JDK into
+1. The launcher looks for `jbanglite.jar` next to it. There is none unless this
+   project vendors one, so it runs `jbanglite-bootstrap-jar`, which downloads
+   the version `jbanglite.properties` pins, checks it against the SHA-256 there
+   and keeps it in `~/.jbang/cache/jbanglite/<version>`.
+2. It looks for a usable Java (`JAVA_HOME`, `javac` on the `PATH`, its own
+   bootstrap JDK; a JDK 11 or newer). If none is found it runs
+   `jbanglite-bootstrap-jdk`, which downloads a Temurin into
    `~/.jbang/cache/jdks/bootstrap` and verifies its published SHA-256.
-2. It runs `jbanglite.jar` from this directory with that Java.
-3. The JDK a script asks for with `//JAVA` is installed by `jbanglite.jar` itself.
+3. It runs the jar with that Java.
+4. The JDK a script asks for with `//JAVA` is installed by `jbanglite.jar`
+   itself.
 
 Nothing is written into the project; everything JBangLite downloads goes to
-`~/.jbang` (`JBANG_DIR`).
+`~/.jbang` (`JBANG_DIR`). Both caches are per machine, so other projects on
+this machine that pin the same version download nothing at all.
 
-Several runs at once are fine: the JDK download is taken by one run while the
-others wait for it, and every other download goes to a file of its own that is
-renamed into place, so a parallel build never fails over a half-written file.
+Several runs at once are fine: each download is taken by one run while the
+others wait, and every download goes to a file of its own that is renamed into
+place, so a parallel build never fails over a half-written file.
 
 ## Files
 
 | File | |
 | --- | --- |
-| `jbanglite`, `jbanglite.cmd` | the launchers (POSIX shells and Windows): find a JDK, run the jar |
-| `jbanglite-bootstrap-jdk`, `jbanglite-bootstrap-jdk.cmd` | download a JDK when the machine has none; run by the launchers, or by hand |
-| `jbanglite.jar` | JBangLite itself |
+| `jbanglite`, `jbanglite.cmd` | the launchers (POSIX shells and Windows) |
+| `jbanglite.properties` | which JBangLite this project runs: version, URL and SHA-256 |
+| `jbanglite-bootstrap-jar`, `.cmd` | download and verify `jbanglite.jar` |
+| `jbanglite-bootstrap-jdk`, `.cmd` | download and verify a JDK when the machine has none |
 | `install.sh`, `install.cmd` | install and update this directory |
 | `LICENSE` | MIT, from JBang |
 | `README.md` | this file |
+
+`jbanglite.jar` is deliberately not here: it is a release asset, so this
+project's history carries about 46 kB of scripts rather than a 2 MB binary per
+update. To pin it into the project anyway, put a `jbanglite.jar` in this
+directory; the launcher prefers it and downloads nothing.
 
 In the JBangLite repository the same files live in `dist/`; the installer
 copies that directory as it is.
 
 ## Updating
 
-Re-run the installer; it replaces every file here, `jbanglite.jar` included,
-with the one from the chosen revision:
+Re-run the installer; it replaces every file here, `jbanglite.properties`
+included, with the one from the chosen revision:
 
 ```bash
-bash jbanglitew/install.sh                        # newest, from main
-JBANGLITE_REF=v0.2.0 bash jbanglitew/install.sh   # a tag or commit instead
+bash jbanglite/install.sh                        # newest, from main
+JBANGLITE_REF=v0.2.0 bash jbanglite/install.sh   # a tag or commit instead
 ```
 
-`jbanglitew\install.cmd` does the same on Windows. Commit the changed files
-afterwards. `jbanglitew/jbanglite --version` prints which version is installed,
-as `0.1.0-lite+<commit>`, the commit of the JBangLite repository the jar was
-built from.
+`jbanglite\install.cmd` does the same on Windows. Commit the changed files
+afterwards. `jbanglite/jbanglite --version` prints which version is installed.
+
+`JBANGLITE_DIST_URL` points the jar download at a mirror for one run, for a
+machine that cannot reach GitHub releases.

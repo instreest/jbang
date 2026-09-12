@@ -2,17 +2,20 @@
 rem ===========================================================================
 rem JBangLite launcher for Windows.
 rem
-rem It runs the jbanglite.jar that sits next to it - committed to the project
-rem together with this script, so a checkout needs nothing installed, not even
-rem a JDK. What it does, in order:
+rem It runs jbanglite.jar, so a checkout needs nothing installed, not even a
+rem JDK. What it does, in order:
 rem
-rem   1. Which Java to use - the bootstrap JDK, JAVA_HOME, javac on the PATH,
+rem   1. Which jar to run  - a jbanglite.jar next to this script when a project
+rem                          vendors one, otherwise the one that
+rem                          jbanglite-bootstrap-jar.cmd installs from the
+rem                          version pinned in jbanglite.properties
+rem   2. Which Java to use - the bootstrap JDK, JAVA_HOME, javac on the PATH,
 rem                          or the JDK that jbanglite-bootstrap-jdk.cmd (next
 rem                          to this script) downloads when there is none
-rem   2. Launch            - run the jar; it builds the script and runs it
+rem   3. Launch            - run the jar; it builds the script and runs it
 rem
-rem That is all it does. Downloading a JDK is jbanglite-bootstrap-jdk.cmd's
-rem job, so it can be run, tested and replaced on its own.
+rem That is all it does. Fetching the jar and fetching a JDK belong to the two
+rem bootstrap scripts, so each can be run, tested and replaced on its own.
 rem
 rem One CMD rule shapes the code below: a variable set inside a parenthesized
 rem block cannot be read in that same block, so anything that reads what it
@@ -22,18 +25,22 @@ setlocal
 
 call :init_settings
 
-rem The jar is committed next to this script; there is nothing to download
+rem --- 1. Which jar to run --------------------------------------------------
+rem A project may vendor the jar by dropping it next to this script, and then
+rem nothing is downloaded. Otherwise the bootstrap script installs the version
+rem jbanglite.properties pins into the cache, shared by every project on this
+rem machine, and prints where it put it; everything else goes to stderr.
 set "jar_path=%script_dir%jbanglite.jar"
 if not exist "%jar_path%" (
-  echo %jar_path% not found. Re-run %script_dir%install.cmd to restore it. 1>&2
-  exit /b 1
+  for /f "usebackq delims=" %%J in (`"%script_dir%jbanglite-bootstrap-jar.cmd"`) do set "jar_path=%%J"
 )
+if not exist "%jar_path%" exit /b 1
 
-rem --- 1. Which Java to use -------------------------------------------------
+rem --- 2. Which Java to use -------------------------------------------------
 call :find_java || exit /b 1
 set launch_cmd="%java_exec%" %JBANG_JAVA_OPTIONS% -jar "%jar_path%"
 
-rem --- 2. Launch ------------------------------------------------------------
+rem --- 3. Launch ------------------------------------------------------------
 rem The jar does the rest: it builds the script and runs it as a child process
 rem with our stdin, stdout and stderr, and exits with the script's status.
 %launch_cmd% %*
