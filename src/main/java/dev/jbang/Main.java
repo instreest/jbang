@@ -234,6 +234,10 @@ public final class Main {
 			} else {
 				file = Paths.get(script);
 				if (!Files.isRegularFile(file)) {
+					if (Files.isDirectory(file)) {
+						throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+								"Script is a directory, not a .java file: '" + script + "'");
+					}
 					if (!Files.isReadable(file)) {
 						throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 								"Script could not be found or read: '" + script + "'");
@@ -282,7 +286,13 @@ public final class Main {
 		Runtime.getRuntime().addShutdownHook(stopChild);
 		try {
 			int status = process.waitFor();
-			Runtime.getRuntime().removeShutdownHook(stopChild);
+			try {
+				Runtime.getRuntime().removeShutdownHook(stopChild);
+			} catch (IllegalStateException e) {
+				// the JVM is already shutting down (Ctrl+C reached both of us and
+				// the child died first): the hook runs anyway and finds nothing
+				// to do, so there is nothing to report
+			}
 			return status;
 		} catch (InterruptedException e) {
 			Thread.currentThread().interrupt();

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.UncheckedIOException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
@@ -223,6 +226,34 @@ abstract class AbstractScriptTest {
 		return env;
 	}
 
+
+	/**
+	 * A PATH with everything the launcher needs (coreutils, curl) but no java:
+	 * one directory of links to the tools on the real PATH, java left out.
+	 */
+	protected String pathWithoutJava() {
+		try {
+			Path bin = Files.createDirectories(tempDir.resolve("path-without-java"));
+			for (String dir : System.getenv("PATH").split(File.pathSeparator)) {
+				Path d = Paths.get(dir);
+				if (!Files.isDirectory(d)) {
+					continue;
+				}
+				try (Stream<Path> tools = Files.list(d)) {
+					for (Path tool : (Iterable<Path>) tools::iterator) {
+						String name = tool.getFileName().toString();
+						if (name.startsWith("java") || Files.exists(bin.resolve(name))) {
+							continue;
+						}
+						Files.createSymbolicLink(bin.resolve(name), tool.toAbsolutePath());
+					}
+				}
+			}
+			return bin.toString();
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
+		}
+	}
 
 	// -------------------------------------------------------------------------
 	// Command builders

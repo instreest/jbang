@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -12,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Map;
-import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -79,34 +77,6 @@ class TestScriptRetry extends AbstractScriptTest {
 			Files.write(jdk.resolve("bin/java"), new byte[0]);
 			Files.write(jdk.resolve("release"), "JAVA_VERSION=\"1.8.0_292\"\n".getBytes(StandardCharsets.UTF_8));
 			return jdk.toString();
-		} catch (IOException e) {
-			throw new UncheckedIOException(e);
-		}
-	}
-
-	/**
-	 * A PATH with everything the launcher needs (coreutils, curl) but no java:
-	 * one directory of links to the tools on the real PATH, java left out.
-	 */
-	private String pathWithoutJava() {
-		try {
-			Path bin = Files.createDirectories(tempDir.resolve("path-without-java"));
-			for (String dir : System.getenv("PATH").split(File.pathSeparator)) {
-				Path d = Paths.get(dir);
-				if (!Files.isDirectory(d)) {
-					continue;
-				}
-				try (Stream<Path> tools = Files.list(d)) {
-					for (Path tool : (Iterable<Path>) tools::iterator) {
-						String name = tool.getFileName().toString();
-						if (name.startsWith("java") || Files.exists(bin.resolve(name))) {
-							continue;
-						}
-						Files.createSymbolicLink(bin.resolve(name), tool.toAbsolutePath());
-					}
-				}
-			}
-			return bin.toString();
 		} catch (IOException e) {
 			throw new UncheckedIOException(e);
 		}

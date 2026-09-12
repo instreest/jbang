@@ -87,7 +87,10 @@ setup_java_exec() {
   fi
   # Nothing usable found, so have a JDK of our own installed. The bootstrap
   # script prints where it put the JDK; everything else it says goes to stderr.
-  JAVA_HOME=$("$abs_jbang_dir/jbanglite-bootstrap-jdk") || exit 1
+  # It is run through bash rather than executed, so a checkout that lost the
+  # execute bit (core.fileMode=false, a zip download) still works, as it does
+  # for this script itself.
+  JAVA_HOME=$(bash "$abs_jbang_dir/jbanglite-bootstrap-jdk") || exit 1
   export JAVA_HOME
   JAVA_EXEC="$JAVA_HOME/bin/java"
 }
