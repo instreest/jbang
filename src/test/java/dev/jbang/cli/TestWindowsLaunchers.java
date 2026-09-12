@@ -35,6 +35,14 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		binDir = Files.createDirectories(tempDir.resolve("bin"));
 		Files.copy(CMD_SCRIPT, binDir.resolve("jbanglite.cmd"));
 		Files.copy(CMD_SCRIPT.resolveSibling("jbanglite-bootstrap-jdk.cmd"), binDir.resolve("jbanglite-bootstrap-jdk.cmd"));
+		// the JDK the bootstrap script would install, pinned at an address that
+		// nothing answers, so a test that reaches it fails fast instead of
+		// fetching 200 MB
+		Files.write(binDir.resolve("jbanglite.properties"),
+				("bootstrapJdkVersion=99.0.0\n"
+						+ "bootstrapJdkUrl." + indexPlatform() + "=https://127.0.0.1:1/nowhere/jdk.zip\n"
+						+ "bootstrapJdkSha256Sum." + indexPlatform() + "=00\n")
+					.getBytes(StandardCharsets.UTF_8));
 		createFakeJar(binDir.resolve("jbanglite.jar"));
 	}
 
@@ -61,15 +69,15 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	@Test
 	void cmdDownloadsAJdkWhenNothingOnTheMachineWillDo() throws Exception {
 		// Nothing usable anywhere: JAVA_HOME too old and a PATH without javac,
-		// so jbanglite.cmd has jbanglite-bootstrap-jdk.cmd download one. An
-		// unreachable JVM index makes that fail quickly instead of fetching
-		// 200 MB.
+		// so jbanglite.cmd has jbanglite-bootstrap-jdk.cmd install the JDK
+		// jbanglite.properties pins, which is pinned at an address nothing
+		// answers so that it fails fast instead of fetching 200 MB.
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"),
 				"PATH", System.getenv("SystemRoot") + "\\System32",
-				"JBANGLITE_JVM_INDEX_BASEURL", "http://localhost:1/nowhere", "JBANGLITE_DOWNLOAD_RETRY", "0", "exit", "3");
+				"JBANGLITE_DOWNLOAD_RETRY", "0", "exit", "3");
 		assertTrue(result.exitCode != 0, result.stderr);
 		assertTrue(result.stderr.contains("older than Java 11"), result.stderr);
-		assertTrue(result.stderr.contains("Could not read the JVM index"), result.stderr);
+		assertTrue(result.stderr.contains("Error downloading the JDK"), result.stderr);
 	}
 
 	@Test
