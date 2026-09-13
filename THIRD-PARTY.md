@@ -53,14 +53,16 @@ repository.
 | `META-INF/licenses/Apache-2.0.txt` | Apache License 2.0, for Maven Resolver, Apache Maven, HttpClient, Commons and Gson |
 | `META-INF/licenses/MIT-slf4j.txt` | SLF4J |
 | `META-INF/licenses/BSD-3-Clause-asm.txt` | ASM |
+| `META-INF/licenses/EPL-2.0.txt` | MIMA |
+| `META-INF/licenses/MPL-2.0.txt` | the public suffix list carried by Apache HttpClient |
 | `META-INF/LICENSE-jbang.txt` | JBang, and this fork |
 | `META-INF/THIRD-PARTY-jbang.md` | this file |
 
-Two license texts are named here rather than bundled: MIMA is under the
-[Eclipse Public License 2.0](https://www.eclipse.org/legal/epl-2.0/) and the
-public suffix list that Apache HttpClient carries is under the
-[Mozilla Public License 2.0](https://www.mozilla.org/MPL/2.0/). Neither is
-shipped inside the artifact it belongs to, so neither can be copied from it.
+Neither the Eclipse Public License 2.0 (MIMA) nor the Mozilla Public License
+2.0 (the public suffix list) is shipped inside the artifact it covers, so those
+two texts are kept in `misc/licenses/` in this repository: the EPL as published
+at eclipse.org, the MPL as published in the
+[public suffix list's own repository](https://github.com/publicsuffix/list).
 
 The exact list of bundled artifacts can be printed with
 `./gradlew dependencies --configuration runtimeClasspath`.
