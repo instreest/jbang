@@ -33,23 +33,39 @@ java {
 	targetCompatibility = JavaVersion.VERSION_11
 }
 
+// MIMA decides which Maven Resolver comes in, and we use Resolver's own classes
+// (JavaScopes, the descriptor policy) directly, so that one has to be declared
+// too: keep it at the version MIMA brings, which the pom of the MIMA release
+// names. The lock file makes a divergence visible in review.
+def mimaVersion = "2.4.48"
+def resolverVersion = "1.9.27"
+def slf4jVersion = "2.0.18"
+
 dependencies {
 	// nullness annotations, required by the files mirrored from JBang
 	implementation 'org.jspecify:jspecify:1.0.0'
 
 	// Maven dependency resolution (the one thing we really cannot re-implement
 	// ourselves), with the HTTP transport Maven itself ships
-	implementation "eu.maveniverse.maven.mima:context:2.4.36"
-	implementation "eu.maveniverse.maven.mima.runtime:standalone-static:2.4.36"
-	implementation "org.apache.maven.resolver:maven-resolver-util:1.9.24"
-	implementation "org.slf4j:slf4j-nop:2.0.18"
+	implementation "eu.maveniverse.maven.mima:context:$mimaVersion"
+	implementation "eu.maveniverse.maven.mima.runtime:standalone-static:$mimaVersion"
+	implementation "org.apache.maven.resolver:maven-resolver-util:$resolverVersion"
+	implementation "org.slf4j:slf4j-nop:$slf4jVersion"
 
 	// JSON, for the JDK index. Comes with maven-resolver-transport-http anyway;
 	// declared because we use it ourselves
-	implementation "com.google.code.gson:gson:2.13.2"
+	implementation "com.google.code.gson:gson:2.14.0"
 
 	// archive handling, for unpacking a downloaded JDK
 	implementation "org.apache.commons:commons-compress:1.28.0"
+
+	constraints {
+		// the HTTP transport brings the 1.7 line of the commons-logging bridge
+		// while everything else is on 2.0; one SLF4J, not one and a half
+		implementation("org.slf4j:jcl-over-slf4j:$slf4jVersion") {
+			because "aligned with the rest of SLF4J"
+		}
+	}
 
 	testImplementation platform("org.junit:junit-bom:5.14.4")
 	testImplementation "org.junit.jupiter:junit-jupiter"

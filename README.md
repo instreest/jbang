@@ -298,7 +298,9 @@ writes a wrong file or makes a wrong request instead of failing.
 | a hand-written JSON reader | `gson` | comes with the transport anyway |
 
 It costs jar size - roughly 2.2 MB to 6.5 MB - which is not a constraint for a
-jar that is downloaded once per machine into a shared cache.
+jar that is downloaded once per machine into a shared cache. Nothing is
+excluded from what they bring: a dependency tree trimmed by hand is one that
+fails in the path nobody tested.
 
 Class-file inspection for the main class, jar creation, OS detection and
 module-info generation are still implemented with the JDK's standard library
