@@ -23,8 +23,8 @@ import org.junit.jupiter.api.io.TempDir;
  * alone.
  *
  * This is the contract JBangLite depends on, so a second implementation - one
- * on a JBang library artifact, say - is held to this same test by extending it
- * and returning its own parser from {@link #parser()}. What the directives
+ * on {@code dev.jbang:jbang.bin}, say - is held to this same test by extending
+ * it and returning its own parser from {@link #parser()}. What the directives
  * themselves mean is tested against JBang's own test, which is mirrored in
  * {@code dev.jbang.source.parser.TestDirectives}; this is about the mapping to
  * the interface.
