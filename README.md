@@ -254,9 +254,17 @@ turns a source file into a `SourceDirectives` built from JBangLite's own types.
 `MirroredDirectiveParser` is the implementation in use and the only class that
 names `Directives` and `KeyValue`, so the mirrored parser is an implementation
 detail rather than JBangLite's API. `TestDirectiveParser` states the contract on
-the interface alone: a second implementation - one on a JBang library artifact,
-should JBang publish one again - is held to the same test and wired in at
-`Providers`, and nothing above the interface changes.
+the interface alone, so a second implementation is held to the same test and
+wired in at `Providers`, with nothing above the interface changing.
+
+JBang publishes its own code as `dev.jbang:jbang.bin` with every release, and
+its `Directives` is identical to the copy here, member for member. Depending on
+it instead of mirroring is therefore possible, and is deliberately not done: the
+artifact brings the whole CLI's dependency tree - aesh, tamboui, jsoup, qute and
+the rest - where the parse path needs none of it, and this fork does not trim
+dependency trees by hand. Copying whole files costs less. What would change that
+is the sync becoming expensive in practice, not the artifact appearing;
+`misc/library-boundary-analysis.md` records the reasoning.
 
 Below that interface the tree is split in three, so that fixes JBang makes to
 the directive handling can be taken over without merging:
