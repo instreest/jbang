@@ -15,10 +15,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 /**
- * Nothing is downloaded without the operator agreeing to it. The launcher can
- * see whether the jar and a JDK are here and asks about those; the jar asks
- * about a script's dependencies itself. JBANGLITE_NETWORK decides how: ask
- * (the default), allow, or deny.
+ * The launcher fetches the jar and a JDK before any JVM exists, so the gate in
+ * the jar cannot cover those two. It asks about them itself, under the same
+ * contract the jar uses: JBANGLITE_CONFIRM_DOWNLOADS is auto, always or never,
+ * and JBANGLITE_ASSUME_YES or --yes answers yes in advance.
  */
 class TestNetworkConsent extends AbstractScriptTest {
 
@@ -53,55 +53,75 @@ class TestNetworkConsent extends AbstractScriptTest {
 		Files.write(script, "class Hello {}".getBytes(StandardCharsets.UTF_8));
 	}
 
+	/** @param mode null to leave JBANGLITE_CONFIRM_DOWNLOADS unset */
 	private Map<String, String> env(String mode) {
 		Map<String, String> env = baseBashEnv("consent");
 		env.put("JAVA_HOME", System.getProperty("java.home"));
+		env.remove("JBANGLITE_ASSUME_YES");
 		if (mode == null) {
-			env.remove("JBANGLITE_NETWORK");
+			env.remove("JBANGLITE_CONFIRM_DOWNLOADS");
 		} else {
-			env.put("JBANGLITE_NETWORK", mode);
+			env.put("JBANGLITE_CONFIRM_DOWNLOADS", mode);
 		}
 		return env;
 	}
 
 	@Test
-	void withoutATerminalItAsksForNothingAndFetchesNothing() throws Exception {
+	void autoWithNobodyToAskSaysWhatItFetchesAndCarriesOn() throws Exception {
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env(null));
 
-		assertNotEquals(0, result.exitCode);
 		assertTrue(result.stderr.contains("jbanglite.jar 9.9.9"),
-				"it should say what it wanted to download: " + result.stderr);
-		assertTrue(result.stderr.contains("no terminal to ask on"), result.stderr);
-		assertTrue(result.stderr.contains("JBANGLITE_NETWORK=allow"),
-				"it should say how to permit it: " + result.stderr);
+				"it should say what it is about to download: " + result.stderr);
+		assertTrue(result.stderr.contains("Error downloading JBangLite"),
+				"auto carries on when there is nobody to ask: " + result.stderr);
 	}
 
 	@Test
-	void denyRefusesWithoutAsking() throws Exception {
-		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("deny"));
+	void alwaysWithNobodyToAskFetchesNothing() throws Exception {
+		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("always"));
 
 		assertNotEquals(0, result.exitCode);
-		assertTrue(result.stderr.contains("JBANGLITE_NETWORK=deny forbids it"), result.stderr);
 		assertTrue(result.stderr.contains("jbanglite.jar 9.9.9"), result.stderr);
+		assertTrue(result.stderr.contains("JBANGLITE_CONFIRM_DOWNLOADS=always"),
+				"it should name the setting that stopped it: " + result.stderr);
+		assertTrue(!result.stderr.contains("Error downloading JBangLite"),
+				"nothing should have been fetched: " + result.stderr);
 	}
 
 	@Test
-	void anUnknownModeNamesTheThreeThatExist() throws Exception {
+	void neverGoesStraightToTheDownload() throws Exception {
+		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("never"));
+
+		assertTrue(result.stderr.contains("Error downloading JBangLite"), result.stderr);
+		assertTrue(!result.stderr.contains("JBangLite has to download"),
+				"never says nothing: " + result.stderr);
+	}
+
+	@Test
+	void assumeYesAnswersInAdvance() throws Exception {
+		Map<String, String> env = env("always");
+		env.put("JBANGLITE_ASSUME_YES", "1");
+		RunResult result = runProcess(bashCmd(launcher, script.toString()), env);
+
+		assertTrue(result.stderr.contains("Error downloading JBangLite"),
+				"always plus assume-yes downloads: " + result.stderr);
+	}
+
+	@Test
+	void theYesOptionAnswersInAdvanceToo() throws Exception {
+		RunResult result = runProcess(bashCmd(launcher, "--yes", script.toString()), env("always"));
+
+		assertTrue(result.stderr.contains("Error downloading JBangLite"),
+				"--yes reaches the launcher, not only the jar: " + result.stderr);
+	}
+
+	@Test
+	void anUnknownModeIsIgnoredWithAWarning() throws Exception {
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("maybe"));
 
-		assertNotEquals(0, result.exitCode);
-		assertTrue(result.stderr.contains("ask, allow or deny"), result.stderr);
-	}
-
-	@Test
-	void allowGoesStraightToTheDownload() throws Exception {
-		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("allow"));
-
-		assertNotEquals(0, result.exitCode);
+		assertTrue(result.stderr.contains("Ignoring invalid JBANGLITE_CONFIRM_DOWNLOADS"), result.stderr);
 		assertTrue(result.stderr.contains("Error downloading JBangLite"),
-				"it should have tried the download: " + result.stderr);
-		assertTrue(!result.stderr.contains("no terminal to ask on"),
-				"it should not have asked: " + result.stderr);
+				"an unknown mode falls back to auto: " + result.stderr);
 	}
 
 	@Test
@@ -111,19 +131,22 @@ class TestNetworkConsent extends AbstractScriptTest {
 
 		assertEquals(0, result.exitCode, result.stderr);
 		assertTrue(!result.stderr.contains("has to download"),
-				"nothing was missing, so nothing should have been asked: " + result.stderr);
+				"nothing was missing, so nothing should have been said: " + result.stderr);
 	}
 
 	/**
-	 * The Windows launcher has to gate the same downloads; fixing only the bash
-	 * one would let Windows through. It cannot be run here, so this reads it.
+	 * The Windows launcher has to gate the same downloads under the same
+	 * contract; fixing only the bash one would let Windows through. It cannot be
+	 * run here, so this reads it.
 	 */
 	@Test
-	void theWindowsLauncherAsksTheSameQuestion() throws Exception {
+	void theWindowsLauncherUsesTheSameContract() throws Exception {
 		String cmd = new String(Files.readAllBytes(CMD_SCRIPT), StandardCharsets.UTF_8);
 
-		assertTrue(cmd.contains("JBANGLITE_NETWORK"), "jbanglite.cmd does not look at JBANGLITE_NETWORK");
-		assertTrue(cmd.contains("Go ahead? [y/N]"), "jbanglite.cmd does not ask before downloading");
+		assertTrue(cmd.contains("JBANGLITE_CONFIRM_DOWNLOADS"),
+				"jbanglite.cmd does not look at JBANGLITE_CONFIRM_DOWNLOADS");
+		assertTrue(cmd.contains("JBANGLITE_ASSUME_YES"), "jbanglite.cmd ignores JBANGLITE_ASSUME_YES");
+		assertTrue(cmd.contains("Continue? [Y/n]"), "jbanglite.cmd does not ask before downloading");
 		assertTrue(cmd.contains("There is no terminal to ask on"),
 				"jbanglite.cmd does not handle having nobody to ask");
 	}

@@ -34,6 +34,11 @@ if /i "%~1"=="--version" goto :print_version
 if /i "%~1"=="-V" goto :print_version
 if /i "%~1"=="--update" goto :run_update
 
+rem --yes is the jar's option, but the launcher downloads before the jar runs, so
+rem it has to see it too.
+set "assume_yes="
+for %%A in (%*) do call :note_assume_yes "%%~A"
+
 rem --- 2. Which jar to run --------------------------------------------------
 rem A project may vendor the jar by dropping it next to this script, and then
 rem nothing is downloaded. Otherwise the bootstrap script installs the version
@@ -53,10 +58,7 @@ rem whatever it settled on.
 call :find_existing_java
 if errorlevel 1 call :add_net_item_jdk
 if not defined net_items goto :net_done
-call :confirm_network || exit /b 1
-rem The jar resolves the script's dependencies later in this same run. The
-rem operator has just said yes, so it is told rather than asked again.
-set "JBANGLITE_NETWORK=allow"
+call :confirm_downloads || exit /b 1
 :net_done
 
 if not exist "%jar_path%" (
@@ -148,7 +150,7 @@ if not exist "%script_dir%install.cmd" (
   exit /b 1
 )
 set "net_items=  - a new JBangLite installation into %script_dir%"
-call :confirm_network || exit /b 1
+call :confirm_downloads || exit /b 1
 if not "%~2"=="" set "JBANGLITE_REF=%~2"
 call "%script_dir%install.cmd" "%script_dir%." || exit /b 1
 if not exist "%script_dir%jbanglite.jar" exit /b 0
@@ -302,12 +304,18 @@ rem --- Asking before going to the network ------------------------------------
 rem
 rem JBangLite downloads three kinds of thing: its own jar, a JDK to run that jar
 rem with, and the dependencies a script declares. This script can see the first
-rem two; the dependencies only the jar knows about, so it asks for those itself,
-rem and the answer given here is passed on so one run never asks twice.
+rem two and asks about them; the jar asks about the third, which only it knows
+rem about. Both use the same contract, JBANGLITE_CONFIRM_DOWNLOADS:
 rem
-rem   JBANGLITE_NETWORK=ask    the default: ask when something has to be fetched
-rem   JBANGLITE_NETWORK=allow  never ask (for CI, where there is nothing to ask on)
-rem   JBANGLITE_NETWORK=deny   never fetch
+rem   auto    the default: ask when there is a terminal, otherwise say what is
+rem           being fetched and go ahead
+rem   always  ask, and fetch nothing when there is no terminal to ask on
+rem   never   never ask. JBANGLITE_ASSUME_YES=1 and --yes do the same
+
+:note_assume_yes
+if "%~1"=="-y" set "assume_yes=1"
+if "%~1"=="--yes" set "assume_yes=1"
+exit /b 0
 
 :add_net_item_jar
 call :property distributionVersion
@@ -335,19 +343,17 @@ endlocal
 exit /b 0
 
 rem Asks whether the things in net_items may be downloaded. 0 to go ahead, 1 to stop.
-:confirm_network
-set "net_mode=%JBANGLITE_NETWORK%"
-if not defined net_mode set "net_mode=ask"
-if /i "%net_mode%"=="allow" exit /b 0
-if /i "%net_mode%"=="deny" goto :net_deny
-if /i "%net_mode%"=="ask" goto :net_ask
-echo JBANGLITE_NETWORK is '%JBANGLITE_NETWORK%'; it has to be ask, allow or deny 1>&2
-exit /b 1
-
-:net_deny
-echo JBangLite has to download something, and JBANGLITE_NETWORK=deny forbids it: 1>&2
-call :print_net_items 1>&2
-exit /b 1
+:confirm_downloads
+rem net_items is set. exit /b 0 to go ahead, exit /b 1 to stop.
+set "net_mode=%JBANGLITE_CONFIRM_DOWNLOADS%"
+if not defined net_mode set "net_mode=auto"
+if defined JBANGLITE_ASSUME_YES exit /b 0
+if "%assume_yes%"=="1" exit /b 0
+if /i "%net_mode%"=="never" exit /b 0
+if /i "%net_mode%"=="always" goto :net_ask
+if /i "%net_mode%"=="auto" goto :net_ask
+echo Ignoring invalid JBANGLITE_CONFIRM_DOWNLOADS: %JBANGLITE_CONFIRM_DOWNLOADS% 1>&2
+set "net_mode=auto"
 
 :net_ask
 rem timeout fails when stdin is redirected, which is how this tells a terminal
@@ -357,15 +363,18 @@ echo.
 echo JBangLite has to download:
 call :print_net_items
 echo.
-set "net_answer=n"
-set /p "net_answer=Go ahead? [y/N]: "
+set "net_answer=y"
+set /p "net_answer=Continue? [Y/n]: "
 if /i "%net_answer%"=="y" exit /b 0
 if /i "%net_answer%"=="yes" exit /b 0
+if "%net_answer%"=="" exit /b 0
 echo Stopped. Nothing was downloaded. 1>&2
 exit /b 1
 
 :net_no_terminal
 echo JBangLite has to download: 1>&2
 call :print_net_items 1>&2
-echo There is no terminal to ask on. Set JBANGLITE_NETWORK=allow to permit it. 1>&2
+if /i not "%net_mode%"=="always" exit /b 0
+echo There is no terminal to ask on and JBANGLITE_CONFIRM_DOWNLOADS=always. 1>&2
+echo Set it to auto or never, or pass --yes, to allow the download. 1>&2
 exit /b 1

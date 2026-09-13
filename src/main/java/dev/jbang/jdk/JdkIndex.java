@@ -6,10 +6,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
@@ -200,27 +198,14 @@ public final class JdkIndex {
 		return osName + "-" + archName;
 	}
 
-	/** The distributions to install from, most preferred first. */
-	public static List<String> distros() {
-		String configured = System.getenv(Settings.ENV_JDK_DISTRO);
-		if (configured == null || configured.trim().isEmpty()) {
-			return Collections.singletonList(Settings.DEFAULT_JDK_DISTRO);
-		}
-		List<String> distros = new ArrayList<>();
-		for (String d : configured.split(",")) {
-			if (!d.trim().isEmpty()) {
-				distros.add(d.trim());
-			}
-		}
-		return distros.isEmpty() ? Collections.singletonList(Settings.DEFAULT_JDK_DISTRO) : distros;
-	}
 
 	/**
 	 * The newest version satisfying the request, looking at each configured
 	 * distribution in turn.
 	 */
 	public Optional<Entry> find(RequestedVersion version) {
-		for (String distro : distros()) {
+		// JBangLite installs from one distribution and offers no knob for it
+		for (String distro : Collections.singletonList(Settings.JDK_DISTRO)) {
 			Optional<Entry> found = find(distro, version);
 			if (found.isPresent()) {
 				return found;

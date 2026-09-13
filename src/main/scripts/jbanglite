@@ -73,53 +73,48 @@ print_version() {
 # --- Asking before going to the network ------------------------------------
 #
 # JBangLite downloads three kinds of thing: its own jar, a JDK to run that jar
-# with, and the dependencies a script declares. Nothing is fetched without the
-# operator agreeing to it.
+# with, and the dependencies a script declares. This script can see the first
+# two and asks about them; the jar asks about the third, which only it knows
+# about. Both use the same contract, JBANGLITE_CONFIRM_DOWNLOADS:
 #
-#   JBANGLITE_NETWORK=ask    the default: ask when something has to be fetched
-#   JBANGLITE_NETWORK=allow  never ask (for CI, where there is nothing to ask on)
-#   JBANGLITE_NETWORK=deny   never fetch
+#   auto    the default: ask when there is a terminal, otherwise say what is
+#           being fetched and go ahead, so an unattended build is never left
+#           waiting for an answer nobody is there to give
+#   always  ask, and fetch nothing when there is no terminal to ask on. This is
+#           the setting for a machine that is meant to stay off the network
+#   never   never ask. JBANGLITE_ASSUME_YES=1 and --yes do the same
 #
-# This script can see two of the three: whether the jar is here and whether a
-# JDK is. The dependencies only the jar knows about, so it asks for those
-# itself; when the answer has already been given here it is passed on in the
-# environment, so one run never asks twice.
+# A run that needs nothing asks nothing, so this is a first-run question.
 
-# Says what JBangLite wanted to download and how to permit it, for when there is
-# nobody to ask.
-no_terminal() {
+# Says what JBangLite was about to download, on stderr.
+say_items() {
   echo "JBangLite has to download:" 1>&2
   printf '%s' "$1" 1>&2
-  echo "There is no terminal to ask on. Set JBANGLITE_NETWORK=allow to permit it." 1>&2
 }
 
 # Asks whether the things listed in $1 may be downloaded. 0 to go ahead, 1 to stop.
-confirm_network() {
+confirm_downloads() {
   local items=$1 mode answer
-  mode=$(printf '%s' "${JBANGLITE_NETWORK:-ask}" | tr 'A-Z' 'a-z')
-  case "$mode" in
-    allow) return 0 ;;
-    ask) ;;
-    deny)
-      echo "JBangLite has to download something, and JBANGLITE_NETWORK=deny forbids it:" 1>&2
-      printf '%s' "$items" 1>&2
-      return 1 ;;
-    *)
-      echo "JBANGLITE_NETWORK is '$JBANGLITE_NETWORK'; it has to be ask, allow or deny" 1>&2
-      return 1 ;;
-  esac
+  mode=$(printf '%s' "${JBANGLITE_CONFIRM_DOWNLOADS:-auto}" | tr 'A-Z' 'a-z')
+  if [ -n "${JBANGLITE_ASSUME_YES:-}" ] || [ "${assumeYes:-0}" = 1 ] || [ "$mode" = never ]; then
+    return 0
+  fi
+  if [ "$mode" != auto ] && [ "$mode" != always ]; then
+    echo "Ignoring invalid JBANGLITE_CONFIRM_DOWNLOADS: $JBANGLITE_CONFIRM_DOWNLOADS" 1>&2
+    mode=auto
+  fi
   # Read from the terminal rather than from stdin: stdin belongs to the script
   # that is about to run, and taking a line from it would lose that line.
   if ! { exec 3<>/dev/tty; } 2>/dev/null; then
-    no_terminal "$items"
-    return 1
+    no_terminal "$items" "$mode"
+    return $?
   fi
   {
     echo
     echo "JBangLite has to download:"
     printf '%s' "$items"
     echo
-    printf 'Go ahead? [y/N]: '
+    printf 'Continue? [Y/n]: '
   } >&3
   # A terminal device can open with nobody behind it: Git Bash gives every
   # process a /dev/tty even when its input is a pipe, and the read then ends
@@ -127,16 +122,28 @@ confirm_network() {
   if ! IFS= read -r answer <&3; then
     exec 3>&-
     echo 1>&2
-    no_terminal "$items"
-    return 1
+    no_terminal "$items" "$mode"
+    return $?
   fi
   echo >&3
   exec 3>&-
   case "$answer" in
-    y|Y|yes|YES|Yes) return 0 ;;
+    ''|y|Y|yes|YES|Yes) return 0 ;;
   esac
   echo "Stopped. Nothing was downloaded." 1>&2
   return 1
+}
+
+# There is nobody to ask: under always that means fetch nothing, under auto it
+# means say what is happening and carry on.
+no_terminal() {
+  say_items "$1"
+  if [ "$2" = always ]; then
+    echo "There is no terminal to ask on and JBANGLITE_CONFIRM_DOWNLOADS=always." 1>&2
+    echo "Set it to auto or never, or pass --yes, to allow the download." 1>&2
+    return 1
+  fi
+  return 0
 }
 
 # Replaces this installation with the one from $1 (a branch, tag or commit of
@@ -149,7 +156,7 @@ run_update() {
     echo "$installer not found, so this installation cannot update itself." 1>&2
     exit 1
   fi
-  confirm_network "  - a new JBangLite installation into $abs_jbang_dir
+  confirm_downloads "  - a new JBangLite installation into $abs_jbang_dir
 " || exit 1
   if [ -n "$1" ]; then export JBANGLITE_REF=$1; fi
   bash "$installer" "$abs_jbang_dir" || exit $?
@@ -266,6 +273,16 @@ execute_jbanglite() {
   exec "${JAVA_EXEC}" ${JBANGLITE_JAVA_OPTIONS} -jar "${jarPath}" "$@"
 }
 
+# --yes is the jar's option, but the launcher downloads before the jar runs, so
+# it has to see it too.
+assumeYes=0
+for arg in "$@"; do
+  case "$arg" in
+    --) break ;;
+    -y|--yes) assumeYes=1 ;;
+  esac
+done
+
 abs_jbang_dir=$(script_dir)
 
 # Windows shells (Cygwin, Git Bash, MSYS2) hand over to the Windows launcher: it
@@ -324,10 +341,7 @@ if ! find_existing_java; then
 "
 fi
 if [ -n "$netItems" ]; then
-  confirm_network "$netItems" || exit 1
-  # The jar resolves the script's dependencies later in this same run. The
-  # operator has just said yes, so it is told rather than asked again.
-  export JBANGLITE_NETWORK=allow
+  confirm_downloads "$netItems" || exit 1
 fi
 
 if [ ! -f "$jarPath" ]; then
