@@ -240,3 +240,74 @@ gson を入れる理由が生まれるのは「JSON を他の用途でも使い�
   リンクを経由した書き込みも拒否する。両方テストあり
 - **hardlink を symlink として作る** → 挙動は同じだが、
   リンク先の検証が掛かるようになった
+
+---
+
+# ⑥ の着手条件の訂正：artifact は `jbang.bin` で、公開は続いている
+
+`dev.jbang:jbang-cli` が 0.132.1 で止まっていると書いたのは、**artifact が
+改名されただけ**だった。後継は `dev.jbang:jbang.bin` で、pom の `<name>` は
+今も "JBang CLI"。公開は止まっていない。
+
+| | |
+| --- | --- |
+| 最新 | **0.141.0（2026-07-13）**、以降も 0.135.1(2025-12) → 0.136.0 → 0.137.0 → 0.138.0 → 0.140.1 → 0.141.0 と継続 |
+| 成果物 | `jbang.bin-0.141.0.jar`（クラスのみ、1.1 MB）、`-all.jar`（全部入り 14.9 MB）、`-sources.jar`、`-javadoc.jar`、`.asc` 署名 |
+
+つまり**ライブラリとして依存できる条件は既に満たされている**。
+
+## 互換性の確認（0.141.0 の jar を実際に読んだ結果）
+
+- `Directives` の public API は**このフォークのミラーと完全一致**（25 メンバ）。
+  `Directives.Extended(String, Function<String,String>)` も public で、
+  `MirroredDirectiveParser` が呼んでいるコンストラクタそのもの
+- パーサが必要とする 13 メンバはすべて存在し、シグネチャも一致
+  （`Util.explode` / `isPattern` / `basePathWithoutPattern` / `isValidPath` /
+  `isValidClassIdentifier` / `isValidModuleIdentifier` / `stringLines` /
+  `warnMsg`、`JavaUtil.RequestedVersionComparator` /
+  `checkRequestedVersion`、`DependencyUtil.looksLikeAGav` /
+  `looksLikeAPossibleGav`、`JitPackUtil.possibleMatch`、
+  `MavenCoordinate.DEFAULT_VERSION`）
+
+`JBangLibraryParser` は `MirroredDirectiveParser` とほぼ同じ中身で書けて、
+`TestDirectiveParser` を継承した適合テストで検証できる。①の境界は
+そのまま使える。
+
+## 新しい論点：CLI 一式の依存が付いてくる
+
+条件は満たされたが、代わりに別の判断が要る。`jbang.bin` の pom が並べる
+ランタイム依存は CLI 全体のもので、パースには要らないものが大半:
+
+```
+devkitman, commons-text, commons-compress, aesh(+readline), qute-core,
+plexus-java, gson, jsoup, java-properties, slf4j-nop, jcl-over-slf4j,
+jandex, mima(context, standalone-static), domtrip-core, domtrip-maven,
+tamboui-toolkit, tamboui-aesh-backend, os-source, ...
+```
+
+パース経路が実際に使うのは jspecify だけ。aesh（readline）や tamboui（TUI）や
+jsoup（HTML）まで `jbanglite.jar` に入ることになる。`-all.jar` が 14.9 MB
+であることが、その規模を端的に示している。
+
+**「exclude はしない」という方針と正面からぶつかる。** 取りうる道は 3 つ:
+
+| | |
+| --- | --- |
+| (a) 依存ごと丸ごと入れる | 方針には忠実。jar は 6.5 MB から十数 MB へ。使わない TUI/HTML ライブラリを同梱することになる |
+| (b) exclude で絞る | jar は小さいままだが「手で刈り込んだ依存ツリー」になり、方針に反する。パーサが将来 Util の別メソッドを呼び始めたら `NoClassDefFoundError` で落ちる |
+| (c) ミラーを続ける | 今のまま。ミラーは 9 ファイル、`sync-upstream.sh` で追従。①の境界のおかげで `Project` は既に上流型から切り離されている |
+
+判断材料として付け加えると、⑤（transport）を「jbang が変えたら再評価」と
+決めたのと同じ理屈がここにも効く。**ミラーの維持コストは実測で低い**
+（全ファイル丸ごとコピーで、上流が無関係な数百ファイルを触っても差分ゼロ）。
+一方 (a) のコストは恒久的に効き続ける。
+
+現時点の推奨は **(c) 継続、ただし条件は「満たされている」に更新**。
+(a) に動く理由が生まれるのは、ミラーの追従が実際に苦しくなったとき
+（`Directives` が新しい依存を引くようになった、シムの手当てが毎回発生する、
+といった実績が出たとき）であって、公開の有無ではなくなった。
+
+# ⑤ transport の再評価条件（更新）
+
+「MIMA が resolver 2.x に載ったら」ではなく、**「jbang 本体が transport を
+変えたら」**を条件とする。定期的なウォッチは不要。
