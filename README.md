@@ -150,6 +150,7 @@ jbanglite [<options>] <script.java> [<args>...]
 | `-o`, `--offline` | never access the network |
 | `-Dkey=value` | a system property, for `${...}` in directives and for the script |
 | `-R<option>` | an extra JVM option for the script |
+| `-y`, `--yes` | download what is missing without asking |
 
 Options may appear anywhere before the script, `--` ends them, and everything
 after the script is the script's. There is deliberately no option that
@@ -160,11 +161,13 @@ tool needs, not whoever runs it.
 
 | Variable | |
 | --- | --- |
-| `JBANGLITE_NETWORK` | whether anything may be downloaded: `ask` (default), `allow`, `deny` |
+| `JBANGLITE_CONFIRM_DOWNLOADS` | whether a download is confirmed first: `auto` (default), `always`, `never` |
+| `JBANGLITE_ASSUME_YES` | set to anything to answer yes in advance, like `--yes` |
 | `JBANGLITE_DIR` | base directory (default `~/.jbanglite`) |
 | `JBANGLITE_CACHE_DIR` | cache directory (default `$JBANGLITE_DIR/cache`) |
 | `JBANGLITE_MAVEN_REPO` | local Maven repository to use instead of `~/.m2/repository` |
 | `JBANGLITE_DEFAULT_JAVA_VERSION` | JDK to use when a script names none (default 17) |
+| `JBANGLITE_JDK_INDEX` | read the JVM index from here instead of from Maven Central |
 | `JBANGLITE_JAVA_OPTIONS` | JVM options for JBangLite itself |
 | `JBANGLITE_DOWNLOAD_RETRY` | extra download attempts (default 5, `0` disables retries) |
 | `JBANGLITE_DOWNLOAD_RETRY_DELAY` | seconds between attempts (default `0`, meaning exponential backoff) |
@@ -180,34 +183,51 @@ complete, so a build matrix never trips over a half-written file.
 
 ## Downloads ask first
 
-JBangLite fetches three kinds of thing, and none of them without being told it
-may: its own jar, a JDK to run that jar with, and the dependencies a script
-declares. When something has to be fetched it says what, and stops unless the
-answer is yes.
+JBangLite fetches three kinds of thing: its own jar, a JDK to run that jar with,
+and the dependencies a script declares. None of them happens silently. When
+something has to be fetched, JBangLite says what, and on a terminal it asks.
 
 ```
 JBangLite has to download:
   - jbanglite.jar 0.2.0
   - a JDK to run it with (Temurin 25.0.3); this machine has none
 
-Go ahead? [y/N]:
+Continue? [Y/n]:
 ```
 
-A run that needs nothing asks nothing, so this is a first-run question and not
-a per-run one. The launcher asks about the jar and the JDK, which it can see for
-itself, and passes the answer on to the jar so one run never asks twice; the jar
-asks about a script's dependencies, which only it knows about. `--update` asks
-before replacing an installation.
+The question only appears when a download really would happen. A JDK that is
+already installed never reaches it, and neither does a dependency that is
+already in the local Maven repository: before asking, JBangLite resolves the
+coordinates against `~/.m2/repository` alone, and when that succeeds there is
+nothing to ask about. So this is a first-run question, not a per-run one.
+`--fresh` skips that shortcut, because it exists to go to the remote
+repositories again.
 
-Set `JBANGLITE_NETWORK=allow` where there is nobody to ask, which is what CI
-needs, and `deny` to keep a machine off the network. Without a terminal and
-without that variable JBangLite fetches nothing and says so, rather than
-downloading on its own say-so.
+A cold first run asks twice. The launcher asks about the jar and the JDK, which
+it fetches itself before any JVM exists; the jar asks about the dependencies,
+which only it knows about. Each question names bytes that are really about to
+move. `--update` asks before replacing an installation.
+
+| | |
+| --- | --- |
+| `JBANGLITE_CONFIRM_DOWNLOADS=auto` (default) | ask when there is a terminal; otherwise say what is being fetched and go ahead, so an unattended build is never left waiting for an answer nobody is there to give |
+| `JBANGLITE_CONFIRM_DOWNLOADS=always` | ask, and fetch nothing when there is no terminal. This is the setting for a machine that is meant to stay off the network, and for a project that means to bring everything it needs with it |
+| `JBANGLITE_CONFIRM_DOWNLOADS=never`, `JBANGLITE_ASSUME_YES=1`, `--yes` | never ask |
+
+Answering with Enter accepts: the gate is there to say what is about to happen,
+not to make every first run fail.
+
+"A terminal" means one that can actually be opened, `/dev/tty` or `CON`. It is
+not `System.console()`: since Java 22 that is non-null even when stdin is a
+pipe, so it would report a terminal where there is none and then read the answer
+out of the script's own input. The question and its answer never touch stdout,
+so `jbanglite Hello.java | sort` is unaffected, and neither is a script that
+reads its own stdin.
 
 ```yaml
 - run: jbanglite/jbanglite tools/Report.java
   env:
-    JBANGLITE_NETWORK: allow
+    JBANGLITE_CONFIRM_DOWNLOADS: never
 ```
 
 ## Requirements

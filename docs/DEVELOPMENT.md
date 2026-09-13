@@ -11,6 +11,26 @@ produces `build/libs/jbanglite.jar`, self-contained, and runs the tests.
 
 The jar targets Java 11 and is built with whatever JDK Gradle runs on.
 
+A project installing JBangLite pins the jar by SHA-256, so the build that
+produces that jar is pinned to the same degree:
+
+| | |
+| --- | --- |
+| `gradle.lockfile` | every resolved version, transitive ones included. A dependency that changes under us fails the build instead of ending up in a release |
+| `gradle/verification-metadata.xml` | the SHA-256 of every artifact the build downloads, the Gradle plugins included |
+
+Both are regenerated together after a version change:
+
+```bash
+./gradlew --refresh-dependencies --write-locks --write-verification-metadata sha256 build
+```
+
+`--refresh-dependencies` matters: without it, artifacts that are already in the
+Gradle cache are not resolved again and so are left out of the checksums.
+
+Releasing is by hand, through `misc/update-dist.sh`; what the tests cover is
+under [Tests and CI](#tests-and-ci).
+
 ## Releasing
 
 ```bash
@@ -43,8 +63,17 @@ one.
 
 ## Staying in step with JBang
 
-The tree is in three parts, so that JBang's fixes to the directive handling can
-be taken over without merging:
+JBang sits behind one interface, `DirectiveParser` in `dev.jbang.spi`, which
+turns a source file into a `SourceDirectives` built from JBangLite's own types.
+`MirroredDirectiveParser` is the implementation in use and the only class that
+names `Directives` and `KeyValue`, so the mirrored parser is an implementation
+detail rather than JBangLite's API. `TestDirectiveParser` states the contract on
+the interface alone: a second implementation - one on a JBang library artifact,
+should JBang publish one again - is held to the same test and wired in at
+`Providers`, and nothing above the interface changes.
+
+Below that interface the tree is in three parts, so that JBang's fixes to the
+directive handling can be taken over without merging:
 
 | | Contents | Maintenance |
 | --- | --- | --- |
@@ -73,9 +102,11 @@ other by package; renaming them would mean editing every sync.
 ./gradlew test
 ```
 
-runs JBang's own `TestDirectives`, unit tests for the pieces JBangLite wrote
-(the HTTP transport, the placeholder expansion), and functional tests that run
-the launcher scripts and the installer against a local server.
+runs JBang's own `TestDirectives`, the contract tests that hold any
+`DirectiveParser` and the download gate to the same behaviour, unit tests for
+the pieces JBangLite wrote (the JVM index, archive unpacking, placeholder
+expansion), and functional tests that run the launcher scripts and the installer
+against a local server.
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs the same command
 on `ubuntu-latest` and `windows-latest` for every push. The launcher and the two
@@ -139,14 +170,32 @@ reproducible; `25` or `25+` accepts any matching release.
 
 ## Dependencies
 
-Maven Resolver, through [MIMA](https://github.com/maveniverse/mima), is the one
-thing JBangLite does not implement itself. Its HTTP transport is left out:
-`JdkHttpTransporterFactory` does that work on the JDK's
-`java.net.http.HttpClient`, with the credentials and proxies the resolver hands
-it, which keeps Apache HttpClient, Gson and the public suffix list — a third of
-the jar — out of the build. JDK download and unpacking, class-file inspection
-for the main class, jar creation and OS detection use only the standard library.
+The third-party runtime dependencies are Maven Resolver (through
+[MIMA](https://github.com/maveniverse/mima)) **with the HTTP transport Maven
+itself ships**, Commons Compress for the JDK archives, Gson for the JDK index,
+the slf4j no-op binding the resolver needs and the jspecify annotations used by
+the mirrored files.
 
-`misc/notices/` holds licence texts for artifacts that ship none of their own;
-the build copies them, and each dependency's own `LICENSE` and `NOTICE`, into
-`META-INF/notices/` in the jar. See [THIRD-PARTY.md](../THIRD-PARTY.md).
+Each of those replaced something JBangLite used to do itself, and for the same
+reason: the format or protocol is defined elsewhere, so getting it subtly wrong
+writes a wrong file or makes a wrong request instead of failing.
+
+| Was | Is now | Why |
+| --- | --- | --- |
+| `JdkHttpTransporterFactory`, a transport on `java.net.http.HttpClient` | `maven-resolver-transport-http` | the transport Maven and MIMA use by default, with the checksum, retry, redirect and authentication behaviour everything else in the Maven ecosystem is tested against |
+| a hand-written tar/zip reader | `commons-compress` | pax and GNU extensions, links and permissions as real JDK archives use them |
+| a hand-written JSON reader | `gson` | comes with the transport anyway |
+
+It costs jar size - roughly 2.2 MB to 6.5 MB - which is not a constraint for a
+jar that is downloaded once per machine into a shared cache. Nothing is
+excluded from what they bring: a dependency tree trimmed by hand is one that
+fails in the path nobody tested.
+
+Class-file inspection for the main class, jar creation, OS detection and
+module-info generation are still implemented with the JDK's standard library
+only. `jbanglite.jar` itself needs Java 11 or later to run (JBang targets
+Java 8); the JDK used for scripts is whatever `//JAVA` asks for.
+
+`misc/licenses/` holds the licence texts of the bundled libraries, which the
+shadow transformers do not carry over; the build copies them into
+`META-INF/licenses/` in the jar. See [THIRD-PARTY.md](../THIRD-PARTY.md).
