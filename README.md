@@ -362,6 +362,23 @@ produces `build/libs/jbanglite.jar` (self-contained). Pass `-PjbangVersion=x.y.z
 to set the version; `misc/update-dist.sh <version>` does so and writes the
 matching `dist/jbanglite.properties`.
 
+A project installing JBangLite pins the jar by SHA-256, so the build that
+produces that jar is pinned to the same degree:
+
+| | |
+| --- | --- |
+| `gradle.lockfile` | every resolved version, transitive ones included. A dependency that changes under us fails the build instead of ending up in a release |
+| `gradle/verification-metadata.xml` | the SHA-256 of every artifact the build downloads, the Gradle plugins included |
+
+Both are regenerated together after a version change:
+
+```bash
+./gradlew --refresh-dependencies --write-locks --write-verification-metadata sha256 build
+```
+
+`--refresh-dependencies` matters: without it, artifacts that are already in the
+Gradle cache are not resolved again and so are left out of the checksums.
+
 `./gradlew test` runs the test suite: the mirrored `TestDirectives` from JBang,
 the contract tests for `DirectiveParser` and the download gate, the JDK index
 and archive unpacking tests, and functional tests for the launcher scripts and

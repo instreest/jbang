@@ -14,6 +14,20 @@ repositories {
 	mavenCentral()
 }
 
+// The jar is pinned by SHA-256 where it is installed (jbanglite.properties), so
+// the build that produces it has to be as fixed as that: the lock files record
+// every resolved version, transitive ones included, and
+// gradle/verification-metadata.xml records the checksum of every artifact that
+// is downloaded to build it. A dependency that changes under us fails the build
+// instead of ending up in a release.
+//
+//   ./gradlew --write-locks --write-verification-metadata sha256 build
+//
+// regenerates both after a version change.
+dependencyLocking {
+	lockAllConfigurations()
+}
+
 java {
 	sourceCompatibility = JavaVersion.VERSION_11
 	targetCompatibility = JavaVersion.VERSION_11
