@@ -82,7 +82,7 @@ dev.jbang.lite.spi
 
 | 自前 | 行数 | 転換候補 | 判断 |
 | --- | --- | --- | --- |
-| `jdk/`（Downloader, Jdk, JdkIndex, JdkManager, Unpacker） | 1039 | **`dev.jbang:devkitman` 0.4.12** | **○ 推奨**。JBang 本体も使う。SPI が確認プロンプトの継ぎ目になる。要確認: 既定は Foojay で、現行の Coursier JVM index とは経路が違う（`MetadataJdkInstaller` で寄せられるか要検証）。`JBangJdkProvider` があるのでキャッシュ配置の互換は取りやすい |
+| `jdk/`（Downloader, Jdk, JdkIndex, JdkManager, Unpacker） | 1039 | **`dev.jbang:devkitman` 0.4.12** | **見送り**（既存の jbanglite スクリプトとの整合性を優先）。以下は参考: **○ 推奨**。JBang 本体も使う。SPI が確認プロンプトの継ぎ目になる。要確認: 既定は Foojay で、現行の Coursier JVM index とは経路が違う（`MetadataJdkInstaller` で寄せられるか要検証）。`JBangJdkProvider` があるのでキャッシュ配置の互換は取りやすい |
 | `JdkHttpTransporterFactory` | 259 | `maven-resolver-transport-jdk` | **△ 保留**。2.x 系にしか無く、今の MIMA 2.4.x は resolver 1.9.x。MIMA 3.0（現在 alpha）が安定したら自前 259 行は丸ごと消せる。**追跡対象** |
 | `util/Json.java` | 206 | gson | **○**。devkitman を入れると gson は推移的に入るので、追加コストが実質ゼロになる |
 | `util/OsDetector.java` | 121 | devkitman `OsUtils` / os-maven-plugin 系 | △。`${os.detected.*}` の互換が要件なので、置換より現状維持が安い |
@@ -92,11 +92,11 @@ dev.jbang.lite.spi
 
 ## 5. 進め方（依存関係の順）
 
-1. `spi` パッケージを切り、`ScriptParser` / `DownloadGate` を導入。
+1. **[実施済]** `spi` パッケージを切り、`DirectiveParser` / `DownloadGate` を導入。
    実装は今のコードのまま、境界だけ入れる（挙動不変、テストで固定）。
-2. `DownloadGate` に確認メッセージを実装（非対話時の既定と
-   `JBANGLITE_ASSUME_YES` を含む）。この時点で当初の目的の一つが片付く。
-3. `jdk/` を devkitman に置き換え。`RemoteAccessProvider` を
+2. **[実施済]** `DownloadGate` に確認メッセージを実装（非対話時の既定と
+   `JBANGLITE_ASSUME_YES` を含む）。
+3. **[見送り]** `jdk/` を devkitman に置き換え。`RemoteAccessProvider` を
    `DownloadGate` 経由にする。Coursier index 要件をここで決着させる。
 4. gson 採用で `util/Json.java` を削除。
 5. MIMA 3 安定を待って `maven-resolver-transport-jdk` に転換。

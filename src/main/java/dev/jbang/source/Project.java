@@ -27,8 +27,9 @@ import dev.jbang.dependencies.DependencyUtil;
 import dev.jbang.dependencies.MavenRepo;
 import dev.jbang.jdk.Jdk;
 import dev.jbang.jdk.JdkManager;
-import dev.jbang.source.parser.Directives;
-import dev.jbang.source.parser.KeyValue;
+import dev.jbang.spi.Attribute;
+import dev.jbang.spi.Providers;
+import dev.jbang.spi.SourceDirectives;
 import dev.jbang.util.JavaUtil;
 import dev.jbang.util.ModuleUtil;
 import dev.jbang.util.OsDetector;
@@ -40,10 +41,10 @@ import dev.jbang.util.Util;
  * options and settings gathered from the <code>//</code>-directives of the main
  * file and of every file it pulls in with <code>//SOURCES</code>.
  *
- * The directives are parsed by {@link Directives}, which is mirrored from
- * JBang, and are applied here with the same rules JBang uses: description, GAV,
- * main class and module name come from the main file only, everything else
- * accumulates over all files.
+ * The directives are read through {@link dev.jbang.spi.DirectiveParser}, the
+ * interface JBang sits behind, and are applied here with the same rules JBang
+ * uses: description, GAV, main class and module name come from the main file
+ * only, everything else accumulates over all files.
  *
  * The build output goes to
  * <code>$JBANG_CACHE_DIR/jars/&lt;file&gt;.&lt;hash&gt;/&lt;base&gt;.jar</code>,
@@ -97,7 +98,7 @@ public class Project {
 	private final List<String> runtimeOptions = new ArrayList<>();
 	private final Map<String, String> manifestAttributes = new LinkedHashMap<>();
 	private final List<Project> subProjects = new ArrayList<>();
-	private final List<KeyValue> docs = new ArrayList<>();
+	private final List<Attribute> docs = new ArrayList<>();
 	private final Map<String, String> properties;
 	private final Properties contextProperties;
 
@@ -185,7 +186,8 @@ public class Project {
 			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 					"Source file could not be found or read: " + source);
 		}
-		Directives directives = new Directives.Extended(Util.readString(source), propertyReplacer());
+		SourceDirectives directives = Providers.directiveParser()
+			.parse(Util.readString(source), propertyReplacer());
 		Path baseDir = main && mainBaseDir != null ? mainBaseDir : source.getParent();
 
 		if (main) {
@@ -210,10 +212,10 @@ public class Project {
 		addRepositories(directives.repositories());
 		compileOptions.addAll(directives.compileOptions());
 		runtimeOptions.addAll(directives.runtimeOptions());
-		docs.addAll(directives.collectDocs());
+		docs.addAll(directives.docs());
 		directives.manifestOptions().forEach(this::putManifestAttribute);
 		directives.agentOptions().forEach(this::putManifestAttribute);
-		resources.addAll(toFileRefs(directives.files(), baseDir));
+		resources.addAll(toFileRefs(directives.fileRefs(baseDir), baseDir));
 
 		String version = directives.javaVersion();
 		if (version != null && JavaUtil.checkRequestedVersion(version)
@@ -237,16 +239,15 @@ public class Project {
 		}
 	}
 
-	private void putManifestAttribute(KeyValue kv) {
-		if (!kv.getKey().isEmpty()) {
-			manifestAttributes.put(kv.getKey(), kv.getValue() != null ? kv.getValue() : "true");
+	private void putManifestAttribute(Attribute attribute) {
+		if (!attribute.key().isEmpty()) {
+			manifestAttributes.put(attribute.key(), attribute.value() != null ? attribute.value() : "true");
 		}
 	}
 
 	/** Turns //FILES entries (with globs and optional aliases) into copy jobs. */
-	private List<FileRef> toFileRefs(List<KeyValue> files, Path baseDir) {
+	private List<FileRef> toFileRefs(List<String> files, Path baseDir) {
 		return files.stream()
-			.flatMap(kv -> Directives.explodeFileRef(null, baseDir, kv).stream())
 			.map(ref -> {
 				String[] split = ref.split("=", 2);
 				String src = split.length == 1 ? split[0] : split[1];
@@ -325,7 +326,7 @@ public class Project {
 		return Collections.unmodifiableList(subProjects);
 	}
 
-	public List<KeyValue> getDocs() {
+	public List<Attribute> getDocs() {
 		return Collections.unmodifiableList(docs);
 	}
 

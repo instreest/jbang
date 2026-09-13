@@ -30,6 +30,8 @@ public final class Settings {
 	public static final String ENV_JDK_INDEX = "JBANG_JDK_INDEX";
 	public static final String ENV_DOWNLOAD_RETRY = "JBANG_DOWNLOAD_RETRY";
 	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JBANG_DOWNLOAD_RETRY_DELAY";
+	public static final String ENV_CONFIRM_DOWNLOADS = "JBANGLITE_CONFIRM_DOWNLOADS";
+	public static final String ENV_ASSUME_YES = "JBANGLITE_ASSUME_YES";
 
 	public static final String CP_SEPARATOR = File.pathSeparator;
 	public static final String DEPENDENCY_CACHE_FILE = "dependency_cache.txt";
@@ -94,6 +96,26 @@ public final class Settings {
 	/** Seconds between download attempts, 0 meaning exponential backoff. */
 	public static int getDownloadRetryDelay() {
 		return intFromEnv(ENV_DOWNLOAD_RETRY_DELAY, 0);
+	}
+
+	/**
+	 * How the download gate asks before fetching a JDK or dependencies:
+	 * "auto" (the default: only when there is a terminal to ask on), "always"
+	 * or "never".
+	 */
+	public static String getConfirmDownloads() {
+		String v = System.getenv(ENV_CONFIRM_DOWNLOADS);
+		return v != null && !v.trim().isEmpty() ? v.trim().toLowerCase() : "auto";
+	}
+
+	/** JBANGLITE_ASSUME_YES, the environment's form of <code>--yes</code>. */
+	public static boolean isAssumeYes() {
+		String v = System.getenv(ENV_ASSUME_YES);
+		if (v == null) {
+			return false;
+		}
+		String s = v.trim().toLowerCase();
+		return s.equals("1") || s.equals("true") || s.equals("yes");
 	}
 
 	private static int intFromEnv(String name, int defaultValue) {

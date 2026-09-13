@@ -22,6 +22,8 @@ import java.util.regex.Pattern;
 import dev.jbang.source.AppBuilder;
 import dev.jbang.source.CmdGenerator;
 import dev.jbang.source.Project;
+import dev.jbang.spi.DownloadGate;
+import dev.jbang.spi.Providers;
 import dev.jbang.util.CommandBuffer;
 import dev.jbang.util.Util;
 
@@ -176,6 +178,11 @@ public final class Main {
 				case "-o":
 				case "--offline":
 					Util.setOffline(true);
+					break;
+				case "-y":
+				case "--yes":
+					// no question to ask: download whatever is missing
+					Providers.setDownloadGate(DownloadGate.ALLOW);
 					break;
 				case "-h":
 				case "--help":
@@ -370,6 +377,7 @@ public final class Main {
 		realOut.println("  --quiet              Only print errors");
 		realOut.println("  --fresh              Ignore caches and rebuild/re-resolve everything");
 		realOut.println("  -o, --offline        Never access the network");
+		realOut.println("  -y, --yes            Download what is missing without asking");
 		realOut.println("  -j, --java <v>       Use the given Java version (e.g. 17 or 17+)");
 		realOut.println("  -m, --main <c>       Main class to run");
 		realOut.println("  --module[=<name>]    Run as a module, optionally with the given name");
@@ -381,5 +389,10 @@ public final class Main {
 		realOut.println("  --enable-preview     Activate Java preview features");
 		realOut.println("  -ea, -esa            Enable (system) assertions");
 		realOut.println("  --cds                Use class data sharing");
+		realOut.println();
+		realOut.println("Before a JDK or a dependency is downloaded, JBangLite says so and, when");
+		realOut.println("it is run from a terminal, asks. JBANGLITE_CONFIRM_DOWNLOADS=never (or");
+		realOut.println("JBANGLITE_ASSUME_YES=1, or --yes) never asks, =always refuses to download");
+		realOut.println("when there is no terminal to ask on.");
 	}
 }

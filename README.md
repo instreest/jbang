@@ -110,7 +110,7 @@ applied the same way:
 
 There are no subcommands: JBangLite does one thing, which is to run the
 script, and `--help` and `--version` are the only options that do something
-else. The other options are `--verbose`, `--quiet`, `--fresh`, `--offline`,
+else. The other options are `--verbose`, `--quiet`, `--fresh`, `--offline`, `--yes`,
 `--java`, `--main`, `--module`, `--deps`, `--repos`, `-C<compiler option>`,
 `-R<jvm option>`, `-Dkey=value`, `--enable-preview`, `-ea`, `-esa` and
 `--cds`.
@@ -131,6 +131,41 @@ and `//FILES` of such a script are resolved from the working directory.
 cat Hello.java | jbanglite -
 jbanglite <(sed 's/World/JBang/' Hello.java)
 ```
+
+### Before anything is downloaded
+
+A run fetches from the network only when something is missing: the JDK a script
+asks for with `//JAVA`, and the dependencies of `//DEPS`. Neither happens
+silently. Both go through one interface, `DownloadGate`, which says what is
+about to be fetched and, when JBangLite is run from a terminal, asks:
+
+```
+[jbanglite] Dependencies are missing locally and will be downloaded from Maven Central:
+   org.eclipse.jdt:org.eclipse.jdt.core:3.46.0
+Continue? [Y/n]
+```
+
+The gate is only reached when the download really would happen. A JDK that is
+already installed never reaches it, and neither does a dependency that is
+already in the local Maven repository: before asking, JBangLite resolves the
+coordinates against `~/.m2/repository` alone, and when that succeeds there is
+nothing to ask about. So the question appears on the first run of a script, not
+on every run. (`--fresh` skips that shortcut, because it exists to go to the
+remote repositories again.)
+
+"From a terminal" means `System.console()`, which is null as soon as stdin or
+stdout is redirected. That is deliberate: `jbanglite -` reads the script from
+stdin and `jbanglite Hello.java | sort` pipes the output, and neither may have
+its stream eaten by a prompt. The question and its answer never touch stdout.
+
+| | |
+| --- | --- |
+| `JBANGLITE_CONFIRM_DOWNLOADS=auto` (default) | ask when there is a terminal; otherwise print what is being fetched and go ahead, so an unattended build is never left waiting for an answer |
+| `JBANGLITE_CONFIRM_DOWNLOADS=always` | ask, and fail rather than download when there is no terminal - for a project that means to bring everything it needs with it |
+| `JBANGLITE_CONFIRM_DOWNLOADS=never`, `JBANGLITE_ASSUME_YES=1`, `--yes` | never ask |
+
+Answering with Enter accepts: the gate is there to say what is about to happen,
+not to make every first run fail.
 
 ### How a script is started
 
@@ -214,8 +249,17 @@ mechanisms do not overlap.
 
 ## Staying in sync with JBang
 
-The tree is split in three, so that fixes JBang makes to the directive handling
-can be taken over without merging:
+JBang sits behind one interface, `DirectiveParser` in `dev.jbang.spi`, which
+turns a source file into a `SourceDirectives` built from JBangLite's own types.
+`MirroredDirectiveParser` is the implementation in use and the only class that
+names `Directives` and `KeyValue`, so the mirrored parser is an implementation
+detail rather than JBangLite's API. `TestDirectiveParser` states the contract on
+the interface alone: a second implementation - one on a JBang library artifact,
+should JBang publish one again - is held to the same test and wired in at
+`Providers`, and nothing above the interface changes.
+
+Below that interface the tree is split in three, so that fixes JBang makes to
+the directive handling can be taken over without merging:
 
 | | Contents | Maintenance |
 | --- | --- | --- |
