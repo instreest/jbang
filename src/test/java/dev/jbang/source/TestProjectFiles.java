@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.util.Collections;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import dev.jbang.ExitException;
@@ -40,9 +42,22 @@ class TestProjectFiles {
 		assertTrue(e.getMessage().contains("//FILES"), e.getMessage());
 	}
 
+	/**
+	 * Windows does not call this absolute, because it names no drive, but it
+	 * still starts at the root of whichever drive the run is on.
+	 */
 	@Test
-	void anAbsoluteTargetIsRefused() {
-		assertThrows(ExitException.class, () -> projectWith("//FILES /etc/evil.txt=data.txt"));
+	void aTargetFromTheRootIsRefused() {
+		ExitException e = assertThrows(ExitException.class,
+				() -> projectWith("//FILES /etc/evil.txt=data.txt"));
+		assertTrue(e.getMessage().contains("//FILES"), e.getMessage());
+	}
+
+	/** Elsewhere "C:" is an ordinary directory name, so only Windows can tell. */
+	@Test
+	@EnabledOnOs(OS.WINDOWS)
+	void aTargetOnAnotherDriveIsRefused() {
+		assertThrows(ExitException.class, () -> projectWith("//FILES C:/evil.txt=data.txt"));
 	}
 
 	@Test

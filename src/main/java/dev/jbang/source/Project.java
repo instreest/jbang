@@ -198,9 +198,12 @@ public class Project {
 				String src = split.length == 1 ? split[0] : split[1];
 				String dest = split.length == 1 ? null : split[0];
 				Path target = dest != null && !dest.isEmpty() ? Paths.get(dest) : null;
-				if (target != null && target.isAbsolute()) {
+				// Not isAbsolute(): on Windows "/etc/x" has a root but no drive, so
+				// it is not absolute, and it would still name a place from the
+				// root of the drive the run happens to be on.
+				if (target != null && target.getRoot() != null) {
 					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-							"Only relative paths allowed in //FILES. Found absolute path: " + dest);
+							"Only relative paths allowed in //FILES. Found: " + dest);
 				}
 				// The target names a place inside the jar, so leaving it has no
 				// meaning to begin with; without this it would name a place on
