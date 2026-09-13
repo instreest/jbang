@@ -72,15 +72,34 @@ jar {
 	}
 }
 
+import com.github.jengelman.gradle.plugins.shadow.transformers.ApacheLicenseResourceTransformer
+import com.github.jengelman.gradle.plugins.shadow.transformers.ApacheNoticeResourceTransformer
+
 shadowJar {
 	mergeServiceFiles()
-	// keep the license notices next to the bundled code
+	// The bundled libraries each carry their own META-INF/LICENSE and NOTICE,
+	// and one file cannot hold several: without these the last one written wins
+	// and the rest are lost, which is exactly what Apache-2.0 section 4(d) asks
+	// us not to do. They merge the notices into one file instead.
+	transform(ApacheLicenseResourceTransformer)
+	transform(ApacheNoticeResourceTransformer) {
+		projectName = 'JBangLite'
+	}
+	// keep this fork's own notices next to the bundled code, and the licenses
+	// of the bundled libraries, which the transformers above do not carry over
 	from('LICENSE') { into 'META-INF'; rename { 'LICENSE-jbang.txt' } }
 	from('THIRD-PARTY.md') { into 'META-INF'; rename { 'THIRD-PARTY-jbang.md' } }
+	from('misc/licenses') { into 'META-INF/licenses' }
+	// a bundled library's module-info describes that library, not this jar
+	exclude 'META-INF/versions/*/module-info.class'
+	exclude 'module-info.class'
 	manifest {
 		attributes(
 			'Main-Class': 'dev.jbang.Main',
-			'JBang-Version': project.version
+			'JBang-Version': project.version,
+			// plexus-utils ships Java 9/10/11 variants of two classes; without
+			// this they are dead weight and the Java 8 versions are used
+			'Multi-Release': 'true'
 		)
 	}
 	archiveFileName = "jbanglite.jar"

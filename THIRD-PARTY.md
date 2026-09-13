@@ -45,5 +45,22 @@ JVM index are fetched by `jdk/Downloader.java` on `java.net.HttpURLConnection`,
 since those come from the distributors' own sites rather than from a Maven
 repository.
 
+`jbanglite.jar` carries the notices of everything it bundles:
+
+| In the jar | |
+| --- | --- |
+| `META-INF/NOTICE` | the NOTICE files of all bundled Apache-2.0 artifacts, merged |
+| `META-INF/licenses/Apache-2.0.txt` | Apache License 2.0, for Maven Resolver, Apache Maven, HttpClient, Commons and Gson |
+| `META-INF/licenses/MIT-slf4j.txt` | SLF4J |
+| `META-INF/licenses/BSD-3-Clause-asm.txt` | ASM |
+| `META-INF/LICENSE-jbang.txt` | JBang, and this fork |
+| `META-INF/THIRD-PARTY-jbang.md` | this file |
+
+Two license texts are named here rather than bundled: MIMA is under the
+[Eclipse Public License 2.0](https://www.eclipse.org/legal/epl-2.0/) and the
+public suffix list that Apache HttpClient carries is under the
+[Mozilla Public License 2.0](https://www.mozilla.org/MPL/2.0/). Neither is
+shipped inside the artifact it belongs to, so neither can be copied from it.
+
 The exact list of bundled artifacts can be printed with
 `./gradlew dependencies --configuration runtimeClasspath`.
