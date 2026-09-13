@@ -70,7 +70,12 @@ public class Project {
 		}
 
 		public Path to(Path parent) {
-			return parent.resolve(target != null ? target : source.getFileName());
+			Path to = parent.resolve(target != null ? target : source.getFileName()).normalize();
+			if (!to.startsWith(parent.normalize())) {
+				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+						"Refusing to write outside " + parent + ": " + to);
+			}
+			return to;
 		}
 
 		void copy(Path destroot) {
@@ -196,6 +201,13 @@ public class Project {
 				if (target != null && target.isAbsolute()) {
 					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 							"Only relative paths allowed in //FILES. Found absolute path: " + dest);
+				}
+				// The target names a place inside the jar, so leaving it has no
+				// meaning to begin with; without this it would name a place on
+				// the machine instead.
+				if (target != null && target.normalize().startsWith("..")) {
+					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+							"//FILES target must stay inside the jar. Found: " + dest);
 				}
 				Path from = baseDir.resolve(src).toAbsolutePath().normalize();
 				if (!Files.isReadable(from)) {

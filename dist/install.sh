@@ -57,7 +57,12 @@ fetch() {  # $1 = file to fetch, $2 = file to write
   if command -v curl > /dev/null 2>&1; then
     curl -fsSL --proto '=https,http' --proto-redir '=https' "$base/$1" -o "$2"
   elif command -v wget > /dev/null 2>&1; then
-    wget -q "$base/$1" -O "$2"
+    # as for curl above: no redirect off https, except for the loopback the
+    # tests serve on, which the check above has already allowed through
+    case "$base" in
+      https://*) wget -q --https-only "$base/$1" -O "$2" ;;
+      *) wget -q "$base/$1" -O "$2" ;;
+    esac
   else
     echo "Neither curl nor wget is available" 1>&2
     exit 1

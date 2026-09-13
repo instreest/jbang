@@ -96,7 +96,13 @@ download() {
       curl -sLf --proto '=https,http' --proto-redir '=https' -o "$2" "$1"
       retval=$?
     elif [ -x "$(command -v wget)" ]; then
-      wget -q -O "$2" "$1"
+      # --https-only also refuses to follow a redirect off https, which is what
+      # curl's --proto-redir does above. It cannot be used for the loopback the
+      # tests serve on, which the check above has already allowed through.
+      case "$1" in
+        https://*) wget -q --https-only -O "$2" "$1" ;;
+        *) wget -q -O "$2" "$1" ;;
+      esac
       retval=$?
     else
       echo "Error: curl or wget not found, please make sure one of them is installed" 1>&2

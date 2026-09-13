@@ -2,6 +2,7 @@ package dev.jbang.jdk;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.URI;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.file.Files;
@@ -203,6 +204,7 @@ public final class JdkManager {
 				+ "). Be patient, this can take several minutes...");
 		Util.verboseMsg("Downloading " + entry.url);
 		try {
+			requireExpectedHost(entry);
 			Downloader.download(entry.url, pkg);
 			verifyChecksum(entry, pkg);
 			Util.infoMsg("Installing JDK " + entry.version + "...");
@@ -229,16 +231,32 @@ public final class JdkManager {
 	}
 
 	/**
+	 * Refuses a download from anywhere but {@link Settings#JDK_DOWNLOAD_HOST}.
+	 * The URL comes from the JVM index, which is the one input here that nothing
+	 * in the project pins, so a bad index would otherwise choose both the
+	 * archive and the checksum that is compared against it.
+	 */
+	void requireExpectedHost(JdkIndex.Entry entry) throws IOException {
+		String host = URI.create(entry.url).getHost();
+		if (host == null || !host.equalsIgnoreCase(Settings.JDK_DOWNLOAD_HOST)) {
+			throw new IOException("The JVM index points at " + host + " for " + entry.distro
+					+ " " + entry.version + ", but JDKs are only downloaded from "
+					+ Settings.JDK_DOWNLOAD_HOST + ": " + entry.url);
+		}
+	}
+
+	/**
 	 * Verifies the downloaded archive against the SHA-256 published next to it
-	 * (".sha256.txt", as used by Temurin and others). A mismatch aborts the
-	 * installation; a checksum that cannot be fetched is only a warning, since
-	 * not every distribution publishes one.
+	 * (".sha256.txt", which Temurin publishes for every archive). Both a
+	 * mismatch and a checksum that cannot be read abort the installation: a
+	 * checksum that is merely unreachable would otherwise be a way to have the
+	 * archive accepted unverified.
 	 */
 	private void verifyChecksum(JdkIndex.Entry entry, Path pkg) throws IOException {
 		Optional<String> published = Downloader.tryReadString(entry.url + ".sha256.txt");
 		if (!published.isPresent()) {
-			Util.warnMsg("No published SHA-256 found for " + entry.url + ", skipping verification");
-			return;
+			throw new IOException("No SHA-256 published next to " + entry.url
+					+ ", so the download cannot be verified");
 		}
 		String expected = published.get().trim().split("\\s+")[0].toLowerCase();
 		String actual = Util.sha256(pkg);

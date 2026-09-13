@@ -39,6 +39,13 @@ public final class Settings {
 	public static final int DEFAULT_JAVA_VERSION = 17;
 	/** The one JDK distribution JBangLite installs: Eclipse Temurin. */
 	public static final String JDK_DISTRO = "temurin";
+	/**
+	 * The host {@link #JDK_DISTRO} publishes its archives on. The JVM index says
+	 * where to download a JDK from, and nothing else vouches for what it says, so
+	 * an archive is only fetched from here. Every Temurin entry in the index
+	 * points at this host; one that does not is a reason to stop, not to follow.
+	 */
+	public static final String JDK_DOWNLOAD_HOST = "github.com";
 	public static final int DEFAULT_DOWNLOAD_RETRY = 5;
 
 	public enum CacheClass {
