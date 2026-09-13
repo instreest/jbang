@@ -39,8 +39,11 @@ import org.eclipse.aether.util.repository.SimpleArtifactDescriptorPolicy;
 
 import eu.maveniverse.maven.mima.context.Context;
 import eu.maveniverse.maven.mima.context.ContextOverrides;
+import eu.maveniverse.maven.mima.runtime.standalonestatic.StandaloneStaticRuntime;
 import dev.jbang.ExitException;
 import dev.jbang.Settings;
+import dev.jbang.spi.DownloadGate;
+import dev.jbang.spi.Providers;
 import dev.jbang.util.Util;
 
 /**
@@ -107,11 +110,21 @@ public final class DependencyResolver {
 				return cached;
 			}
 		}
-		// Nothing was cached, so this goes to the repositories. Offline runs never
-		// do, so they are not worth asking about.
 		if (!Util.isOffline()) {
-			Util.confirmNetwork(depIds.size() == 1 ? "the dependency " + depIds.get(0)
-					: depIds.size() + " dependencies (" + String.join(", ", depIds) + ") and whatever they need");
+			// what the local Maven repository already holds needs no download and
+			// is therefore not worth asking about; --fresh skips the shortcut
+			// because it exists to go to the remote repositories again
+			List<ArtifactInfo> local = Util.isFresh() ? null : resolveFromLocalRepo(depIds, repos);
+			if (local != null) {
+				Util.verboseMsg("Resolved artifact(s) without downloading: " + local);
+				DependencyCache.store(key, local);
+				return local;
+			}
+			Providers.downloadGate()
+				.check(new DownloadGate.Request(DownloadGate.Kind.DEPENDENCIES,
+						"Dependencies are missing locally and will be downloaded"
+								+ (repos.isEmpty() ? " from Maven Central:" : ":"),
+						depIds));
 		}
 		Util.infoMsg("Resolving dependencies...");
 		try (Session resolver = new Session(Util.isOffline(), Util.isFresh(), repos)) {
@@ -120,6 +133,21 @@ public final class DependencyResolver {
 			DependencyCache.store(key, artifacts);
 			Util.verboseMsg("Resolved artifact(s): " + artifacts);
 			return artifacts;
+		}
+	}
+
+	/**
+	 * Resolves the coordinates against the local Maven repository only, and
+	 * returns null when that does not hold everything (which is the sign that a
+	 * download would follow). Nothing is printed: this is a look, not a step of
+	 * its own, and the real resolution reports what it does.
+	 */
+	private static List<ArtifactInfo> resolveFromLocalRepo(List<String> depIds, List<MavenRepo> repos) {
+		try (Session offline = new Session(true, false, repos, true)) {
+			return offline.doResolve(depIds);
+		} catch (RuntimeException e) {
+			Util.verboseMsg("Not everything is in the local Maven repository: " + e.getMessage());
+			return null;
 		}
 	}
 
@@ -149,6 +177,10 @@ public final class DependencyResolver {
 	private final Context context;
 
 	private Session(boolean offline, boolean updateCache, List<MavenRepo> repositories) {
+		this(offline, updateCache, repositories, false);
+	}
+
+	private Session(boolean offline, boolean updateCache, List<MavenRepo> repositories, boolean silent) {
 		Map<String, String> userProperties = new HashMap<>();
 		// avoid being blocked by servers that reject the default "Java" user agent
 		userProperties.put("aether.connector.userAgent", "JBangLite/" + Util.getVersion());
@@ -161,10 +193,10 @@ public final class DependencyResolver {
 			.repositories(toRemoteRepositories(repositories))
 			.addRepositoriesOp(ContextOverrides.AddRepositoriesOp.REPLACE)
 			.snapshotUpdatePolicy(updateCache ? ContextOverrides.SnapshotUpdatePolicy.ALWAYS : null);
-		if (!Util.isQuiet()) {
+		if (!silent && !Util.isQuiet()) {
 			overrides.repositoryListener(new ProgressListener());
 		}
-		this.context = new JBangLiteRuntime().create(overrides.build());
+		this.context = new StandaloneStaticRuntime().create(overrides.build());
 	}
 
 	@Override

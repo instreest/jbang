@@ -14,29 +14,58 @@ repositories {
 	mavenCentral()
 }
 
+// The jar is pinned by SHA-256 where it is installed (jbanglite.properties), so
+// the build that produces it has to be as fixed as that: the lock files record
+// every resolved version, transitive ones included, and
+// gradle/verification-metadata.xml records the checksum of every artifact that
+// is downloaded to build it. A dependency that changes under us fails the build
+// instead of ending up in a release.
+//
+//   ./gradlew --write-locks --write-verification-metadata sha256 build
+//
+// regenerates both after a version change.
+dependencyLocking {
+	lockAllConfigurations()
+}
+
 java {
 	sourceCompatibility = JavaVersion.VERSION_11
 	targetCompatibility = JavaVersion.VERSION_11
 }
 
+// MIMA decides which Maven Resolver comes in, and we use Resolver's own classes
+// (JavaScopes, the descriptor policy) directly, so that one has to be declared
+// too: keep it at the version MIMA brings, which the pom of the MIMA release
+// names. The lock file makes a divergence visible in review.
+def mimaVersion = "2.4.48"
+def resolverVersion = "1.9.27"
+def slf4jVersion = "2.0.18"
+
 dependencies {
 	// nullness annotations, required by the files mirrored from JBang
 	implementation 'org.jspecify:jspecify:1.0.0'
 
-	// Maven dependency resolution (the one thing we really cannot re-implement ourselves)
-	implementation "eu.maveniverse.maven.mima:context:2.4.36"
-	implementation("eu.maveniverse.maven.mima.runtime:standalone-static:2.4.36") {
-		// the HTTP transport (Apache HttpClient, Gson, the public suffix list)
-		// is replaced by JdkHttpTransporterFactory on the JDK's HttpClient
-		exclude group: 'org.apache.maven.resolver', module: 'maven-resolver-transport-http'
+	// Maven dependency resolution (the one thing we really cannot re-implement
+	// ourselves), with the HTTP transport Maven itself ships
+	implementation "eu.maveniverse.maven.mima:context:$mimaVersion"
+	implementation "eu.maveniverse.maven.mima.runtime:standalone-static:$mimaVersion"
+	implementation "org.apache.maven.resolver:maven-resolver-util:$resolverVersion"
+	implementation "org.slf4j:slf4j-nop:$slf4jVersion"
+
+	// JSON, for the JDK index. Comes with maven-resolver-transport-http anyway;
+	// declared because we use it ourselves
+	implementation "com.google.code.gson:gson:2.14.0"
+
+	// archive handling, for unpacking a downloaded JDK
+	implementation "org.apache.commons:commons-compress:1.28.0"
+
+	constraints {
+		// the HTTP transport brings the 1.7 line of the commons-logging bridge
+		// while everything else is on 2.0; one SLF4J, not one and a half
+		implementation("org.slf4j:jcl-over-slf4j:$slf4jVersion") {
+			because "aligned with the rest of SLF4J"
+		}
 	}
-	implementation "org.apache.maven.resolver:maven-resolver-spi:1.9.24"
-	implementation "org.apache.maven.resolver:maven-resolver-util:1.9.24"
-	implementation "org.apache.maven.resolver:maven-resolver-transport-file:1.9.24"
-	// only for the ChecksumExtractor type in the signatures JBangLiteRuntime
-	// overrides; the class is never loaded at run time
-	compileOnly "org.apache.maven.resolver:maven-resolver-transport-http:1.9.24"
-	implementation "org.slf4j:slf4j-nop:2.0.18"
 
 	testImplementation platform("org.junit:junit-bom:5.14.4")
 	testImplementation "org.junit.jupiter:junit-jupiter"
@@ -77,54 +106,35 @@ jar {
 	}
 }
 
-/**
- * Collects the LICENSE and NOTICE files of every bundled dependency into one
- * directory per artifact. A shadow jar otherwise has them all land on
- * META-INF/LICENSE and META-INF/NOTICE, where the last one written wins and
- * the rest are lost - and Apache-2.0 asks for the NOTICE of every work it
- * covers to travel with the distribution.
- */
-tasks.register('collectNotices') {
-	def outDir = layout.buildDirectory.dir('notices')
-	def runtime = configurations.runtimeClasspath
-	inputs.files(runtime)
-	outputs.dir(outDir)
-	inputs.dir('misc/notices')
-	doLast {
-		def root = outDir.get().asFile
-		root.deleteDir()
-		root.mkdirs()
-		// texts we have to ship for artifacts that put none in their own jar
-		copy { from 'misc/notices'; into root }
-		runtime.resolvedConfiguration.resolvedArtifacts.each { artifact ->
-			def id = artifact.moduleVersion.id
-			def name = "${id.group}-${id.name}-${id.version}"
-			zipTree(artifact.file).matching {
-				include 'META-INF/LICENSE*', 'META-INF/NOTICE*', 'META-INF/COPYRIGHT*',
-						'META-INF/licenses/**', 'about.html'
-			}.files.each { f ->
-				if (f.isFile() && f.length() > 0) {
-					def target = new File(root, name)
-					target.mkdirs()
-					new File(target, f.name).bytes = f.bytes
-				}
-			}
-		}
-	}
-}
+import com.github.jengelman.gradle.plugins.shadow.transformers.ApacheLicenseResourceTransformer
+import com.github.jengelman.gradle.plugins.shadow.transformers.ApacheNoticeResourceTransformer
 
 shadowJar {
-	dependsOn 'collectNotices'
 	mergeServiceFiles()
-	// keep the license notices next to the bundled code: JBangLite's own, and
-	// one directory per dependency so that none overwrites another
+	// The bundled libraries each carry their own META-INF/LICENSE and NOTICE,
+	// and one file cannot hold several: without these the last one written wins
+	// and the rest are lost, which is exactly what Apache-2.0 section 4(d) asks
+	// us not to do. They merge the notices into one file instead.
+	transform(ApacheLicenseResourceTransformer)
+	transform(ApacheNoticeResourceTransformer) {
+		projectName = 'JBangLite'
+	}
+	// keep this fork's own notices next to the bundled code, and the licenses
+	// of the bundled libraries, which the transformers above do not carry over
 	from('LICENSE') { into 'META-INF'; rename { 'LICENSE-jbanglite.txt' } }
 	from('THIRD-PARTY.md') { into 'META-INF'; rename { 'THIRD-PARTY.md' } }
-	from(layout.buildDirectory.dir('notices')) { into 'META-INF/notices' }
+	from('misc/licenses') { into 'META-INF/licenses' }
+	// a bundled library's module-info describes that library, not this jar
+	exclude 'META-INF/versions/*/module-info.class'
+	exclude 'module-info.class'
 	manifest {
 		attributes(
 			'Main-Class': 'dev.jbang.Main',
-			'JBangLite-Version': project.version
+			// the launchers and the tests read this attribute for --version
+			'JBangLite-Version': project.version,
+			// plexus-utils ships Java 9/10/11 variants of two classes; without
+			// this they are dead weight and the Java 8 versions are used
+			'Multi-Release': 'true'
 		)
 	}
 	archiveFileName = "jbanglite.jar"

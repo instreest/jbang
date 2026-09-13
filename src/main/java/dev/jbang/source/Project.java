@@ -25,8 +25,9 @@ import dev.jbang.dependencies.DependencyResolver;
 import dev.jbang.dependencies.MavenRepo;
 import dev.jbang.jdk.Jdk;
 import dev.jbang.jdk.JdkManager;
-import dev.jbang.source.parser.Directives;
-import dev.jbang.source.parser.KeyValue;
+import dev.jbang.spi.Attribute;
+import dev.jbang.spi.Providers;
+import dev.jbang.spi.SourceDirectives;
 import dev.jbang.util.JavaUtil;
 import dev.jbang.util.OsDetector;
 import dev.jbang.util.Placeholders;
@@ -37,11 +38,12 @@ import dev.jbang.util.Util;
  * options and settings gathered from the <code>//</code>-directives of the main
  * file and of every file it pulls in with <code>//SOURCES</code>.
  *
- * The directives are parsed by {@link Directives}, which is mirrored from
- * JBang, and are applied here with the same rules JBang uses: the main class
- * comes from the main file only, everything else accumulates over all files.
- * Directives JBangLite has no use for (//MODULE, //CDS, //JAVAAGENT, //GAV,
- * //DESCRIPTION, //DOCS, //DEPS on a .java file) are parsed and ignored.
+ * The directives are read through {@link dev.jbang.spi.DirectiveParser}, the
+ * interface JBang sits behind, and are applied here with the same rules JBang
+ * uses: the main class comes from the main file only, everything else
+ * accumulates over all files. Directives JBangLite has no use for (//MODULE,
+ * //CDS, //JAVAAGENT, //GAV, //DESCRIPTION, //DOCS) are parsed and ignored: the
+ * interface mirrors what JBang understands, not what JBangLite acts on.
  *
  * The build output goes to
  * <code>$JBANGLITE_CACHE_DIR/jars/&lt;file&gt;.&lt;hash&gt;/&lt;base&gt;.jar</code>,
@@ -140,7 +142,8 @@ public class Project {
 			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 					"Source file could not be found or read: " + source);
 		}
-		Directives directives = new Directives.Extended(Util.readString(source), propertyReplacer());
+		SourceDirectives directives = Providers.directiveParser()
+			.parse(Util.readString(source), propertyReplacer());
 		Path baseDir = source.getParent();
 
 		if (main) {
@@ -157,7 +160,7 @@ public class Project {
 		compileOptions.addAll(directives.compileOptions());
 		runtimeOptions.addAll(directives.runtimeOptions());
 		directives.manifestOptions().forEach(this::putManifestAttribute);
-		resources.addAll(toFileRefs(directives.files(), baseDir));
+		resources.addAll(toFileRefs(directives.fileRefs(baseDir), baseDir));
 
 		String version = directives.javaVersion();
 		if (version != null && JavaUtil.checkRequestedVersion(version)
@@ -176,16 +179,15 @@ public class Project {
 		}
 	}
 
-	private void putManifestAttribute(KeyValue kv) {
-		if (!kv.getKey().isEmpty()) {
-			manifestAttributes.put(kv.getKey(), kv.getValue() != null ? kv.getValue() : "true");
+	private void putManifestAttribute(Attribute attribute) {
+		if (!attribute.key().isEmpty()) {
+			manifestAttributes.put(attribute.key(), attribute.value() != null ? attribute.value() : "true");
 		}
 	}
 
 	/** Turns //FILES entries (with globs and optional aliases) into copy jobs. */
-	private List<FileRef> toFileRefs(List<KeyValue> files, Path baseDir) {
+	private List<FileRef> toFileRefs(List<String> files, Path baseDir) {
 		return files.stream()
-			.flatMap(kv -> Directives.explodeFileRef(null, baseDir, kv).stream())
 			.map(ref -> {
 				String[] split = ref.split("=", 2);
 				String src = split.length == 1 ? split[0] : split[1];

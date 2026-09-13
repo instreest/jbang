@@ -2,17 +2,27 @@ package dev.jbang.jdk;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
+
 import dev.jbang.ExitException;
 import dev.jbang.Settings;
 import dev.jbang.dependencies.DependencyResolver;
-import dev.jbang.util.Json;
 import dev.jbang.util.RequestedVersion;
 import dev.jbang.util.Util;
 
@@ -54,16 +64,20 @@ public final class JdkIndex {
 	}
 
 	private final String platform;
-	private final Map<String, Object> index;
+	private final JsonObject index;
 
 	private static JdkIndex cached;
 
-	private JdkIndex(String platform, Map<String, Object> index) {
+	private JdkIndex(String platform, JsonObject index) {
 		this.platform = platform;
 		this.index = index;
 	}
 
-	/** Loads (and caches) the index for the current platform. */
+	/**
+	 * Loads (and caches) the index for the current platform. The environment
+	 * variable JBANG_JDK_INDEX overrides where it comes from: it is either a
+	 * path to a JSON file in the same format or a Maven coordinate.
+	 */
 	public static JdkIndex instance() {
 		if (cached == null) {
 			String platform = platform();
@@ -72,17 +86,49 @@ public final class JdkIndex {
 		return cached;
 	}
 
-	private static Map<String, Object> read(String platform) {
-		String source = INDEX_GROUP_ID + ":index-" + platform + ":" + INDEX_VERSION_RANGE;
-		Util.verboseMsg("Resolving JDK index: " + source);
+	private static JsonObject read(String platform) {
+		String override = System.getenv(Settings.ENV_JDK_INDEX);
+		String source;
 		String json;
 		try {
-			json = readFromJar(DependencyResolver.resolveArtifact(source), platform);
+			if (override != null && !override.trim().isEmpty()) {
+				Path file = Paths.get(override.trim());
+				if (Files.isRegularFile(file)) {
+					source = file.toString();
+					json = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+				} else {
+					source = override.trim();
+					json = readFromJar(DependencyResolver.resolveArtifact(source), platform);
+				}
+			} else {
+				source = INDEX_GROUP_ID + ":index-" + platform + ":" + INDEX_VERSION_RANGE;
+				Util.verboseMsg("Resolving JDK index: " + source);
+				json = readFromJar(DependencyResolver.resolveArtifact(source), platform);
+			}
 		} catch (IOException e) {
 			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
 					"Could not read the JDK index for " + platform + ": " + e.getMessage(), e);
 		}
-		return Json.parseObject(json);
+		Util.verboseMsg("Using JDK index: " + source);
+		return parse(json, source);
+	}
+
+	/** An index read from somewhere else than the configured source. */
+	static JdkIndex of(String platform, String json) {
+		return new JdkIndex(platform, parse(json, "<given>"));
+	}
+
+	static JsonObject parse(String json, String source) {
+		try {
+			JsonElement parsed = JsonParser.parseString(json);
+			if (!parsed.isJsonObject()) {
+				throw new JsonSyntaxException("not a JSON object");
+			}
+			return parsed.getAsJsonObject();
+		} catch (JsonSyntaxException e) {
+			throw new ExitException(ExitException.EXIT_UNEXPECTED_STATE,
+					"The JDK index read from " + source + " is not valid: " + e.getMessage(), e);
+		}
 	}
 
 	private static String readFromJar(Path jar, String platform) throws IOException {
@@ -106,8 +152,10 @@ public final class JdkIndex {
 			osName = "linux";
 			break;
 		case alpine_linux:
-			// the index only lists glibc builds, which do not run on musl
-			Util.warnMsg("The JDK index has no musl (Alpine) builds; install a JDK yourself");
+			// the index only lists glibc builds; they do not run on musl, so an
+			// Alpine user has to point JBANG_JDK_INDEX at a suitable index
+			Util.warnMsg("The JDK index has no musl (Alpine) builds; "
+					+ "set " + Settings.ENV_JDK_INDEX + " or install a JDK yourself");
 			osName = "linux";
 			break;
 		case mac:
@@ -152,12 +200,27 @@ public final class JdkIndex {
 		return osName + "-" + archName;
 	}
 
+	/** The distributions to install from, most preferred first. */
+	public static List<String> distros() {
+		String configured = System.getenv(Settings.ENV_JDK_DISTRO);
+		if (configured == null || configured.trim().isEmpty()) {
+			return Collections.singletonList(Settings.DEFAULT_JDK_DISTRO);
+		}
+		List<String> distros = new ArrayList<>();
+		for (String d : configured.split(",")) {
+			if (!d.trim().isEmpty()) {
+				distros.add(d.trim());
+			}
+		}
+		return distros.isEmpty() ? Collections.singletonList(Settings.DEFAULT_JDK_DISTRO) : distros;
+	}
+
 	/**
 	 * The newest version satisfying the request, looking at each configured
 	 * distribution in turn.
 	 */
 	public Optional<Entry> find(RequestedVersion version) {
-		for (String distro : Collections.singletonList(Settings.JDK_DISTRO)) {
+		for (String distro : distros()) {
 			Optional<Entry> found = find(distro, version);
 			if (found.isPresent()) {
 				return found;
@@ -193,18 +256,24 @@ public final class JdkIndex {
 		return Optional.of(new Entry(distro, bestVersion, bestValue.substring(0, sep), bestValue.substring(sep + 1)));
 	}
 
-	@SuppressWarnings("unchecked")
+	/**
+	 * The versions the index lists for a distribution, mapped to their
+	 * "&lt;archive type&gt;+&lt;url&gt;" value. Anything shaped differently is
+	 * skipped rather than rejected: an index that grows an entry of another kind
+	 * must not stop the ones we do understand from being used.
+	 */
 	private Map<String, String> versionsOf(String distro) {
-		Object entry = index.get(distro);
-		if (!(entry instanceof Map)) {
+		JsonElement entry = index.get(distro);
+		if (entry == null || !entry.isJsonObject()) {
 			return Collections.emptyMap();
 		}
 		Map<String, String> versions = new LinkedHashMap<>();
-		((Map<String, Object>) entry).forEach((version, value) -> {
-			if (value instanceof String) {
-				versions.put(version, (String) value);
+		for (Map.Entry<String, JsonElement> e : entry.getAsJsonObject().entrySet()) {
+			JsonElement value = e.getValue();
+			if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+				versions.put(e.getKey(), value.getAsString());
 			}
-		});
+		}
 		return versions;
 	}
 }

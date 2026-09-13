@@ -224,7 +224,9 @@ How JBangLite is built, released and kept in step with JBang is in
 
 ## License
 
-MIT, Copyright (c) 2020 Max Rydahl Andersen; the original JBang notice is kept
-unchanged in [LICENSE](LICENSE) and the JBangLite modifications are under the
-same license. `jbanglite.jar` bundles Maven Resolver and others; see
-[THIRD-PARTY.md](THIRD-PARTY.md).
+MIT License, Copyright (c) 2020 Max Rydahl Andersen (the original JBang notice
+is kept unchanged in [LICENSE](LICENSE)); the JBangLite modifications are
+provided under the same license. `jbanglite.jar` bundles MIMA (EPL-2.0), Apache
+Maven Resolver, Apache HttpClient, Apache Commons Compress and Gson
+(Apache-2.0) and SLF4J (MIT); see [THIRD-PARTY.md](THIRD-PARTY.md) for details
+and for the origin of code adapted from other projects.

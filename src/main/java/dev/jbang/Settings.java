@@ -26,10 +26,12 @@ public final class Settings {
 	public static final String ENV_CACHE_DIR = "JBANGLITE_CACHE_DIR";
 	public static final String ENV_MAVEN_REPO = "JBANGLITE_MAVEN_REPO";
 	public static final String ENV_DEFAULT_JAVA_VERSION = "JBANGLITE_DEFAULT_JAVA_VERSION";
-	/** ask / allow / deny: whether anything may be downloaded. Empty means ask. */
-	public static final String ENV_NETWORK = "JBANGLITE_NETWORK";
+	public static final String ENV_JDK_INDEX = "JBANGLITE_JDK_INDEX";
 	public static final String ENV_DOWNLOAD_RETRY = "JBANGLITE_DOWNLOAD_RETRY";
 	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JBANGLITE_DOWNLOAD_RETRY_DELAY";
+	/** auto / always / never: whether a download is confirmed before it starts. */
+	public static final String ENV_CONFIRM_DOWNLOADS = "JBANGLITE_CONFIRM_DOWNLOADS";
+	public static final String ENV_ASSUME_YES = "JBANGLITE_ASSUME_YES";
 
 	public static final String CP_SEPARATOR = File.pathSeparator;
 	public static final String DEPENDENCY_CACHE_FILE = "dependency_cache.txt";
@@ -94,6 +96,26 @@ public final class Settings {
 	/** Seconds between download attempts, 0 meaning exponential backoff. */
 	public static int getDownloadRetryDelay() {
 		return intFromEnv(ENV_DOWNLOAD_RETRY_DELAY, 0);
+	}
+
+	/**
+	 * How the download gate asks before fetching a JDK or dependencies:
+	 * "auto" (the default: only when there is a terminal to ask on), "always"
+	 * or "never".
+	 */
+	public static String getConfirmDownloads() {
+		String v = System.getenv(ENV_CONFIRM_DOWNLOADS);
+		return v != null && !v.trim().isEmpty() ? v.trim().toLowerCase() : "auto";
+	}
+
+	/** JBANGLITE_ASSUME_YES, the environment's form of <code>--yes</code>. */
+	public static boolean isAssumeYes() {
+		String v = System.getenv(ENV_ASSUME_YES);
+		if (v == null) {
+			return false;
+		}
+		String s = v.trim().toLowerCase();
+		return s.equals("1") || s.equals("true") || s.equals("yes");
 	}
 
 	private static int intFromEnv(String name, int defaultValue) {

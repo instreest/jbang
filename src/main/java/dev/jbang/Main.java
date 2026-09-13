@@ -16,6 +16,8 @@ import java.util.concurrent.TimeUnit;
 import dev.jbang.source.AppBuilder;
 import dev.jbang.source.CmdGenerator;
 import dev.jbang.source.Project;
+import dev.jbang.spi.DownloadGate;
+import dev.jbang.spi.Providers;
 import dev.jbang.util.CommandBuffer;
 import dev.jbang.util.Util;
 
@@ -122,6 +124,11 @@ public final class Main {
 				case "-o":
 				case "--offline":
 					Util.setOffline(true);
+					break;
+				case "-y":
+				case "--yes":
+					// no question to ask: download whatever is missing
+					Providers.setDownloadGate(DownloadGate.ALLOW);
 					break;
 				case "-h":
 				case "--help":
@@ -249,6 +256,12 @@ public final class Main {
 		realOut.println("  -o, --offline        Never access the network");
 		realOut.println("  -Dkey=value          System property for directive substitution and the script");
 		realOut.println("  -R<option>           Additional JVM option when running");
+		realOut.println("  -y, --yes            Download what is missing without asking");
+		realOut.println();
+		realOut.println("Before a JDK or a dependency is downloaded, JBangLite says so and, when it");
+		realOut.println("is run from a terminal, asks. JBANGLITE_CONFIRM_DOWNLOADS=never (or");
+		realOut.println("JBANGLITE_ASSUME_YES=1, or --yes) never asks, =always refuses to download");
+		realOut.println("when there is no terminal to ask on.");
 		realOut.println();
 		realOut.println("--version and --update are answered by the launcher script, which needs");
 		realOut.println("neither this jar nor a JDK for them.");

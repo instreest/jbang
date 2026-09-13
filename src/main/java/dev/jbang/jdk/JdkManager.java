@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
@@ -16,6 +17,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import dev.jbang.ExitException;
 import dev.jbang.Settings;
+import dev.jbang.spi.DownloadGate;
+import dev.jbang.spi.Providers;
 import dev.jbang.util.RequestedVersion;
 import dev.jbang.util.Util;
 
@@ -142,6 +145,14 @@ public final class JdkManager {
 			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
 					"No suitable JDK was found for requested version " + version + " and we are offline");
 		}
+		// asked before the index is fetched, because reading it is already a
+		// download; the entry that is then chosen is named by the message
+		// download() prints
+		Providers.downloadGate()
+			.check(new DownloadGate.Request(DownloadGate.Kind.JDK,
+					"No JDK matching Java " + version + " was found on this machine.",
+					Collections.singletonList("a JDK for Java " + version + ", and the JDK index listing it, "
+							+ "into " + jdksDir)));
 		JdkIndex.Entry entry = selectEntry(version);
 		Path jdkDir = jdksDir.resolve(entry.version);
 		try (Lock lock = Lock.acquire(jdksDir.resolve(".locks").resolve(entry.version + ".lock"))) {
