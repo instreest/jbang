@@ -44,6 +44,8 @@ Classpath Exception).
 | [Gson](https://github.com/google/gson) (`com.google.code.gson:gson`) | Apache License 2.0 |
 | [ASM](https://asm.ow2.io/) (`org.ow2.asm:asm`, needed by the Maven model builder) | BSD 3-Clause |
 | [SLF4J](https://www.slf4j.org/) (`slf4j-api`, `slf4j-nop`, `jcl-over-slf4j`) | MIT License |
+| [JSpecify](https://jspecify.dev/) (`org.jspecify:jspecify`), the nullness annotations the mirrored files use | Apache License 2.0 |
+| [Error Prone annotations](https://errorprone.info/) (`com.google.errorprone:error_prone_annotations`), pulled in by Gson | Apache License 2.0 |
 
 Maven artifacts are fetched with Maven Resolver's own HTTP transport, the one
 Maven itself uses, so its checksum, retry, redirect and authentication
@@ -57,13 +59,13 @@ repository.
 | In the jar | |
 | --- | --- |
 | `META-INF/NOTICE` | the NOTICE files of all bundled Apache-2.0 artifacts, merged |
-| `META-INF/licenses/Apache-2.0.txt` | Apache License 2.0, for Maven Resolver, Apache Maven, HttpClient, Commons and Gson |
+| `META-INF/licenses/Apache-2.0.txt` | Apache License 2.0, for Maven Resolver, Apache Maven, HttpClient, Commons, Gson, JSpecify and the Error Prone annotations |
 | `META-INF/licenses/MIT-slf4j.txt` | SLF4J |
 | `META-INF/licenses/BSD-3-Clause-asm.txt` | ASM |
 | `META-INF/licenses/EPL-2.0.txt` | MIMA |
 | `META-INF/licenses/MPL-2.0.txt` | the public suffix list carried by Apache HttpClient |
-| `META-INF/LICENSE-jbang.txt` | JBang, and this fork |
-| `META-INF/THIRD-PARTY-jbang.md` | this file |
+| `META-INF/LICENSE-jbanglite.txt` | JBang, and this fork |
+| `META-INF/THIRD-PARTY.md` | this file |
 
 Neither the Eclipse Public License 2.0 (MIMA) nor the Mozilla Public License
 2.0 (the public suffix list) is shipped inside the artifact it covers, so those
@@ -75,16 +77,6 @@ MIMA is distributed under the Eclipse Public License 2.0, which asks that
 recipients be told where to get the source: it is at
 <https://github.com/maveniverse/mima>, and every released version is on Maven
 Central with its `-sources` jar.
-
-### Notices inside the jar
-
-`jbanglite.jar` carries, under `META-INF/notices/<group>-<artifact>-<version>/`,
-the `LICENSE` and `NOTICE` files each bundled artifact ships, one directory per
-artifact so that none overwrites another. Artifacts that ship no such file of
-their own have their text taken from `misc/notices/` in this repository; ASM,
-whose BSD 3-Clause licence asks for the notice to travel with a binary
-distribution, is there. `META-INF/LICENSE-jbanglite.txt` is JBangLite's own
-licence and `META-INF/THIRD-PARTY.md` is this file.
 
 The exact list of bundled artifacts can be printed with
 `./gradlew dependencies --configuration runtimeClasspath`.

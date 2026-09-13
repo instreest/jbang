@@ -117,7 +117,12 @@ shadowJar {
 	// us not to do. They merge the notices into one file instead.
 	transform(ApacheLicenseResourceTransformer)
 	transform(ApacheNoticeResourceTransformer) {
+		// Without these the generated header names the Apache Software
+		// Foundation as this project's copyright holder, which it is not.
 		projectName = 'JBangLite'
+		organizationName = 'Max Rydahl Andersen and the JBangLite contributors'
+		organizationURL = 'https://github.com/instreest/jbanglite'
+		inceptionYear = '2020'
 	}
 	// keep this fork's own notices next to the bundled code, and the licenses
 	// of the bundled libraries, which the transformers above do not carry over
@@ -127,6 +132,9 @@ shadowJar {
 	// a bundled library's module-info describes that library, not this jar
 	exclude 'META-INF/versions/*/module-info.class'
 	exclude 'module-info.class'
+	// likewise META-INF/DEPENDENCIES: it is one dependency's own list, and in
+	// this jar it reads as ours while naming versions that are not here
+	exclude 'META-INF/DEPENDENCIES'
 	manifest {
 		attributes(
 			'Main-Class': 'dev.jbang.Main',
