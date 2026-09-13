@@ -201,3 +201,42 @@ gson を入れる理由が生まれるのは「JSON を他の用途でも使い�
 - 今すぐやる価値があるものは ④⑤⑥ には無い
 - やるなら **Unpacker**（(A) か (B)、+ テスト）と、**`Json.java` のテスト追加**
 - ④は見送り、⑤は MIMA 待ち（無期限）、⑥は jbang-cli の再公開待ち（条件は上記）
+
+---
+
+# 実施記録（④⑤ + Unpacker）
+
+上の判断のうち、サイズを制約から外すという方針転換を受けて次を実施した。
+
+| | 判断 | 結果 |
+| --- | --- | --- |
+| ⑤ transport | 「無期限保留」から **(c) 純正 HTTP transport に復帰** へ | `JdkHttpTransporterFactory`(259行) と `JBangLiteRuntime`(52行) と その テスト(203行) を削除。MIMA の `StandaloneStaticRuntime` をそのまま使う |
+| Unpacker | **(A) commons-compress** | 手書き tar/zip リーダを置き換え。pax・GNU 拡張・リンク・権限は Commons Compress が扱う |
+| ④ Json | **gson に転換** | `util/Json.java`(206行) を削除。gson は transport が連れてくるので追加コストは無い |
+
+## 補足（調査で判明した事実）
+
+- resolver 1.9.x の純正 Apache transport の artifactId は
+  `maven-resolver-transport-http`（`-apache` は 2.x 以降の名前）。
+  連れてくるのは **HttpClient 4.5.14 / HttpCore 4.4.16 / commons-codec /
+  gson / jcl-over-slf4j**。HttpClient **5 ではない**
+- HttpClient 4.5.x は 4 系の最終ラインで、Maven 3.9.x が使っているものと同じ。
+  枯れているが新機能は来ない。MIMA が resolver 2.x に載れば HttpClient 5 系
+  （`maven-resolver-transport-apache`）か `maven-resolver-transport-jdk` に移れる
+- commons-compress 1.28 は commons-io / commons-lang3 / commons-codec を引く。
+  tar+gzip+zip しか使わないので exclude できる可能性はあるが、
+  未テスト経路で `NoClassDefFoundError` になるリスクがあるので入れたままにした
+- jar は **2.26 MB → 6.46 MB**。内訳（圧縮後）は commons 系 2.3 MB、
+  HttpClient/Core 0.85 MB、resolver/maven 0.55 MB、gson 0.24 MB、
+  JBangLite 自身 0.14 MB
+
+## セキュリティ上の効果
+
+前回指摘した Unpacker の 3 つの穴のうち:
+
+- **pax ヘッダ未対応**（長いパスを静かに切り詰める）→ 解消。テストあり
+- **symlink 先の未検証** → リンク先が出力ディレクトリの外を指す場合は拒否、
+  さらに書き込み時に親ディレクトリの実パスを検証して、
+  リンクを経由した書き込みも拒否する。両方テストあり
+- **hardlink を symlink として作る** → 挙動は同じだが、
+  リンク先の検証が掛かるようになった

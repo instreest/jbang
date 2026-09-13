@@ -14,10 +14,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
+
 import dev.jbang.ExitException;
 import dev.jbang.Settings;
 import dev.jbang.dependencies.DependencyResolver;
-import dev.jbang.util.Json;
 import dev.jbang.util.RequestedVersion;
 import dev.jbang.util.Util;
 
@@ -59,11 +64,11 @@ public final class JdkIndex {
 	}
 
 	private final String platform;
-	private final Map<String, Object> index;
+	private final JsonObject index;
 
 	private static JdkIndex cached;
 
-	private JdkIndex(String platform, Map<String, Object> index) {
+	private JdkIndex(String platform, JsonObject index) {
 		this.platform = platform;
 		this.index = index;
 	}
@@ -81,7 +86,7 @@ public final class JdkIndex {
 		return cached;
 	}
 
-	private static Map<String, Object> read(String platform) {
+	private static JsonObject read(String platform) {
 		String override = System.getenv(Settings.ENV_JDK_INDEX);
 		String source;
 		String json;
@@ -105,7 +110,25 @@ public final class JdkIndex {
 					"Could not read the JDK index for " + platform + ": " + e.getMessage(), e);
 		}
 		Util.verboseMsg("Using JDK index: " + source);
-		return Json.parseObject(json);
+		return parse(json, source);
+	}
+
+	/** An index read from somewhere else than the configured source. */
+	static JdkIndex of(String platform, String json) {
+		return new JdkIndex(platform, parse(json, "<given>"));
+	}
+
+	static JsonObject parse(String json, String source) {
+		try {
+			JsonElement parsed = JsonParser.parseString(json);
+			if (!parsed.isJsonObject()) {
+				throw new JsonSyntaxException("not a JSON object");
+			}
+			return parsed.getAsJsonObject();
+		} catch (JsonSyntaxException e) {
+			throw new ExitException(ExitException.EXIT_UNEXPECTED_STATE,
+					"The JDK index read from " + source + " is not valid: " + e.getMessage(), e);
+		}
 	}
 
 	private static String readFromJar(Path jar, String platform) throws IOException {
@@ -233,18 +256,24 @@ public final class JdkIndex {
 		return Optional.of(new Entry(distro, bestVersion, bestValue.substring(0, sep), bestValue.substring(sep + 1)));
 	}
 
-	@SuppressWarnings("unchecked")
+	/**
+	 * The versions the index lists for a distribution, mapped to their
+	 * "&lt;archive type&gt;+&lt;url&gt;" value. Anything shaped differently is
+	 * skipped rather than rejected: an index that grows an entry of another kind
+	 * must not stop the ones we do understand from being used.
+	 */
 	private Map<String, String> versionsOf(String distro) {
-		Object entry = index.get(distro);
-		if (!(entry instanceof Map)) {
+		JsonElement entry = index.get(distro);
+		if (entry == null || !entry.isJsonObject()) {
 			return Collections.emptyMap();
 		}
 		Map<String, String> versions = new LinkedHashMap<>();
-		((Map<String, Object>) entry).forEach((version, value) -> {
-			if (value instanceof String) {
-				versions.put(version, (String) value);
+		for (Map.Entry<String, JsonElement> e : entry.getAsJsonObject().entrySet()) {
+			JsonElement value = e.getValue();
+			if (value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()) {
+				versions.put(e.getKey(), value.getAsString());
 			}
-		});
+		}
 		return versions;
 	}
 }

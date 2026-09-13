@@ -281,16 +281,28 @@ of unrelated files costs nothing here, which is why this is a sync and not a
 
 ## Dependencies
 
-The only third-party runtime dependencies are Maven Resolver (through
-[MIMA](https://github.com/maveniverse/mima)), the slf4j no-op binding it needs
-and the jspecify annotations used by the mirrored files. Maven Resolver's own
-HTTP transport (Apache HttpClient, Gson and the public suffix list, a third of
-the jar) is left out: `JdkHttpTransporterFactory` does the same job on the
-JDK's `java.net.http.HttpClient`, with the credentials and proxies from
-`~/.m2/settings.xml` that the resolver hands it, and without uploads, which
-JBangLite never makes. JDK download/unpacking, class-file inspection for the
-main class, jar creation, OS detection and module-info generation are
-implemented with the JDK's standard library only. `jbanglite.jar` itself needs Java 11 or later to run (JBang targets
+The third-party runtime dependencies are Maven Resolver (through
+[MIMA](https://github.com/maveniverse/mima)) **with the HTTP transport Maven
+itself ships**, Commons Compress for the JDK archives, Gson for the JDK index,
+the slf4j no-op binding the resolver needs and the jspecify annotations used by
+the mirrored files.
+
+Each of those replaced something JBangLite used to do itself, and for the same
+reason: the format or protocol is defined elsewhere, so getting it subtly wrong
+writes a wrong file or makes a wrong request instead of failing.
+
+| Was | Is now | Why |
+| --- | --- | --- |
+| `JdkHttpTransporterFactory`, a transport on `java.net.http.HttpClient` | `maven-resolver-transport-http` | the transport Maven and MIMA use by default, with the checksum, retry, redirect and authentication behaviour everything else in the Maven ecosystem is tested against |
+| a hand-written tar/zip reader | `commons-compress` | pax and GNU extensions, links and permissions as real JDK archives use them |
+| a hand-written JSON reader | `gson` | comes with the transport anyway |
+
+It costs jar size - roughly 2.2 MB to 6.5 MB - which is not a constraint for a
+jar that is downloaded once per machine into a shared cache.
+
+Class-file inspection for the main class, jar creation, OS detection and
+module-info generation are still implemented with the JDK's standard library
+only. `jbanglite.jar` itself needs Java 11 or later to run (JBang targets
 Java 8); the JDK used for scripts is whatever `//JAVA` asks for.
 
 ## How JDKs are obtained
@@ -350,8 +362,10 @@ produces `build/libs/jbanglite.jar` (self-contained). Pass `-PjbangVersion=x.y.z
 to set the version; `misc/update-dist.sh <version>` does so and writes the
 matching `dist/jbanglite.properties`.
 
-`./gradlew test` runs the test suite: the mirrored `TestDirectives` from JBang
-and functional tests for the launcher scripts and the installer. There
+`./gradlew test` runs the test suite: the mirrored `TestDirectives` from JBang,
+the contract tests for `DirectiveParser` and the download gate, the JDK index
+and archive unpacking tests, and functional tests for the launcher scripts and
+the installer. There
 is no release pipeline or CI configuration in this fork; `misc/update-dist.sh`
 takes the place of a release.
 
@@ -360,5 +374,6 @@ takes the place of a release.
 MIT License, Copyright (c) 2020 Max Rydahl Andersen (the original JBang notice
 is kept unchanged in [LICENSE](LICENSE)); the JBangLite modifications are
 provided under the same license. `jbanglite.jar` bundles MIMA (EPL-2.0), Apache
-Maven Resolver (Apache-2.0) and SLF4J (MIT); see [THIRD-PARTY.md](THIRD-PARTY.md)
+Maven Resolver, Apache HttpClient, Apache Commons Compress and Gson
+(Apache-2.0) and SLF4J (MIT); see [THIRD-PARTY.md](THIRD-PARTY.md)
 for details and for the origin of code adapted from other projects.

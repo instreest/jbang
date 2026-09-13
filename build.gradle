@@ -23,20 +23,19 @@ dependencies {
 	// nullness annotations, required by the files mirrored from JBang
 	implementation 'org.jspecify:jspecify:1.0.0'
 
-	// Maven dependency resolution (the one thing we really cannot re-implement ourselves)
+	// Maven dependency resolution (the one thing we really cannot re-implement
+	// ourselves), with the HTTP transport Maven itself ships
 	implementation "eu.maveniverse.maven.mima:context:2.4.36"
-	implementation("eu.maveniverse.maven.mima.runtime:standalone-static:2.4.36") {
-		// the HTTP transport (Apache HttpClient, Gson, the public suffix list)
-		// is replaced by JdkHttpTransporterFactory on the JDK's HttpClient
-		exclude group: 'org.apache.maven.resolver', module: 'maven-resolver-transport-http'
-	}
-	implementation "org.apache.maven.resolver:maven-resolver-spi:1.9.24"
+	implementation "eu.maveniverse.maven.mima.runtime:standalone-static:2.4.36"
 	implementation "org.apache.maven.resolver:maven-resolver-util:1.9.24"
-	implementation "org.apache.maven.resolver:maven-resolver-transport-file:1.9.24"
-	// only for the ChecksumExtractor type in the signatures JBangLiteRuntime
-	// overrides; the class is never loaded at run time
-	compileOnly "org.apache.maven.resolver:maven-resolver-transport-http:1.9.24"
 	implementation "org.slf4j:slf4j-nop:2.0.18"
+
+	// JSON, for the JDK index. Comes with maven-resolver-transport-http anyway;
+	// declared because we use it ourselves
+	implementation "com.google.code.gson:gson:2.13.2"
+
+	// archive handling, for unpacking a downloaded JDK
+	implementation "org.apache.commons:commons-compress:1.28.0"
 
 	testImplementation platform("org.junit:junit-bom:5.14.4")
 	testImplementation "org.junit.jupiter:junit-jupiter"
