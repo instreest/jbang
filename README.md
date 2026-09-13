@@ -2,8 +2,12 @@
 
 **Ship a Java tool that anyone can run straight after `git clone`.** Commit a
 `jbanglite/` directory next to your tool, and whoever checks the project out
-runs it with one command. No JDK to install, no dependencies to fetch by hand,
-no build to explain.
+runs it with one command.
+
+They do not need a JDK installed. They do not need *the* JDK your tool asks
+for, even if the one they have is older or newer. They do not fetch your
+dependencies, and there is no build to explain. None of that is their problem
+any more, and none of it is yours to support.
 
 ```bash
 jbanglite/jbanglite tools/Report.java --since 2026-01
@@ -49,7 +53,7 @@ jbanglite\jbanglite.cmd tools\Report.java  # Windows
 ````
 
 `install.cmd` installs from a Windows command prompt. The installer writes
-eleven files, about 50 kB, into `jbanglite/`; commit all of them, the way a
+eleven files, about 80 kB, into `jbanglite/`; commit all of them, the way a
 Gradle or Maven wrapper is committed.
 
 ## What gets committed, and what gets downloaded
@@ -184,8 +188,8 @@ complete, so a build matrix never trips over a half-written file.
 ## Downloads ask first
 
 JBangLite fetches three kinds of thing: its own jar, a JDK to run that jar with,
-and the dependencies a script declares. None of them happens silently. When
-something has to be fetched, JBangLite says what, and on a terminal it asks.
+and the dependencies a script declares. When something has to be fetched it says
+what, and on a terminal it asks.
 
 ```
 JBangLite has to download:
@@ -195,34 +199,20 @@ JBangLite has to download:
 Continue? [Y/n]:
 ```
 
-The question only appears when a download really would happen. A JDK that is
-already installed never reaches it, and neither does a dependency that is
-already in the local Maven repository: before asking, JBangLite resolves the
-coordinates against `~/.m2/repository` alone, and when that succeeds there is
-nothing to ask about. So this is a first-run question, not a per-run one.
-`--fresh` skips that shortcut, because it exists to go to the remote
-repositories again.
-
-A cold first run asks twice. The launcher asks about the jar and the JDK, which
-it fetches itself before any JVM exists; the jar asks about the dependencies,
-which only it knows about. Each question names bytes that are really about to
-move. `--update` asks before replacing an installation.
+Only a download that would really happen is asked about, so this is a first-run
+question rather than a per-run one. A JDK that is already installed never
+reaches it, and neither does a dependency already in the local Maven repository.
+A cold first run asks twice: the launcher about the jar and the JDK, the jar
+about the dependencies. `--update` asks before replacing an installation.
 
 | | |
 | --- | --- |
-| `JBANGLITE_CONFIRM_DOWNLOADS=auto` (default) | ask when there is a terminal; otherwise say what is being fetched and go ahead, so an unattended build is never left waiting for an answer nobody is there to give |
-| `JBANGLITE_CONFIRM_DOWNLOADS=always` | ask, and fetch nothing when there is no terminal. This is the setting for a machine that is meant to stay off the network, and for a project that means to bring everything it needs with it |
+| `JBANGLITE_CONFIRM_DOWNLOADS=auto` (default) | ask on a terminal; otherwise say what is being fetched and go ahead, so an unattended build never waits for an answer nobody is there to give |
+| `JBANGLITE_CONFIRM_DOWNLOADS=always` | ask, and fetch nothing when there is no terminal. The setting for a machine meant to stay off the network |
 | `JBANGLITE_CONFIRM_DOWNLOADS=never`, `JBANGLITE_ASSUME_YES=1`, `--yes` | never ask |
 
-Answering with Enter accepts: the gate is there to say what is about to happen,
-not to make every first run fail.
-
-"A terminal" means one that can actually be opened, `/dev/tty` or `CON`. It is
-not `System.console()`: since Java 22 that is non-null even when stdin is a
-pipe, so it would report a terminal where there is none and then read the answer
-out of the script's own input. The question and its answer never touch stdout,
-so `jbanglite Hello.java | sort` is unaffected, and neither is a script that
-reads its own stdin.
+Enter accepts. The question and its answer go to the terminal, never to stdout,
+so a pipeline built on a tool's output is unaffected.
 
 ```yaml
 - run: jbanglite/jbanglite tools/Report.java
@@ -237,10 +227,11 @@ and `tar` with `gzip`; or, on Windows, nothing that Windows does not already
 ship. A JDK 11 or newer is used if there is one, and installed if there is not.
 Alpine (musl) is the exception: install a JDK there yourself.
 
-## Contributing and internals
+## How it works, and contributing
 
-How JBangLite is built, released and kept in step with JBang is in
-[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+What happens between `git clone` and the tool's first line of output, in three
+diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). How JBangLite is built,
+released and kept in step with JBang: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## License
 

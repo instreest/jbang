@@ -1,5 +1,8 @@
 # Developing JBangLite
 
+The shape of a run, and where the network is touched, is in
+[ARCHITECTURE.md](ARCHITECTURE.md). This file is about working on the code.
+
 ## Building
 
 ```bash
@@ -156,6 +159,14 @@ The `.cmd` scripts use only `curl`, `tar` and `certutil`, which Windows ships;
 no PowerShell is involved. `jbanglite` hands over to `jbanglite.cmd` on Windows
 shells (Git Bash, MSYS2, Cygwin), so nothing else is needed there either.
 
+Both sides ask before they download, and both decide whether there is anyone to
+ask by opening the terminal itself, `/dev/tty` or `CON`. `System.console()` is
+not used for this: since Java 22 it is non-null even when stdin is a pipe, so it
+would report a terminal where there is none and then read the answer out of the
+script's own input. The shell has the mirror image of the same problem, because
+Git Bash hands every process a `/dev/tty` whose read ends at once; a read that
+ends without an answer is therefore treated as having nobody to ask.
+
 ## How the jar gets JDKs for `//JAVA`
 
 A JDK already on the machine is preferred. Only when none satisfies the request
@@ -178,31 +189,29 @@ reproducible; `25` or `25+` accepts any matching release.
 
 ## Dependencies
 
-The third-party runtime dependencies are Maven Resolver (through
-[MIMA](https://github.com/maveniverse/mima)) **with the HTTP transport Maven
-itself ships**, Commons Compress for the JDK archives, Gson for the JDK index,
-the slf4j no-op binding the resolver needs and the jspecify annotations used by
-the mirrored files.
+`jbanglite.jar` bundles Maven Resolver through
+[MIMA](https://github.com/maveniverse/mima), with the HTTP transport Maven
+itself ships; Commons Compress for the JDK archives; Gson for the JVM index; the
+slf4j no-op binding the resolver needs; and the jspecify annotations the
+mirrored files use.
 
-Each of those replaced something JBangLite used to do itself, and for the same
-reason: the format or protocol is defined elsewhere, so getting it subtly wrong
-writes a wrong file or makes a wrong request instead of failing.
+Each is there for the same reason: the format or the protocol is defined
+elsewhere, so an implementation of our own that is subtly wrong writes a wrong
+file or makes a wrong request instead of failing.
 
-| Was | Is now | Why |
-| --- | --- | --- |
-| `JdkHttpTransporterFactory`, a transport on `java.net.http.HttpClient` | `maven-resolver-transport-http` | the transport Maven and MIMA use by default, with the checksum, retry, redirect and authentication behaviour everything else in the Maven ecosystem is tested against |
-| a hand-written tar/zip reader | `commons-compress` | pax and GNU extensions, links and permissions as real JDK archives use them |
-| a hand-written JSON reader | `gson` | comes with the transport anyway |
+| | What it carries |
+| --- | --- |
+| `maven-resolver-transport-http` | the checksum, retry, redirect and authentication behaviour the rest of the Maven ecosystem is tested against |
+| `commons-compress` | tar and zip as real JDK archives use them: pax and GNU extensions, links, permissions |
+| `gson` | the JVM index, and it arrives with the transport anyway |
 
-It costs jar size - roughly 2.2 MB to 6.5 MB - which is not a constraint for a
-jar that is downloaded once per machine into a shared cache. Nothing is
-excluded from what they bring: a dependency tree trimmed by hand is one that
-fails in the path nobody tested.
+Nothing is excluded from what they bring. A dependency tree trimmed by hand is
+one that fails in the path nobody tested, and the jar is downloaded once per
+machine into a shared cache, so its 6 MB buys more than it costs.
 
-Class-file inspection for the main class, jar creation, OS detection and
-module-info generation are still implemented with the JDK's standard library
-only. `jbanglite.jar` itself needs Java 11 or later to run (JBang targets
-Java 8); the JDK used for scripts is whatever `//JAVA` asks for.
+Class-file inspection for the main class, jar creation and OS detection use the
+JDK's standard library only. `jbanglite.jar` needs Java 11 or later to run
+(JBang targets Java 8); the JDK a script runs on is whatever `//JAVA` asks for.
 
 `misc/licenses/` holds the licence texts of the bundled libraries, which the
 shadow transformers do not carry over; the build copies them into

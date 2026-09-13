@@ -40,7 +40,7 @@ safe: one run downloads while the others wait.
 | `LICENSE`, `README.md` | |
 
 `jbanglite.jar` is not here on purpose: it is a download, so this project's
-history carries about 50 kB of scripts rather than a binary per update. To pin
+history carries about 80 kB of scripts rather than a binary per update. To pin
 it into the project anyway, put a `jbanglite.jar` in this directory; the
 launcher prefers it.
 
