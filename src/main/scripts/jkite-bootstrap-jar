@@ -4,7 +4,8 @@
 # and SHA-256 in the jkite.properties next to this script, downloaded into
 # $JKITE_CACHE_DIR/jkite/<version> (~/.jkite/cache/jkite/<version>).
 # It prints the jar's path on stdout and says nothing else there; progress and
-# errors go to stderr. When the jar is already installed it only prints.
+# errors go to stderr. When the jar is already installed it checks that the
+# installed one is the pinned one, and then only prints.
 #
 # The cache is per machine, not per project, so several projects that pin the
 # same version share one download. The launcher (jkite) runs this when
@@ -167,6 +168,21 @@ release_lock() {
 
 # --- Installing --------------------------------------------------------------
 
+# True when $jarPath is there and is the jar this project pins.
+#
+# The hash is checked every run, not only right after the download: the cache is
+# shared by every project on this machine, so the jar sitting under this version
+# may have been put there by another project, pinning another hash. A jar is
+# this project's jar when this project's checksum says so, and not before.
+cached_jar_is_ours() {
+  local actual
+  [ -f "$jarPath" ] || return 1
+  # nothing to check against; install_jar_locked says so when it downloads
+  [ -n "$distributionSha256Sum" ] || return 0
+  actual=$(sha256_of "$jarPath")
+  [ "$distributionSha256Sum" = "$actual" ]
+}
+
 # Downloads the jar into $jarDir, one run at a time; the others wait and then
 # use what it installed.
 install_jar() {
@@ -184,7 +200,10 @@ install_jar() {
 install_jar_locked() {
   local tmp actual
   # another run may have installed it while we waited for the lock
-  if [ -f "$jarPath" ]; then return 0; fi
+  if cached_jar_is_ours; then return 0; fi
+  if [ -f "$jarPath" ]; then
+    echo "The cached $jarPath is not what $propertiesFile pins, downloading it again" 1>&2
+  fi
   mkdir -p "$jarDir"
   # this run's own file, so nothing is shared with a jkite running at the
   # same time, and the jar only appears under its real name once it is complete
@@ -228,8 +247,14 @@ read_properties || exit 1
 jarDir="$CACHEDIR/jkite/$distributionVersion"
 jarPath="$jarDir/jkite.jar"
 
-if [ ! -f "$jarPath" ]; then
+if ! cached_jar_is_ours; then
   install_jar
+  # install_jar returns as soon as another run has put a jar there, so what
+  # ends up being used is checked here rather than only where it is downloaded
+  if ! cached_jar_is_ours; then
+    echo "$jarPath is not the jar $propertiesFile pins, refusing to run it" 1>&2
+    exit 1
+  fi
 fi
 
 echo "$jarPath"

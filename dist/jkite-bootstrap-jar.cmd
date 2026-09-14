@@ -42,7 +42,17 @@ call :read_properties || exit /b 1
 
 set "jar_dir=%cache_dir%\jkite\%distribution_version%"
 set "jar_path=%jar_dir%\jkite.jar"
-if not exist "%jar_path%" call :install_jar || exit /b 1
+call :cached_jar_is_ours
+if errorlevel 1 (
+  call :install_jar || exit /b 1
+  rem install_jar returns as soon as another run has put a jar there, so what
+  rem ends up being used is checked here rather than only where it is downloaded
+  call :cached_jar_is_ours
+  if errorlevel 1 (
+    echo %jar_path% is not the jar %properties_file% pins, refusing to run it 1>&2
+    exit /b 1
+  )
+)
 echo %jar_path%
 exit /b 0
 
@@ -137,9 +147,24 @@ set "jar_result=%ERRORLEVEL%"
 call :release_lock
 exit /b %jar_result%
 
+rem True (errorlevel 0) when %jar_path% is there and is the jar this project
+rem pins. The hash is checked every run, not only right after the download: the
+rem cache is shared by every project on this machine, so the jar sitting under
+rem this version may have been put there by another project, pinning another
+rem hash. A jar is this project's jar when this project's checksum says so.
+:cached_jar_is_ours
+if not exist "%jar_path%" exit /b 1
+rem nothing to check against; install_jar_locked says so when it downloads
+if "%distribution_sha256%"=="" exit /b 0
+call :sha256 "%jar_path%"
+if /i not "%distribution_sha256%"=="%sha256_result%" exit /b 1
+exit /b 0
+
 :install_jar_locked
 rem another run may have installed it while we waited for the lock
-if exist "%jar_path%" exit /b 0
+call :cached_jar_is_ours
+if not errorlevel 1 exit /b 0
+if exist "%jar_path%" echo The cached %jar_path% is not what %properties_file% pins, downloading it again 1>&2
 if not exist "%jar_dir%" mkdir "%jar_dir%" 2>nul
 rem this run's own file, so the jar only appears under its real name once it
 rem is complete
