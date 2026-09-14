@@ -21,8 +21,8 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
 /**
- * Functional tests for the Windows launcher (jbanglite.cmd) using a fake jbanglite.jar:
- * exit codes and output must pass through unchanged. jbanglite.cmd is
+ * Functional tests for the Windows launcher (jkite.cmd) using a fake jkite.jar:
+ * exit codes and output must pass through unchanged. jkite.cmd is
  * self-contained, so there is no PowerShell launcher to hand over to.
  */
 @EnabledOnOs(OS.WINDOWS)
@@ -33,17 +33,17 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	@BeforeEach
 	void setupLaunchers() throws IOException {
 		binDir = Files.createDirectories(tempDir.resolve("bin"));
-		Files.copy(CMD_SCRIPT, binDir.resolve("jbanglite.cmd"));
-		Files.copy(CMD_SCRIPT.resolveSibling("jbanglite-bootstrap-jdk.cmd"), binDir.resolve("jbanglite-bootstrap-jdk.cmd"));
+		Files.copy(CMD_SCRIPT, binDir.resolve("jkite.cmd"));
+		Files.copy(CMD_SCRIPT.resolveSibling("jkite-bootstrap-jdk.cmd"), binDir.resolve("jkite-bootstrap-jdk.cmd"));
 		// the JDK the bootstrap script would install, pinned at an address that
 		// nothing answers, so a test that reaches it fails fast instead of
 		// fetching 200 MB
-		Files.write(binDir.resolve("jbanglite.properties"),
+		Files.write(binDir.resolve("jkite.properties"),
 				("bootstrapJdkVersion=99.0.0\n"
 						+ "bootstrapJdkUrl." + indexPlatform() + "=https://127.0.0.1:1/nowhere/jdk.zip\n"
 						+ "bootstrapJdkSha256Sum." + indexPlatform() + "=00\n")
 					.getBytes(StandardCharsets.UTF_8));
-		createFakeJar(binDir.resolve("jbanglite.jar"));
+		createFakeJar(binDir.resolve("jkite.jar"));
 	}
 
 	@Test
@@ -69,12 +69,12 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 	@Test
 	void cmdDownloadsAJdkWhenNothingOnTheMachineWillDo() throws Exception {
 		// Nothing usable anywhere: JAVA_HOME too old and a PATH without javac,
-		// so jbanglite.cmd has jbanglite-bootstrap-jdk.cmd install the JDK
-		// jbanglite.properties pins, which is pinned at an address nothing
+		// so jkite.cmd has jkite-bootstrap-jdk.cmd install the JDK
+		// jkite.properties pins, which is pinned at an address nothing
 		// answers so that it fails fast instead of fetching 200 MB.
 		RunResult result = runLauncher(cmdLauncher(), "JAVA_HOME", createFakeJdk("1.8.0_292"),
 				"PATH", System.getenv("SystemRoot") + "\\System32",
-				"JBANGLITE_DOWNLOAD_RETRY", "0", "exit", "3");
+				"JKITE_DOWNLOAD_RETRY", "0", "exit", "3");
 		assertTrue(result.exitCode != 0, result.stderr);
 		assertTrue(result.stderr.contains("older than Java 11"), result.stderr);
 		assertTrue(result.stderr.contains("Error downloading the JDK"), result.stderr);
@@ -102,7 +102,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 
 	/**
-	 * Makes the running JDK available as JBANGLITE_CACHE_DIR\jdks\bootstrap (as if
+	 * Makes the running JDK available as JKITE_CACHE_DIR\jdks\bootstrap (as if
 	 * the launcher had downloaded it) so the launchers have a JDK to fall back
 	 * to when JAVA_HOME is rejected, without downloading one.
 	 */
@@ -119,7 +119,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 
 
 	private List<String> cmdLauncher() {
-		return new ArrayList<>(Arrays.asList("cmd.exe", "/c", binDir.resolve("jbanglite.cmd").toString()));
+		return new ArrayList<>(Arrays.asList("cmd.exe", "/c", binDir.resolve("jkite.cmd").toString()));
 	}
 
 
@@ -128,8 +128,8 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		// the defaults come first, so that a test naming one of them overrides it
 		// rather than being overridden by it
 		env.put("JAVA_HOME", System.getProperty("java.home"));
-		env.put("JBANGLITE_DIR", tempDir.resolve("jbang-home").toString());
-		env.put("JBANGLITE_CACHE_DIR", tempDir.resolve("cache").toString());
+		env.put("JKITE_DIR", tempDir.resolve("jbang-home").toString());
+		env.put("JKITE_CACHE_DIR", tempDir.resolve("cache").toString());
 		int i = 0;
 		// leading "NAME", "value" pairs are environment variables
 		while (args.length - i > 2

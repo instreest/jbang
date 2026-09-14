@@ -18,7 +18,7 @@ import java.util.Properties;
  * directive naming a property nobody set would otherwise build something
  * subtly different from what the script asked for.
  *
- * This is JBangLite's own implementation of the behaviour upstream's
+ * This is JKite's own implementation of the behaviour upstream's
  * PropertiesValueResolver has, written so that the fork carries no code whose
  * licence history is unclear.
  */

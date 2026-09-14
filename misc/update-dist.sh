@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Refreshes dist/, which is JBangLite as a project installs it (see
+# Refreshes dist/, which is JKite as a project installs it (see
 # dist/install.sh): the launcher scripts and LICENSE are copied there from the
-# sources, and jbanglite.properties is written to pin both downloads a project
-# can need - jbanglite.jar and, for a machine with no Java at all, a JDK to
+# sources, and jkite.properties is written to pin both downloads a project
+# can need - jkite.jar and, for a machine with no Java at all, a JDK to
 # start it with. install.sh, install.cmd and README.md are maintained in dist/
 # itself.
 #
@@ -21,7 +21,7 @@
 # install.sh fetches the scripts from there too - then commit dist/:
 #
 #   misc/update-dist.sh 0.2.0
-#   gh release create v0.2.0 dist/* build/libs/jbanglite.jar
+#   gh release create v0.2.0 dist/* build/libs/jkite.jar
 #   git add dist && git commit -m 'Release 0.2.0'
 #
 # --check rebuilds nothing and only compares the copied scripts; the jar and
@@ -30,33 +30,33 @@
 # Needs curl, unzip and awk on top of what the build needs.
 #
 # Environment:
-#   JBANGLITE_REPO             the GitHub repository releases are published to
-#                              (default instreest/jbanglite)
-#   JBANGLITE_RELEASE_BASEURL  where releases are served from
+#   JKITE_REPO             the GitHub repository releases are published to
+#                              (default instreest/jkite)
+#   JKITE_RELEASE_BASEURL  where releases are served from
 #                              (default https://github.com)
-#   JBANGLITE_JVM_INDEX_BASEURL  a mirror of Maven Central for the JVM index
+#   JKITE_JVM_INDEX_BASEURL  a mirror of Maven Central for the JVM index
 #
 set -eu
 cd "$(dirname "$0")/.."
 
-copied="src/main/scripts/jbanglite src/main/scripts/jbanglite.cmd
-        src/main/scripts/jbanglite-bootstrap-jdk src/main/scripts/jbanglite-bootstrap-jdk.cmd
-        src/main/scripts/jbanglite-bootstrap-jar src/main/scripts/jbanglite-bootstrap-jar.cmd
+copied="src/main/scripts/jkite src/main/scripts/jkite.cmd
+        src/main/scripts/jkite-bootstrap-jdk src/main/scripts/jkite-bootstrap-jdk.cmd
+        src/main/scripts/jkite-bootstrap-jar src/main/scripts/jkite-bootstrap-jar.cmd
         LICENSE"
 
-repo=${JBANGLITE_REPO:-instreest/jbanglite}
-releaseBaseUrl=${JBANGLITE_RELEASE_BASEURL:-https://github.com}
-jvmIndexBaseUrl=${JBANGLITE_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
+repo=${JKITE_REPO:-instreest/jkite}
+releaseBaseUrl=${JKITE_RELEASE_BASEURL:-https://github.com}
+jvmIndexBaseUrl=${JKITE_JVM_INDEX_BASEURL:-https://repo1.maven.org/maven2}
 
 # The JDK the launchers install when the machine has none. It only has to run
-# jbanglite.jar; the JDK a script asks for with //JAVA is installed by the jar.
+# jkite.jar; the JDK a script asks for with //JAVA is installed by the jar.
 bootstrapJavaVersion=25
 
 # The platforms a project may be checked out on. Named as the JVM index names
 # them, which is also what the launcher scripts compute from uname. "a:b" pins
 # platform a from b's entry, for a platform Temurin does not build: Windows on
 # ARM runs the x64 build under emulation, and this JDK only has to start
-# jbanglite.jar. Drop the mapping once Temurin publishes windows-arm64.
+# jkite.jar. Drop the mapping once Temurin publishes windows-arm64.
 platforms="linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64:windows-amd64"
 
 if [ "${1:-}" = "--check" ]; then
@@ -79,7 +79,7 @@ if [ -z "$version" ]; then
   exit 2
 fi
 
-work=$(mktemp -d "${TMPDIR:-/tmp}/jbanglite-dist.XXXXXX")
+work=$(mktemp -d "${TMPDIR:-/tmp}/jkite-dist.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 
 sha256_of() {
@@ -146,8 +146,8 @@ for spec in $platforms; do
   fi
 done
 
-./gradlew --quiet shadowJar -PjbangVersion="$version"
-jarSha=$(sha256_of build/libs/jbanglite.jar)
+./gradlew --quiet shadowJar -PjkiteVersion="$version"
+jarSha=$(sha256_of build/libs/jkite.jar)
 
 mkdir -p dist
 for from in $copied; do
@@ -158,23 +158,23 @@ done
   cat <<EOF
 # What this project runs, and what it needs to run it. A project commits this
 # file, not the binaries: the launcher scripts download each one once per
-# machine, into ~/.jbanglite, and check it against the SHA-256 here.
+# machine, into ~/.jkite, and check it against the SHA-256 here.
 #
 # Written by misc/update-dist.sh; to move to another version run install.sh
-# again rather than editing by hand. JBANGLITE_DIST_URL overrides the jar's URL
+# again rather than editing by hand. JKITE_DIST_URL overrides the jar's URL
 # for one run, for a machine that cannot reach GitHub releases.
 
 distributionVersion=$version
-distributionUrl=$releaseBaseUrl/$repo/releases/download/v$version/jbanglite.jar
+distributionUrl=$releaseBaseUrl/$repo/releases/download/v$version/jkite.jar
 distributionSha256Sum=$jarSha
 
 # The JDK a launcher installs when the machine has no usable Java, one entry
-# per platform. It only has to run jbanglite.jar; the JDK a script asks for
+# per platform. It only has to run jkite.jar; the JDK a script asks for
 # with //JAVA is installed by the jar itself.
 bootstrapJdkVersion=$jdkVersion
 EOF
   sort "$jdkProperties"
-} > dist/jbanglite.properties
+} > dist/jkite.properties
 
 echo "dist/ refreshed for $version (bootstrap JDK $jdkVersion)" 1>&2
-echo "Now: gh release create v$version dist/* build/libs/jbanglite.jar && git add dist && git commit" 1>&2
+echo "Now: gh release create v$version dist/* build/libs/jkite.jar && git add dist && git commit" 1>&2

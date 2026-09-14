@@ -41,12 +41,12 @@ import dev.jbang.util.Util;
  * The directives are read through {@link dev.jbang.spi.DirectiveParser}, the
  * interface JBang sits behind, and are applied here with the same rules JBang
  * uses: the main class comes from the main file only, everything else
- * accumulates over all files. Directives JBangLite has no use for (//MODULE,
+ * accumulates over all files. Directives JKite has no use for (//MODULE,
  * //CDS, //JAVAAGENT, //GAV, //DESCRIPTION, //DOCS) are parsed and ignored: the
- * interface mirrors what JBang understands, not what JBangLite acts on.
+ * interface mirrors what JBang understands, not what JKite acts on.
  *
  * The build output goes to
- * <code>$JBANGLITE_CACHE_DIR/jars/&lt;file&gt;.&lt;hash&gt;/&lt;base&gt;.jar</code>,
+ * <code>$JKITE_CACHE_DIR/jars/&lt;file&gt;.&lt;hash&gt;/&lt;base&gt;.jar</code>,
  * where the hash covers the contents of all sources and resources, so a change
  * in any of them triggers a rebuild.
  */

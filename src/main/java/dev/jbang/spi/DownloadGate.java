@@ -9,7 +9,7 @@ import java.util.Objects;
  * Asked before anything is fetched from the network, so that a run never
  * downloads silently.
  *
- * Every automatic download JBangLite makes passes through here first: the JDK
+ * Every automatic download JKite makes passes through here first: the JDK
  * a script asks for with <code>//JAVA</code> (the JVM index included) and the
  * dependencies of <code>//DEPS</code>. The gate is asked only when something
  * really is missing locally - a JDK that is already installed or a dependency

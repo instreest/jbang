@@ -16,7 +16,7 @@ import dev.jbang.util.Util;
  * and for every redirect it follows, so that a redirect cannot quietly move a
  * download onto a plaintext connection. Failed transfers are retried with the
  * same backoff the launcher scripts use, controlled by
- * JBANGLITE_DOWNLOAD_RETRY and JBANGLITE_DOWNLOAD_RETRY_DELAY.
+ * JKITE_DOWNLOAD_RETRY and JKITE_DOWNLOAD_RETRY_DELAY.
  */
 final class Downloader {
 	private static final int MAX_REDIRECTS = 10;
@@ -77,7 +77,7 @@ final class Downloader {
 	}
 
 	/**
-	 * Everything JBangLite downloads here is a JDK archive or its checksum, and
+	 * Everything JKite downloads here is a JDK archive or its checksum, and
 	 * both are published over https; anything else is refused rather than
 	 * fetched over a connection that can be read or rewritten in transit.
 	 */
@@ -97,7 +97,7 @@ final class Downloader {
 			conn.setInstanceFollowRedirects(false);
 			conn.setConnectTimeout(CONNECT_TIMEOUT);
 			conn.setReadTimeout(READ_TIMEOUT);
-			conn.setRequestProperty("User-Agent", "JBangLite/" + Util.getVersion());
+			conn.setRequestProperty("User-Agent", "JKite/" + Util.getVersion());
 			int status = conn.getResponseCode();
 			if (status >= 300 && status < 400) {
 				String location = conn.getHeaderField("Location");

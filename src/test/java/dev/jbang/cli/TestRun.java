@@ -16,8 +16,8 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * Runs a script end to end through jbanglite's main class: the script's stdin,
- * stdout, stderr and exit status must be those of the jbanglite process, and
+ * Runs a script end to end through jkite's main class: the script's stdin,
+ * stdout, stderr and exit status must be those of the jkite process, and
  * the bash launcher must pass them through unchanged as well.
  */
 class TestRun extends AbstractScriptTest {
@@ -34,13 +34,13 @@ class TestRun extends AbstractScriptTest {
 			"}", "");
 
 	@Test
-	void scriptStreamsAndExitStatusAreThoseOfJbanglite() throws Exception {
+	void scriptStreamsAndExitStatusAreThoseOfJkite() throws Exception {
 		Path script = tempDir.resolve("Echo.java");
 		Files.write(script, SCRIPT.getBytes(StandardCharsets.UTF_8));
 		Path stdin = tempDir.resolve("stdin.txt");
 		Files.write(stdin, "hello from stdin\n".getBytes(StandardCharsets.UTF_8));
 
-		RunResult result = runProcess(jbanglite(script.toString(), "a b", "c"), env(), stdin);
+		RunResult result = runProcess(jkite(script.toString(), "a b", "c"), env(), stdin);
 
 		assertEquals(7, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("stdin: hello from stdin"), result.stdout);
@@ -64,7 +64,7 @@ class TestRun extends AbstractScriptTest {
 
 		assertEquals(7, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("args: -Rx,--verbose,--,-"), result.stdout);
-		assertFalse(result.stderr.contains("[jbanglite]"), result.stderr); // --quiet took effect
+		assertFalse(result.stderr.contains("[jkite]"), result.stderr); // --quiet took effect
 	}
 
 	@Test
@@ -73,7 +73,7 @@ class TestRun extends AbstractScriptTest {
 		Files.write(script, SCRIPT.getBytes(StandardCharsets.UTF_8));
 
 		// what a script needs is declared in the script, not on the command line
-		RunResult result = runProcess(jbanglite("--java", "17", script.toString()), env());
+		RunResult result = runProcess(jkite("--java", "17", script.toString()), env());
 
 		assertEquals(2, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("Unknown option: --java"), result.stderr);
@@ -81,7 +81,7 @@ class TestRun extends AbstractScriptTest {
 
 	@Test
 	void aDirectoryIsRejectedAsInvalidInput() throws Exception {
-		RunResult result = runProcess(jbanglite(tempDir.toString()), env());
+		RunResult result = runProcess(jkite(tempDir.toString()), env());
 		assertEquals(2, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("is a directory"), result.stderr);
 	}
@@ -90,14 +90,14 @@ class TestRun extends AbstractScriptTest {
 	void bashLauncherRunsTheBootstrapScriptWithoutItsExecuteBit() throws Exception {
 		requireBash();
 		Path launcher = bashLauncherWithJar();
-		Path bootstrap = launcher.resolveSibling("jbanglite-bootstrap-jdk");
+		Path bootstrap = launcher.resolveSibling("jkite-bootstrap-jdk");
 		bootstrap.toFile().setExecutable(false);
 		Map<String, String> env = env();
 		// no usable JDK anywhere, so the launcher has to run the bootstrap
 		// script, which fails fast at the unreachable address it is pinned to
 		env.remove("JAVA_HOME");
 		env.put("PATH", pathWithoutJava());
-		env.put("JBANGLITE_DOWNLOAD_RETRY", "0");
+		env.put("JKITE_DOWNLOAD_RETRY", "0");
 		env.put("no_proxy", "localhost,127.0.0.1");
 		env.put("NO_PROXY", "localhost,127.0.0.1");
 		RunResult result = runProcess(bashCmd(launcher, "exit", "3"), env);
@@ -115,13 +115,13 @@ class TestRun extends AbstractScriptTest {
 		assertTrue(result.stderr.contains("some error output"), result.stderr);
 	}
 
-	/** jbanglite's main class on this JVM, the test classpath included. */
+	/** jkite's main class on this JVM, the test classpath included. */
 	private static List<String> java() {
 		return Arrays.asList(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
 				"-cp", System.getProperty("java.class.path"), "dev.jbang.Main");
 	}
 
-	private static List<String> jbanglite(String... args) {
+	private static List<String> jkite(String... args) {
 		List<String> cmd = new ArrayList<>(java());
 		cmd.add("--offline");
 		cmd.addAll(Arrays.asList(args));

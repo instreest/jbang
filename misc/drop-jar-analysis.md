@@ -1,34 +1,34 @@
-# jbanglite.jar を廃し、ブートストラップに徹する案の影響整理
+# jkite.jar を廃し、ブートストラップに徹する案の影響整理
 
 ## 提案の要約
 
-JBangLite の役割を次の 3 つだけに絞る。
+JKite の役割を次の 3 つだけに絞る。
 
 1. JDK の取得（自動ダウンロード前に確認メッセージを出す）
 2. JBang 本体（上流の配布物）の取得
 3. JBang による依存性解決の自動ダウンロード前の確認メッセージ
 
 スクリプトの実行そのものは上流の JBang に任せる。結果として
-`jbanglite.jar`（= JBang の縮小フォーク）は不要になる。
+`jkite.jar`（= JBang の縮小フォーク）は不要になる。
 
 ## 現状との対比
 
 | | 現状 | 提案 |
 | --- | --- | --- |
 | 実体 | 縮小フォーク jar（`src/main/java` 31 ファイル）+ ランチャ/ブートストラップ 6 スクリプト | シェル/cmd スクリプトのみ |
-| 配布 | `jbanglite.jar` を GitHub Release に置き、`jbanglite.properties` で version/URL/SHA-256 を固定 | 上流 JBang の配布物を pin するだけ |
+| 配布 | `jkite.jar` を GitHub Release に置き、`jkite.properties` で version/URL/SHA-256 を固定 | 上流 JBang の配布物を pin するだけ |
 | 上流追従 | `misc/sync-upstream.sh` でミラー 9 ファイル + シム 3 ファイルを手当て | 不要（上流のリリースを指すだけ） |
 
 ## 消えるもの（メンテナンス上の利益）
 
 - `src/main/java` の 31 ファイルと `src/test` の 7 ファイル、Gradle ビルド、
   shadowJar、MIMA/maven-resolver 依存、`JdkHttpTransporterFactory` と
-  `JBangLiteRuntime`（Apache HttpClient を JDK HttpClient に差し替えるための自前実装）。
+  `JKiteRuntime`（Apache HttpClient を JDK HttpClient に差し替えるための自前実装）。
 - ミラー/シム 3 分割と `misc/sync-upstream.sh`、`misc/upstream-ref.txt` の運用。
   上流が `Directives.java` を直せば、そのまま JBang のリリースとして降ってくる。
 - リリース手順そのもの（`misc/update-dist.sh <version>` → `gh release create` →
   `dist/` コミット）。jar を publish する必要がなくなり、
-  `jbanglite-bootstrap-jar` は「JBang の zip を取ってくる」スクリプトに置き換わる。
+  `jkite-bootstrap-jar` は「JBang の zip を取ってくる」スクリプトに置き換わる。
 - 「JBang の挙動と違う」というクラスのバグ全般。ディレクティブの解釈は
   上流そのものになる。
 
@@ -41,10 +41,10 @@ JBangLite の役割を次の 3 つだけに絞る。
    現状の jar は `java` を子プロセスとして起動し、stdin/stdout/stderr を共有して
    スクリプトの終了コードをそのまま返す。上流 JBang は逆で、`java` のコマンドラインを
    stdout に印字して 255 で終了し、ランチャがそれを `eval` する。
-   上流に戻ると `jbanglite Hello.java | sort` のストリーミング、パイプ入力、`$?` の
+   上流に戻ると `jkite Hello.java | sort` のストリーミング、パイプ入力、`$?` の
    意味づけは上流の `bin/jbang` の実装に従うことになる（実用上は動くが、
    「プロトコルなし」という現在の設計上の売りは失われる）。
-   逆に利点もある: 現状は jbanglite の JVM がスクリプト実行中ずっと常駐するが、
+   逆に利点もある: 現状は jkite の JVM がスクリプト実行中ずっと常駐するが、
    `eval` 方式ならそれがなくなる。
 2. **機能の縮小そのもの**
    サブコマンド（`edit`, `init`, `alias`, `catalog`, `trust`, `app`, `export` …）、
@@ -98,16 +98,16 @@ JBangLite の役割を次の 3 つだけに絞る。
 CI で黙って止まるのが最悪なので、
 
 - tty でなければ確認せず続行（既定）、または
-- `JBANGLITE_ASSUME_YES=1` / `--yes` で明示的に飛ばし、tty でなければ拒否
+- `JKITE_ASSUME_YES=1` / `--yes` で明示的に飛ばし、tty でなければ拒否
 
 のどちらかを選ぶ。現行のブートストラップスクリプトは無言でダウンロードするので、
 どちらにしても既存利用者には挙動変更になる。
 
 ## 移行コスト
 
-- `jbanglite.properties` の意味が変わる（JBangLite の jar → JBang の配布物）。
+- `jkite.properties` の意味が変わる（JKite の jar → JBang の配布物）。
   install 済みプロジェクトは再 install が要る。
-- `jbanglite` に渡していたオプション（`-C`, `-R`, `--cds` など）は
+- `jkite` に渡していたオプション（`-C`, `-R`, `--cds` など）は
   上流 JBang の `jbang run` のオプションに読み替えて転送する層が要る。
   ここは薄いが、完全一致はしない。
 - 動機だった java-call-hierarchy-exporter 側で、

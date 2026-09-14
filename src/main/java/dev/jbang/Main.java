@@ -22,13 +22,13 @@ import dev.jbang.util.CommandBuffer;
 import dev.jbang.util.Util;
 
 /**
- * JBangLite command line.
+ * JKite command line.
  *
  * <pre>
- * jbanglite [options] &lt;script.java&gt; [args...]
+ * jkite [options] &lt;script.java&gt; [args...]
  * </pre>
  *
- * There are no subcommands: JBangLite does one thing, which is to build the
+ * There are no subcommands: JKite does one thing, which is to build the
  * script and run it, and <code>--help</code> and <code>--version</code> are
  * the only options that do something else. Everything about the script - its
  * Java version, dependencies, main class - is what its <code>//</code>
@@ -39,7 +39,7 @@ import dev.jbang.util.Util;
  *
  * The script runs as a child process with this process's stdin, stdout and
  * stderr; its exit status becomes this process's exit status. The launcher
- * scripts (jbanglite, jbanglite.cmd) only find a JDK and exec the jar; there is
+ * scripts (jkite, jkite.cmd) only find a JDK and exec the jar; there is
  * no protocol between them and the jar.
  */
 public final class Main {
@@ -73,7 +73,7 @@ public final class Main {
 
 	static int run(List<String> args) throws IOException {
 		ScriptOptions opts = ScriptOptions.parse(args);
-		Util.verboseMsg("jbanglite version " + Util.getVersion());
+		Util.verboseMsg("jkite version " + Util.getVersion());
 		Project prj = opts.project();
 		Path jar = new AppBuilder(prj).build();
 		List<String> cmd = new CmdGenerator(prj, jar)
@@ -188,7 +188,7 @@ public final class Main {
 			}
 			if (!file.toString().endsWith(".java")) {
 				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-						"Only .java source files are supported by JBangLite: '" + script + "'");
+						"Only .java source files are supported by JKite: '" + script + "'");
 			}
 			return new Project(file, properties);
 		}
@@ -234,14 +234,14 @@ public final class Main {
 	}
 
 	private static void printHelp() {
-		realOut.println("jbanglite " + Util.getVersion());
+		realOut.println("jkite " + Util.getVersion());
 		realOut.println();
 		realOut.println("Builds and runs a single-file Java program. What it needs - its Java version,");
 		realOut.println("dependencies, sources - is declared in the program with //JAVA, //DEPS and");
-		realOut.println("//SOURCES directives, and JBangLite fetches all of it.");
+		realOut.println("//SOURCES directives, and JKite fetches all of it.");
 		realOut.println();
 		realOut.println("Usage:");
-		realOut.println("  jbanglite [<options>] <script.java> [<args>...]");
+		realOut.println("  jkite [<options>] <script.java> [<args>...]");
 		realOut.println();
 		realOut.println("Options may appear anywhere before the script, '--' ends them, and");
 		realOut.println("everything after the script is passed to it.");
@@ -249,7 +249,7 @@ public final class Main {
 		realOut.println("Options:");
 		realOut.println("  -h, --help           Print this help and exit");
 		realOut.println("  -V, --version        Print the version and exit");
-		realOut.println("  --update [<ref>]     Update this JBangLite installation and exit");
+		realOut.println("  --update [<ref>]     Update this JKite installation and exit");
 		realOut.println("  --verbose            Print what is being done");
 		realOut.println("  --quiet              Only print errors");
 		realOut.println("  --fresh              Ignore caches and rebuild/re-resolve everything");
@@ -258,9 +258,9 @@ public final class Main {
 		realOut.println("  -R<option>           Additional JVM option when running");
 		realOut.println("  -y, --yes            Download what is missing without asking");
 		realOut.println();
-		realOut.println("Before a JDK or a dependency is downloaded, JBangLite says so and, when it");
-		realOut.println("is run from a terminal, asks. JBANGLITE_CONFIRM_DOWNLOADS=never (or");
-		realOut.println("JBANGLITE_ASSUME_YES=1, or --yes) never asks, =always refuses to download");
+		realOut.println("Before a JDK or a dependency is downloaded, JKite says so and, when it");
+		realOut.println("is run from a terminal, asks. JKITE_CONFIRM_DOWNLOADS=never (or");
+		realOut.println("JKITE_ASSUME_YES=1, or --yes) never asks, =always refuses to download");
 		realOut.println("when there is no terminal to ask on.");
 		realOut.println();
 		realOut.println("--version and --update are answered by the launcher script, which needs");

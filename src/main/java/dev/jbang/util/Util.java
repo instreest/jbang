@@ -37,10 +37,10 @@ import dev.jbang.Settings;
  * Small collection of helpers: messages, OS detection, file globbing, hashing
  * and process execution.
  *
- * JBangLite shim: the members used by the files mirrored from upstream
+ * JKite shim: the members used by the files mirrored from upstream
  * (see misc/upstream-mirror.txt) keep upstream's signatures and behaviour, the
- * rest is JBangLite's own. Upstream's class additionally deals with catalogs,
- * remote resources and downloads, which JBangLite does not support.
+ * rest is JKite's own. Upstream's class additionally deals with catalogs,
+ * remote resources and downloads, which JKite does not support.
  */
 public final class Util {
 	public static final Pattern patternFQCN = Pattern.compile(
@@ -119,7 +119,7 @@ public final class Util {
 	 * <code>System.in</code>, because stdin belongs to the script that is about
 	 * to run and taking a line from it would lose that line. It is not taken
 	 * from {@link System#console()} either: since Java 22 that is non-null even
-	 * when stdin is a pipe, which would put us back on stdin. JBangLite installs
+	 * when stdin is a pipe, which would put us back on stdin. JKite installs
 	 * a JDK far newer than 22, so that is the usual case and not an edge one.
 	 */
 	public static String askOnTerminal(String prompt) {
@@ -196,9 +196,9 @@ public final class Util {
 			Duration d = Duration.between(startTime, Instant.now());
 			long s = d.getSeconds();
 			long n = d.minus(s, ChronoUnit.SECONDS).toMillis();
-			return String.format("[jbanglite] [%d:%03d] ", s, n);
+			return String.format("[jkite] [%d:%03d] ", s, n);
 		}
-		return "[jbanglite] ";
+		return "[jkite] ";
 	}
 
 	// ------------------------------------------------------------------- OS
@@ -250,7 +250,7 @@ public final class Util {
 	}
 
 	/**
-	 * Upstream reads JBANGLITE_RUNTIME_SHELL here; JBangLite never launches through
+	 * Upstream reads JKITE_RUNTIME_SHELL here; JKite never launches through
 	 * a shell, so only the OS matters (CommandBuffer quotes for it).
 	 */
 	public static Shell getShell() {
@@ -364,7 +364,7 @@ public final class Util {
 	 * paths as strings (relative if the pattern was relative). A pattern that is
 	 * an existing folder is treated as if it ended in "/**". A plain (non glob)
 	 * path is returned unchanged. Unlike upstream, catalog references are not
-	 * recognised because JBangLite has no catalogs.
+	 * recognised because JKite has no catalogs.
 	 */
 	public static List<String> explode(String source, Path baseDir, String filePattern) {
 		if (source != null && isURL(source)) {
@@ -591,7 +591,7 @@ public final class Util {
 				if (res != null) {
 					try (InputStream is = res.openStream()) {
 						java.util.jar.Manifest mf = new java.util.jar.Manifest(is);
-						v = mf.getMainAttributes().getValue("JBangLite-Version");
+						v = mf.getMainAttributes().getValue("JKite-Version");
 					}
 				}
 			} catch (IOException e) {

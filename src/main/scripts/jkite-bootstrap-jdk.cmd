@@ -1,30 +1,30 @@
 @echo off
 rem ===========================================================================
-rem Installs the JDK that runs jbanglite.jar when the machine has none: the
-rem Temurin that jbanglite.properties pins for this platform, into
-rem %JBANGLITE_CACHE_DIR%\jdks\bootstrap
-rem (%userprofile%\.jbanglite\cache\jdks\bootstrap). It prints that directory
+rem Installs the JDK that runs jkite.jar when the machine has none: the
+rem Temurin that jkite.properties pins for this platform, into
+rem %JKITE_CACHE_DIR%\jdks\bootstrap
+rem (%userprofile%\.jkite\cache\jdks\bootstrap). It prints that directory
 rem on stdout and says nothing else there; progress and errors go to stderr.
 rem When the JDK is already installed it only prints.
 rem
-rem The version, URL and SHA-256 were resolved when JBangLite was released and
+rem The version, URL and SHA-256 were resolved when JKite was released and
 rem are committed with the project, so there is no index to read and nothing to
 rem decide here: download, verify, unpack.
 rem
-rem The launcher (jbanglite.cmd) runs it when it finds no usable JDK; it can
+rem The launcher (jkite.cmd) runs it when it finds no usable JDK; it can
 rem just as well be run by hand, or replaced by anything else that puts a JDK
 rem there. It is self-contained: no PowerShell, only what Windows ships with
 rem (curl, tar, certutil).
 rem
-rem   jbanglite-bootstrap-jdk.cmd        install if needed, print the JDK home
+rem   jkite-bootstrap-jdk.cmd        install if needed, print the JDK home
 rem
 rem Environment:
-rem   JBANGLITE_DIR, JBANGLITE_CACHE_DIR   where JBangLite keeps things
-rem   JBANGLITE_DOWNLOAD_RETRY, JBANGLITE_DOWNLOAD_RETRY_DELAY
-rem   JBANGLITE_LOCK_TIMEOUT               seconds to wait for another run's download
+rem   JKITE_DIR, JKITE_CACHE_DIR   where JKite keeps things
+rem   JKITE_DOWNLOAD_RETRY, JKITE_DOWNLOAD_RETRY_DELAY
+rem   JKITE_LOCK_TIMEOUT               seconds to wait for another run's download
 rem
-rem Several JBangLite runs can be started at the same time (a build matrix, a
-rem multi-module build). They share ~\.jbanglite, so the download takes a
+rem Several JKite runs can be started at the same time (a build matrix, a
+rem multi-module build). They share ~\.jkite, so the download takes a
 rem directory lock (mkdir is atomic: :acquire_lock / :release_lock) and the JDK
 rem is unpacked into a directory of this run's own that is renamed into place.
 rem
@@ -53,39 +53,39 @@ rem ===========================================================================
 rem How often a failed download is retried, and how long to wait in between
 rem (0 means an exponential backoff of 1, 2, 4, ... seconds)
 set "download_retry=5"
-if not "%JBANGLITE_DOWNLOAD_RETRY%"=="" set "download_retry=%JBANGLITE_DOWNLOAD_RETRY%"
+if not "%JKITE_DOWNLOAD_RETRY%"=="" set "download_retry=%JKITE_DOWNLOAD_RETRY%"
 set "download_retry_delay=0"
-if not "%JBANGLITE_DOWNLOAD_RETRY_DELAY%"=="" set "download_retry_delay=%JBANGLITE_DOWNLOAD_RETRY_DELAY%"
+if not "%JKITE_DOWNLOAD_RETRY_DELAY%"=="" set "download_retry_delay=%JKITE_DOWNLOAD_RETRY_DELAY%"
 
-rem The directories JBangLite keeps its JDKs, jars and caches in.
-set "jbanglite_dir=%userprofile%\.jbanglite"
-if not "%JBANGLITE_DIR%"=="" set "jbanglite_dir=%JBANGLITE_DIR%"
-set "cache_dir=%jbanglite_dir%\cache"
-if not "%JBANGLITE_CACHE_DIR%"=="" set "cache_dir=%JBANGLITE_CACHE_DIR%"
+rem The directories JKite keeps its JDKs, jars and caches in.
+set "jkite_dir=%userprofile%\.jkite"
+if not "%JKITE_DIR%"=="" set "jkite_dir=%JKITE_DIR%"
+set "cache_dir=%jkite_dir%\cache"
+if not "%JKITE_CACHE_DIR%"=="" set "cache_dir=%JKITE_CACHE_DIR%"
 set "jdk_dir=%cache_dir%\jdks\bootstrap"
 
 rem %~dp0 in a subroutine is the label, not this file, so remember where we are
 set "script_dir=%~dp0"
-set "properties_file=%~dp0jbanglite.properties"
+set "properties_file=%~dp0jkite.properties"
 
-rem The name this platform has in jbanglite.properties
+rem The name this platform has in jkite.properties
 set "platform=windows-amd64"
 if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "platform=windows-arm64"
 
-rem Tells this run's temporary files apart from those of a JBangLite running at
+rem Tells this run's temporary files apart from those of a JKite running at
 rem the same time
 set "run_id=%RANDOM%%RANDOM%"
 
 rem How long to wait (in seconds) for another run that is downloading the JDK
 set "lock_timeout=600"
-if not "%JBANGLITE_LOCK_TIMEOUT%"=="" set "lock_timeout=%JBANGLITE_LOCK_TIMEOUT%"
+if not "%JKITE_LOCK_TIMEOUT%"=="" set "lock_timeout=%JKITE_LOCK_TIMEOUT%"
 exit /b 0
 
 rem ===========================================================================
 rem The properties
 rem ===========================================================================
 
-rem Reads jbanglite.properties next to this script into jdk_version, jdk_url
+rem Reads jkite.properties next to this script into jdk_version, jdk_url
 rem and jdk_sha256.
 rem
 rem The values are never handed to CALL: CALL expands %% a second time and the
@@ -202,11 +202,11 @@ set /a lock_waited=0
 mkdir "%lock_dir%" 2>nul && exit /b 0
 if exist "%lock_done%" exit /b 2
 if %lock_waited% GEQ %lock_timeout% (
-  echo Gave up after %lock_timeout% seconds waiting for another JBangLite to finish. 1>&2
-  echo If no other JBangLite is running, remove %lock_dir% and try again. 1>&2
+  echo Gave up after %lock_timeout% seconds waiting for another JKite to finish. 1>&2
+  echo If no other JKite is running, remove %lock_dir% and try again. 1>&2
   exit /b 1
 )
-if %lock_waited% EQU 0 echo Waiting for another JBangLite to finish downloading... 1>&2
+if %lock_waited% EQU 0 echo Waiting for another JKite to finish downloading... 1>&2
 call :sleep 1
 set /a lock_waited+=1
 goto :acquire_lock_try
@@ -239,7 +239,7 @@ if %download_retry_delay% GTR 0 (
 )
 set /a attempts_total=%download_retry%+1
 call echo Download %attempt%/%attempts_total% failed. Retry in %%wait_seconds%% second(s)... 1>&2
-if %attempt% EQU 1 echo (Set JBANGLITE_DOWNLOAD_RETRY=0 to disable retries^) 1>&2
+if %attempt% EQU 1 echo (Set JKITE_DOWNLOAD_RETRY=0 to disable retries^) 1>&2
 call :sleep %%wait_seconds%%
 goto :download_attempt
 

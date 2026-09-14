@@ -65,7 +65,7 @@ class TestPlaceholders {
 		if (name != null) {
 			assertEquals(System.getenv(name), replace("${env." + name + "}"));
 		}
-		assertEquals("none", replace("${env.JBANGLITE_SURELY_NOT_SET:none}"));
+		assertEquals("none", replace("${env.JKITE_SURELY_NOT_SET:none}"));
 	}
 
 	@Test

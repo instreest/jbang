@@ -16,7 +16,7 @@ import dev.jbang.spi.SourceDirectives;
  *
  * It is the only place that names {@link Directives} and {@link KeyValue}: this
  * class maps them to the types of {@code dev.jbang.spi}, so the mirrored files
- * stay a detail of the implementation rather than JBangLite's own API.
+ * stay a detail of the implementation rather than JKite's own API.
  */
 public final class MirroredDirectiveParser implements DirectiveParser {
 

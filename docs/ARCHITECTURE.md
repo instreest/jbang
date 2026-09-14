@@ -1,4 +1,4 @@
-# How JBangLite works
+# How JKite works
 
 Two programs, one boundary. A shell script finds a JDK and a jar; the jar
 builds and runs the tool. Everything below is what happens between
@@ -12,11 +12,11 @@ every project that pins the same version.
 ```mermaid
 flowchart LR
   subgraph repo["the tool's repository (git)"]
-    L["jbanglite/<br/>11 scripts + jbanglite.properties<br/>79 kB"]
+    L["jkite/<br/>11 scripts + jkite.properties<br/>79 kB"]
     T["tools/Report.java<br/>//JAVA //DEPS //SOURCES"]
   end
-  subgraph machine["~/.jbanglite (per machine, shared)"]
-    J["cache/jbanglite/&lt;version&gt;/jbanglite.jar"]
+  subgraph machine["~/.jkite (per machine, shared)"]
+    J["cache/jkite/&lt;version&gt;/jkite.jar"]
     B["cache/jdks/bootstrap"]
     S["cache/jdks/&lt;version&gt;"]
     A["cache/jars/&lt;name&gt;.&lt;hash&gt;/"]
@@ -29,7 +29,7 @@ flowchart LR
   T -- "//JAVA" --> S
 ```
 
-`jbanglite.properties` is the only file that decides what may be downloaded: it
+`jkite.properties` is the only file that decides what may be downloaded: it
 carries the version, URL and SHA-256 of the jar, and the same three for the
 bootstrap JDK of every platform. A download whose hash does not match is
 discarded.
@@ -40,14 +40,14 @@ discarded.
 sequenceDiagram
   autonumber
   actor U as user
-  participant L as jbanglite<br/>shell or cmd
+  participant L as jkite<br/>shell or cmd
   participant BS as bootstrap<br/>scripts
-  participant JAR as jbanglite.jar
+  participant JAR as jkite.jar
   participant SC as the tool
 
-  U->>L: jbanglite/jbanglite tools/Report.java --since 2026-01
+  U->>L: jkite/jkite tools/Report.java --since 2026-01
   Note over L: --version and --update<br/>are answered here and stop
-  L->>L: is jbanglite.jar here?
+  L->>L: is jkite.jar here?
   L->>L: is a usable JDK here?<br/>bootstrap → JAVA_HOME → javac on PATH
   alt something is missing
     L->>U: names it and asks
@@ -79,14 +79,14 @@ Four places, and no others.
 
 | What | From | Verified against |
 | --- | --- | --- |
-| `jbanglite.jar` | the pinned URL | SHA-256 in `jbanglite.properties` |
-| the bootstrap JDK | the pinned URL | SHA-256 in `jbanglite.properties` |
+| `jkite.jar` | the pinned URL | SHA-256 in `jkite.properties` |
+| the bootstrap JDK | the pinned URL | SHA-256 in `jkite.properties` |
 | the `//JAVA` JDK | the Coursier JVM index, then the distributor | the checksum the distributor publishes |
 | `//DEPS` | Maven Central, or `//REPOS` | Maven Resolver's own checksums |
 
 The first two happen in the shell, before any JVM exists; the last two happen
 in the jar. Each side asks before it fetches, which is why a cold first run
-asks twice. `JBANGLITE_CONFIRM_DOWNLOADS` governs both.
+asks twice. `JKITE_CONFIRM_DOWNLOADS` governs both.
 
 ## Inside the jar
 
@@ -103,7 +103,7 @@ flowchart TD
 ```
 
 `DirectiveParser` is the only seam JBang sits behind. Everything above it works
-on JBangLite's own `SourceDirectives`, so the mirrored copy of JBang's parser is
+on JKite's own `SourceDirectives`, so the mirrored copy of JBang's parser is
 an implementation detail rather than this project's API.
 
 The built jar is cached under a directory named after a hash of every source

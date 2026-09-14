@@ -1,18 +1,18 @@
 @echo off
 rem ===========================================================================
-rem JBangLite launcher for Windows.
+rem JKite launcher for Windows.
 rem
-rem It runs jbanglite.jar, so a checkout needs nothing installed, not even a
+rem It runs jkite.jar, so a checkout needs nothing installed, not even a
 rem JDK. What it does, in order:
 rem
 rem   1. Its own options   - --version and --update, answered here without
 rem                          running the jar or needing a JDK
-rem   2. Which jar to run  - a jbanglite.jar next to this script when a project
+rem   2. Which jar to run  - a jkite.jar next to this script when a project
 rem                          vendors one, otherwise the one that
-rem                          jbanglite-bootstrap-jar.cmd installs from the
-rem                          version pinned in jbanglite.properties
+rem                          jkite-bootstrap-jar.cmd installs from the
+rem                          version pinned in jkite.properties
 rem   3. Which Java to use - the bootstrap JDK, JAVA_HOME, javac on the PATH,
-rem                          or the JDK that jbanglite-bootstrap-jdk.cmd (next
+rem                          or the JDK that jkite-bootstrap-jdk.cmd (next
 rem                          to this script) downloads when there is none
 rem   4. Launch            - run the jar; it builds the script and runs it
 rem
@@ -42,9 +42,9 @@ for %%A in (%*) do call :note_assume_yes "%%~A"
 rem --- 2. Which jar to run --------------------------------------------------
 rem A project may vendor the jar by dropping it next to this script, and then
 rem nothing is downloaded. Otherwise the bootstrap script installs the version
-rem jbanglite.properties pins into the cache, shared by every project on this
+rem jkite.properties pins into the cache, shared by every project on this
 rem machine, and prints where it put it; everything else goes to stderr.
-set "jar_path=%script_dir%jbanglite.jar"
+set "jar_path=%script_dir%jkite.jar"
 
 rem Nothing is fetched without the operator agreeing to it. What the two
 rem bootstrap scripts would have to fetch is asked about at once, so a first run
@@ -62,13 +62,13 @@ call :confirm_downloads || exit /b 1
 :net_done
 
 if not exist "%jar_path%" (
-  for /f "usebackq delims=" %%J in (`"%script_dir%jbanglite-bootstrap-jar.cmd"`) do set "jar_path=%%J"
+  for /f "usebackq delims=" %%J in (`"%script_dir%jkite-bootstrap-jar.cmd"`) do set "jar_path=%%J"
 )
 if not exist "%jar_path%" exit /b 1
 
 rem --- 3. Which Java to use -------------------------------------------------
 call :find_java || exit /b 1
-set launch_cmd="%java_exec%" %JBANGLITE_JAVA_OPTIONS% -jar "%jar_path%"
+set launch_cmd="%java_exec%" %JKITE_JAVA_OPTIONS% -jar "%jar_path%"
 
 rem --- 4. Launch ------------------------------------------------------------
 rem The jar does the rest: it builds the script and runs it as a child process
@@ -81,10 +81,10 @@ rem This script's own options
 rem ===========================================================================
 
 rem Prints the version that will actually run, and under it where that was
-rem decided: the version jbanglite.properties pins, and the jar that will be
+rem decided: the version jkite.properties pins, and the jar that will be
 rem used. Nothing is downloaded.
 rem
-rem The cached jar needs no asking to be named: jbanglite-bootstrap-jar.cmd
+rem The cached jar needs no asking to be named: jkite-bootstrap-jar.cmd
 rem puts it under the version it pinned and only after its SHA-256 matched, so
 rem the directory it sits in is its version. A jar a project vendored next to
 rem the launcher is asked, because it is the one that will run and its version
@@ -96,17 +96,17 @@ if "%property_value%"=="" (
   exit /b 1
 )
 set "pinned=%property_value%"
-set "vendored=%script_dir%jbanglite.jar"
-set "cached=%cache_dir%\jbanglite\%pinned%\jbanglite.jar"
+set "vendored=%script_dir%jkite.jar"
+set "cached=%cache_dir%\jkite\%pinned%\jkite.jar"
 if exist "%vendored%" goto :print_vendored_jar
 if exist "%cached%" goto :print_cached_jar
-echo jbanglite %pinned%
+echo jkite %pinned%
 echo   pinned %pinned% by %properties_file%
 echo   jar not installed yet, it is downloaded on the first run
 exit /b 0
 
 :print_cached_jar
-echo jbanglite %pinned%
+echo jkite %pinned%
 echo   pinned %pinned% by %properties_file%
 echo   jar %pinned% at %cached%
 exit /b 0
@@ -114,12 +114,12 @@ exit /b 0
 :print_vendored_jar
 call :jar_version "%vendored%"
 if not defined jar_version_value goto :print_vendored_unknown
-echo jbanglite %jar_version_value%
+echo jkite %jar_version_value%
 echo   pinned %pinned% by %properties_file%
 echo   jar %jar_version_value% at %vendored% (vendored, so this jar runs and not the pinned version)
 exit /b 0
 :print_vendored_unknown
-echo jbanglite %pinned%
+echo jkite %pinned%
 echo   pinned %pinned% by %properties_file%
 echo   jar of an unknown version at %vendored% (vendored, so this jar runs and not the pinned version)
 exit /b 0
@@ -132,7 +132,7 @@ rem already here, so nothing is downloaded to answer --version.
 setlocal
 set "found="
 call :find_existing_java 2>nul || goto :jar_version_done
-set "probe=%TEMP%\jbanglite-%run_id%-jarversion.txt"
+set "probe=%TEMP%\jkite-%run_id%-jarversion.txt"
 "%java_exec%" -jar "%~1" --version > "%probe%" 2>nul
 for /f "usebackq delims=" %%V in ("%probe%") do if not defined found set "found=%%V"
 del /f /q "%probe%" 2>nul
@@ -141,7 +141,7 @@ endlocal & set "jar_version_value=%found%"
 exit /b 0
 
 rem Replaces this installation with the one from %2 (a branch, tag or commit of
-rem the JBangLite repository; the default is whatever install.cmd defaults to)
+rem the JKite repository; the default is whatever install.cmd defaults to)
 rem by running the install.cmd that sits next to this script. Needs no Java and
 rem no jar, so it works even when the pinned jar can no longer be downloaded.
 :run_update
@@ -149,18 +149,18 @@ if not exist "%script_dir%install.cmd" (
   echo %script_dir%install.cmd not found, so this installation cannot update itself. 1>&2
   exit /b 1
 )
-set "net_items=  - a new JBangLite installation into %script_dir%"
+set "net_items=  - a new JKite installation into %script_dir%"
 call :confirm_downloads || exit /b 1
-if not "%~2"=="" set "JBANGLITE_REF=%~2"
+if not "%~2"=="" set "JKITE_REF=%~2"
 call "%script_dir%install.cmd" "%script_dir%." || exit /b 1
-if not exist "%script_dir%jbanglite.jar" exit /b 0
+if not exist "%script_dir%jkite.jar" exit /b 0
 echo. 1>&2
-echo Warning: %script_dir%jbanglite.jar was not touched, and a jar next to 1>&2
-echo the launcher wins over jbanglite.properties, so that old jar still runs. 1>&2
+echo Warning: %script_dir%jkite.jar was not touched, and a jar next to 1>&2
+echo the launcher wins over jkite.properties, so that old jar still runs. 1>&2
 echo Remove it, or replace it with the jar of the version just installed. 1>&2
 exit /b 0
 
-rem Sets property_value to the value of the key %1 in jbanglite.properties next
+rem Sets property_value to the value of the key %1 in jkite.properties next
 rem to this script, empty when it is not there.
 :property
 setlocal enabledelayedexpansion
@@ -184,21 +184,21 @@ rem Settings
 rem ===========================================================================
 
 :init_settings
-rem The oldest Java that can run jbanglite.jar; anything newer is fine, and the
-rem JDK a script asks for with //JAVA is chosen by jbanglite.jar itself
+rem The oldest Java that can run jkite.jar; anything newer is fine, and the
+rem JDK a script asks for with //JAVA is chosen by jkite.jar itself
 set "min_java_version=11"
 
-rem The directories JBangLite keeps its JDKs, jars and caches in.
-set "jbanglite_dir=%userprofile%\.jbanglite"
-if not "%JBANGLITE_DIR%"=="" set "jbanglite_dir=%JBANGLITE_DIR%"
-set "cache_dir=%jbanglite_dir%\cache"
-if not "%JBANGLITE_CACHE_DIR%"=="" set "cache_dir=%JBANGLITE_CACHE_DIR%"
+rem The directories JKite keeps its JDKs, jars and caches in.
+set "jkite_dir=%userprofile%\.jkite"
+if not "%JKITE_DIR%"=="" set "jkite_dir=%JKITE_DIR%"
+set "cache_dir=%jkite_dir%\cache"
+if not "%JKITE_CACHE_DIR%"=="" set "cache_dir=%JKITE_CACHE_DIR%"
 
 rem %~dp0 in a subroutine is the label, not this file, so remember where we are
 set "script_dir=%~dp0"
-set "properties_file=%~dp0jbanglite.properties"
+set "properties_file=%~dp0jkite.properties"
 
-rem Tells this run's temporary files apart from those of a JBangLite running at
+rem Tells this run's temporary files apart from those of a JKite running at
 rem the same time
 set "run_id=%RANDOM%%RANDOM%"
 exit /b 0
@@ -209,8 +209,8 @@ rem ===========================================================================
 
 rem Sets java_exec (and JAVA_HOME) to the Java to run the jar with, downloading
 rem one when the machine has none. Any Java %min_java_version% or newer will do:
-rem the JDK a script asks for with //JAVA is chosen by jbanglite.jar itself.
-rem The java to run jbanglite.jar with, installing one when the machine has
+rem the JDK a script asks for with //JAVA is chosen by jkite.jar itself.
+rem The java to run jkite.jar with, installing one when the machine has
 rem none.
 :find_java
 rem The search already ran before the download was agreed to; reuse what it found
@@ -222,7 +222,7 @@ rem Looks for a JDK that is already on this machine and sets java_exec to its
 rem java, without installing anything; exits 1 when there is none.
 :find_existing_java
 set "java_exec="
-rem The JDK jbanglite-bootstrap-jdk.cmd downloaded on an earlier run
+rem The JDK jkite-bootstrap-jdk.cmd downloaded on an earlier run
 call :usable_java "%cache_dir%\jdks\bootstrap" && (
   set "JAVA_HOME=%cache_dir%\jdks\bootstrap"
   set "java_exec=%cache_dir%\jdks\bootstrap\bin\java.exe"
@@ -257,7 +257,7 @@ set "path_java="
 for /f "delims=" %%J in ('where javac 2^>nul') do if not defined path_java set "path_java=%%J"
 if not defined path_java exit /b 1
 rem (through a file: a quoted path in front of a pipe is mangled by cmd /c)
-set "path_java_probe=%TEMP%\jbanglite-%run_id%-java.txt"
+set "path_java_probe=%TEMP%\jkite-%run_id%-java.txt"
 "%path_java%" -J-XshowSettings:properties -version > "%path_java_probe%" 2>&1
 set "path_java_home="
 for /f "usebackq tokens=1,* delims== " %%A in (`findstr /r /c:"^ *java.home =" "%path_java_probe%"`) do set "path_java_home=%%B"
@@ -271,13 +271,13 @@ exit /b 0
 rem Nothing usable found, so have a JDK of our own installed. The bootstrap
 rem script prints where it put the JDK; everything else it says goes to stderr.
 :install_bootstrap_jdk
-call "%script_dir%jbanglite-bootstrap-jdk.cmd" >nul || exit /b 1
+call "%script_dir%jkite-bootstrap-jdk.cmd" >nul || exit /b 1
 set "JAVA_HOME=%cache_dir%\jdks\bootstrap"
 set "java_exec=%cache_dir%\jdks\bootstrap\bin\java.exe"
 exit /b 0
 
 rem Succeeds when %1 holds a JDK (scripts have to be compiled, so a JRE is no
-rem use) new enough to run jbanglite.jar
+rem use) new enough to run jkite.jar
 :usable_java
 if not exist "%~1\bin\java.exe" exit /b 1
 if not exist "%~1\bin\javac.exe" exit /b 1
@@ -302,15 +302,15 @@ exit /b 0
 
 rem --- Asking before going to the network ------------------------------------
 rem
-rem JBangLite downloads three kinds of thing: its own jar, a JDK to run that jar
+rem JKite downloads three kinds of thing: its own jar, a JDK to run that jar
 rem with, and the dependencies a script declares. This script can see the first
 rem two and asks about them; the jar asks about the third, which only it knows
-rem about. Both use the same contract, JBANGLITE_CONFIRM_DOWNLOADS:
+rem about. Both use the same contract, JKITE_CONFIRM_DOWNLOADS:
 rem
 rem   auto    the default: ask when there is a terminal, otherwise say what is
 rem           being fetched and go ahead
 rem   always  ask, and fetch nothing when there is no terminal to ask on
-rem   never   never ask. JBANGLITE_ASSUME_YES=1 and --yes do the same
+rem   never   never ask. JKITE_ASSUME_YES=1 and --yes do the same
 
 :note_assume_yes
 if "%~1"=="-y" set "assume_yes=1"
@@ -319,7 +319,7 @@ exit /b 0
 
 :add_net_item_jar
 call :property distributionVersion
-set "net_items=%net_items%  - jbanglite.jar %property_value%|"
+set "net_items=%net_items%  - jkite.jar %property_value%|"
 exit /b 0
 
 :add_net_item_jdk
@@ -345,14 +345,14 @@ exit /b 0
 rem Asks whether the things in net_items may be downloaded. 0 to go ahead, 1 to stop.
 :confirm_downloads
 rem net_items is set. exit /b 0 to go ahead, exit /b 1 to stop.
-set "net_mode=%JBANGLITE_CONFIRM_DOWNLOADS%"
+set "net_mode=%JKITE_CONFIRM_DOWNLOADS%"
 if not defined net_mode set "net_mode=auto"
-if defined JBANGLITE_ASSUME_YES exit /b 0
+if defined JKITE_ASSUME_YES exit /b 0
 if "%assume_yes%"=="1" exit /b 0
 if /i "%net_mode%"=="never" exit /b 0
 if /i "%net_mode%"=="always" goto :net_ask
 if /i "%net_mode%"=="auto" goto :net_ask
-echo Ignoring invalid JBANGLITE_CONFIRM_DOWNLOADS: %JBANGLITE_CONFIRM_DOWNLOADS% 1>&2
+echo Ignoring invalid JKITE_CONFIRM_DOWNLOADS: %JKITE_CONFIRM_DOWNLOADS% 1>&2
 set "net_mode=auto"
 
 :net_ask
@@ -360,7 +360,7 @@ rem timeout fails when stdin is redirected, which is how this tells a terminal
 rem from a pipe. Without one there is nobody to ask.
 2>nul >nul timeout /t 0 || goto :net_no_terminal
 echo.
-echo JBangLite has to download:
+echo JKite has to download:
 call :print_net_items
 echo.
 set "net_answer=y"
@@ -372,9 +372,9 @@ echo Stopped. Nothing was downloaded. 1>&2
 exit /b 1
 
 :net_no_terminal
-echo JBangLite has to download: 1>&2
+echo JKite has to download: 1>&2
 call :print_net_items 1>&2
 if /i not "%net_mode%"=="always" exit /b 0
-echo There is no terminal to ask on and JBANGLITE_CONFIRM_DOWNLOADS=always. 1>&2
+echo There is no terminal to ask on and JKITE_CONFIRM_DOWNLOADS=always. 1>&2
 echo Set it to auto or never, or pass --yes, to allow the download. 1>&2
 exit /b 1

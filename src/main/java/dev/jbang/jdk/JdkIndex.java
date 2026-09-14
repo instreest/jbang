@@ -25,12 +25,12 @@ import dev.jbang.util.RequestedVersion;
 import dev.jbang.util.Util;
 
 /**
- * The list of downloadable JDKs. JBangLite uses the JVM index that the
+ * The list of downloadable JDKs. JKite uses the JVM index that the
  * Coursier project publishes to Maven Central as
  * <code>io.get-coursier.jvm.indices:index-&lt;platform&gt;</code>, so no
  * separate discovery service has to be reachable: the index travels over the
  * same Maven repository (and therefore the same mirrors, proxies and
- * credentials) that JBangLite already needs for <code>//DEPS</code>.
+ * credentials) that JKite already needs for <code>//DEPS</code>.
  *
  * The index maps a distribution and version to the distributor's own download
  * URL, for example
@@ -204,7 +204,7 @@ public final class JdkIndex {
 	 * distribution in turn.
 	 */
 	public Optional<Entry> find(RequestedVersion version) {
-		// JBangLite installs from one distribution and offers no knob for it
+		// JKite installs from one distribution and offers no knob for it
 		for (String distro : Collections.singletonList(Settings.JDK_DISTRO)) {
 			Optional<Entry> found = find(distro, version);
 			if (found.isPresent()) {

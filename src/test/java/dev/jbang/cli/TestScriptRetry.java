@@ -22,14 +22,14 @@ import com.github.tomakehurst.wiremock.stubbing.Scenario;
 /**
  * Download retries in the bootstrap scripts, exercised on the jar download
  * because it is the one every platform makes. A WireMock server fails the
- * request a few times before serving the jar, and JBANGLITE_DOWNLOAD_RETRY says
+ * request a few times before serving the jar, and JKITE_DOWNLOAD_RETRY says
  * how many attempts the script may make.
  *
  * See https://github.com/jbangdev/jbang/issues/2459
  */
 class TestScriptRetry extends AbstractScriptTest {
 
-	private static final String JAR_PATH = "/releases/download/v9.9.9/jbanglite.jar";
+	private static final String JAR_PATH = "/releases/download/v9.9.9/jkite.jar";
 
 	private Path wrapper;
 	private byte[] jar;
@@ -37,8 +37,8 @@ class TestScriptRetry extends AbstractScriptTest {
 	@BeforeEach
 	void installTheScripts() throws Exception {
 		requireBash();
-		wrapper = Files.createDirectories(tempDir.resolve("jbanglite"));
-		for (String name : Arrays.asList("jbanglite", "jbanglite-bootstrap-jar")) {
+		wrapper = Files.createDirectories(tempDir.resolve("jkite"));
+		for (String name : Arrays.asList("jkite", "jkite-bootstrap-jar")) {
 			Files.copy(BASH_SCRIPT.resolveSibling(name), wrapper.resolve(name));
 		}
 		Path fakeJar = tempDir.resolve("fake.jar");
@@ -48,7 +48,7 @@ class TestScriptRetry extends AbstractScriptTest {
 
 	/** Fails {@code failCount} times with a 500, then serves the jar. */
 	private void stubFlakyJar(int failCount) throws Exception {
-		Files.write(wrapper.resolve("jbanglite.properties"),
+		Files.write(wrapper.resolve("jkite.properties"),
 				("distributionVersion=9.9.9\n"
 						+ "distributionUrl=" + wm.baseUrl() + JAR_PATH + "\n"
 						+ "distributionSha256Sum=" + sha256(jar) + "\n").getBytes(StandardCharsets.UTF_8));
@@ -75,8 +75,8 @@ class TestScriptRetry extends AbstractScriptTest {
 
 	private Map<String, String> env(int retryCount) {
 		Map<String, String> env = baseBashEnv("retry-" + retryCount);
-		env.put("JBANGLITE_DOWNLOAD_RETRY", String.valueOf(retryCount));
-		env.put("JBANGLITE_DOWNLOAD_RETRY_DELAY", "0");
+		env.put("JKITE_DOWNLOAD_RETRY", String.valueOf(retryCount));
+		env.put("JKITE_DOWNLOAD_RETRY_DELAY", "0");
 		env.put("JAVA_HOME", System.getProperty("java.home"));
 		env.put("no_proxy", "localhost,127.0.0.1");
 		env.put("NO_PROXY", "localhost,127.0.0.1");
@@ -87,7 +87,7 @@ class TestScriptRetry extends AbstractScriptTest {
 	void theDownloadSucceedsAfterTransientFailures() throws Exception {
 		stubFlakyJar(3);
 
-		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env(5));
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "exit", "0"), env(5));
 
 		assertEquals(0, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("Retry in"), result.stderr);
@@ -99,11 +99,11 @@ class TestScriptRetry extends AbstractScriptTest {
 	void theDownloadFailsWhenTheRetriesAreExhausted() throws Exception {
 		stubFlakyJar(10);
 
-		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env(2));
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "exit", "0"), env(2));
 
 		assertNotEquals(0, result.exitCode, "the script should have failed");
 		assertTrue(result.stderr.contains("Download 2/3 failed"), result.stderr);
-		assertTrue(result.stderr.contains("Error downloading JBangLite"), result.stderr);
+		assertTrue(result.stderr.contains("Error downloading JKite"), result.stderr);
 		wm.verify(3, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
@@ -111,7 +111,7 @@ class TestScriptRetry extends AbstractScriptTest {
 	void zeroRetriesMeansASingleAttempt() throws Exception {
 		stubFlakyJar(1);
 
-		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env(0));
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "exit", "0"), env(0));
 
 		assertNotEquals(0, result.exitCode, "the script should have failed");
 		assertFalse(result.stderr.contains("Retry in"), result.stderr);
@@ -120,12 +120,12 @@ class TestScriptRetry extends AbstractScriptTest {
 
 	@Test
 	void aPlaintextDownloadUrlIsRefused() throws Exception {
-		Files.write(wrapper.resolve("jbanglite.properties"),
+		Files.write(wrapper.resolve("jkite.properties"),
 				("distributionVersion=9.9.9\n"
-						+ "distributionUrl=http://example.invalid/jbanglite.jar\n"
+						+ "distributionUrl=http://example.invalid/jkite.jar\n"
 						+ "distributionSha256Sum=" + sha256(jar) + "\n").getBytes(StandardCharsets.UTF_8));
 
-		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env(0));
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "exit", "0"), env(0));
 
 		assertNotEquals(0, result.exitCode, "the script should have failed");
 		assertTrue(result.stderr.contains("anything but https"), result.stderr);

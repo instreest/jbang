@@ -12,4 +12,4 @@ out
 .DS_Store
 
 # the jar is a release asset, never committed (see misc/update-dist.sh)
-dist/jbanglite.jar
+dist/jkite.jar

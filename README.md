@@ -1,7 +1,7 @@
-# JBangLite
+# JKite
 
 **Ship a Java tool that anyone can run straight after `git clone`.** Commit a
-`jbanglite/` directory next to your tool, and whoever checks the project out
+`jkite/` directory next to your tool, and whoever checks the project out
 runs it with one command.
 
 They do not need a JDK installed. They do not need *the* JDK your tool asks
@@ -10,7 +10,7 @@ dependencies, and there is no build to explain. None of that is their problem
 any more, and none of it is yours to support.
 
 ```bash
-jbanglite/jbanglite tools/Report.java --since 2026-01
+jkite/jkite tools/Report.java --since 2026-01
 ```
 
 That works because the tool declares what it needs, in the tool:
@@ -21,13 +21,13 @@ That works because the tool declares what it needs, in the tool:
 //SOURCES report/*.java
 ```
 
-JBangLite reads those directives, installs a JDK if the machine has none,
+JKite reads those directives, installs a JDK if the machine has none,
 resolves the dependencies from Maven Central, compiles, and runs. Every
 download is pinned to a version and checked against a SHA-256 committed with
 your project, and is fetched once per machine, so the second tool and the
 second checkout cost nothing.
 
-The directives are JBang's, parsed by JBang's own parser. JBangLite is a
+The directives are JBang's, parsed by JBang's own parser. JKite is a
 reduced fork of [JBang](https://github.com/jbangdev/jbang) that does this one
 thing. It is not affiliated with, endorsed by, or supported by the JBang
 project; please report problems here, not to them.
@@ -37,8 +37,8 @@ project; please report problems here, not to them.
 For the tool's author, once:
 
 ```bash
-curl -fsSL https://github.com/instreest/jbanglite/releases/latest/download/install.sh | bash
-git add jbanglite && git commit -m "Add JBangLite"
+curl -fsSL https://github.com/instreest/jkite/releases/latest/download/install.sh | bash
+git add jkite && git commit -m "Add JKite"
 ```
 
 For everyone else, nothing. Put this in your project's README:
@@ -47,65 +47,65 @@ For everyone else, nothing. Put this in your project's README:
 ## Running the tools
 
 ```bash
-jbanglite/jbanglite tools/Report.java      # macOS, Linux, WSL
-jbanglite\jbanglite.cmd tools\Report.java  # Windows
+jkite/jkite tools/Report.java      # macOS, Linux, WSL
+jkite\jkite.cmd tools\Report.java  # Windows
 ```
 ````
 
 `install.cmd` installs from a Windows command prompt. The installer writes
-eleven files, about 80 kB, into `jbanglite/`; commit all of them, the way a
+eleven files, about 80 kB, into `jkite/`; commit all of them, the way a
 Gradle or Maven wrapper is committed.
 
 ## What gets committed, and what gets downloaded
 
-`jbanglite/` holds the launcher scripts and `jbanglite.properties`, which pins
+`jkite/` holds the launcher scripts and `jkite.properties`, which pins
 everything a run may need to fetch:
 
 ```properties
 distributionVersion=0.2.0
-distributionUrl=https://github.com/instreest/jbanglite/releases/download/v0.2.0/jbanglite.jar
+distributionUrl=https://github.com/instreest/jkite/releases/download/v0.2.0/jkite.jar
 distributionSha256Sum=dbc5414a...
 bootstrapJdkVersion=25.0.3
 bootstrapJdkUrl.linux-amd64=https://github.com/adoptium/...tar.gz
 bootstrapJdkSha256Sum.linux-amd64=69264a7a...
 ```
 
-Neither `jbanglite.jar` nor a JDK is committed. On the first run the launcher
-downloads what it is missing into `~/.jbanglite`, checks it against the SHA-256
+Neither `jkite.jar` nor a JDK is committed. On the first run the launcher
+downloads what it is missing into `~/.jkite`, checks it against the SHA-256
 above, and keeps it there for every project on the machine. So a project's
 history carries scripts, not binaries, and moving to a new version changes a
 few lines rather than megabytes.
 
 A project that would rather not depend on the download can put a
-`jbanglite.jar` into `jbanglite/` itself: it wins over the properties, and then
+`jkite.jar` into `jkite/` itself: it wins over the properties, and then
 only a JDK is ever fetched.
 
 ## Updating
 
-Which JBangLite a project runs is a property of the project, as it is for the
-Gradle and Maven wrappers: it is what `jbanglite/jbanglite.properties` says, it
+Which JKite a project runs is a property of the project, as it is for the
+Gradle and Maven wrappers: it is what `jkite/jkite.properties` says, it
 is committed, and whoever clones the project gets it. The tool's author
 updates it; everyone else receives it with `git pull`.
 
 ```bash
-jbanglite/jbanglite --update            # the newest release
-jbanglite/jbanglite --update v0.3.0     # or a particular one
-git add jbanglite && git commit -m "Update JBangLite to 0.3.0"
+jkite/jkite --update            # the newest release
+jkite/jkite --update v0.3.0     # or a particular one
+git add jkite && git commit -m "Update JKite to 0.3.0"
 ```
 
 `--update` re-runs the installer next to it and replaces every file. It is
 answered by the launcher script, so it needs neither the jar nor a JDK: an
 installation whose pinned jar can no longer be downloaded can still update
-itself out of that state. It leaves a vendored `jbanglite.jar` alone, and warns
+itself out of that state. It leaves a vendored `jkite.jar` alone, and warns
 that the old jar still wins.
 
 `--version` names the version that will actually run, and downloads nothing:
 
 ```
-$ jbanglite/jbanglite --version
-jbanglite 0.3.0
-  pinned 0.3.0 by /home/me/tool/jbanglite/jbanglite.properties
-  jar 0.3.0 at /home/me/.jbanglite/cache/jbanglite/0.3.0/jbanglite.jar
+$ jkite/jkite --version
+jkite 0.3.0
+  pinned 0.3.0 by /home/me/tool/jkite/jkite.properties
+  jar 0.3.0 at /home/me/.jkite/cache/jkite/0.3.0/jkite.jar
 ```
 
 Ordinary runs never check for a new version. Nothing reaches the network
@@ -136,11 +136,11 @@ for JBang still runs: `//MODULE`, `//CDS`, `//JAVAAGENT`, `//GAV`,
 
 ## Options
 
-There are no subcommands. JBangLite runs the script, and only `--help`,
+There are no subcommands. JKite runs the script, and only `--help`,
 `--version` and `--update` do something else.
 
 ```
-jbanglite [<options>] <script.java> [<args>...]
+jkite [<options>] <script.java> [<args>...]
 ```
 
 | Option | |
@@ -165,35 +165,35 @@ tool needs, not whoever runs it.
 
 | Variable | |
 | --- | --- |
-| `JBANGLITE_CONFIRM_DOWNLOADS` | whether a download is confirmed first: `auto` (default), `always`, `never` |
-| `JBANGLITE_ASSUME_YES` | set to anything to answer yes in advance, like `--yes` |
-| `JBANGLITE_DIR` | base directory (default `~/.jbanglite`) |
-| `JBANGLITE_CACHE_DIR` | cache directory (default `$JBANGLITE_DIR/cache`) |
-| `JBANGLITE_MAVEN_REPO` | local Maven repository to use instead of `~/.m2/repository` |
-| `JBANGLITE_DEFAULT_JAVA_VERSION` | JDK to use when a script names none (default 17) |
-| `JBANGLITE_JDK_INDEX` | read the JVM index from here instead of from Maven Central |
-| `JBANGLITE_JAVA_OPTIONS` | JVM options for JBangLite itself |
-| `JBANGLITE_DOWNLOAD_RETRY` | extra download attempts (default 5, `0` disables retries) |
-| `JBANGLITE_DOWNLOAD_RETRY_DELAY` | seconds between attempts (default `0`, meaning exponential backoff) |
-| `JBANGLITE_LOCK_TIMEOUT` | seconds to wait for another run that is downloading (default 600) |
-| `JBANGLITE_DIST_URL` | fetch `jbanglite.jar` from here instead of from the pinned URL |
-| `JBANGLITE_REPO`, `JBANGLITE_REF` | the repository and release the installer installs from |
-| `JBANGLITE_DIST_BASEURL` | install from here instead of from a GitHub release |
+| `JKITE_CONFIRM_DOWNLOADS` | whether a download is confirmed first: `auto` (default), `always`, `never` |
+| `JKITE_ASSUME_YES` | set to anything to answer yes in advance, like `--yes` |
+| `JKITE_DIR` | base directory (default `~/.jkite`) |
+| `JKITE_CACHE_DIR` | cache directory (default `$JKITE_DIR/cache`) |
+| `JKITE_MAVEN_REPO` | local Maven repository to use instead of `~/.m2/repository` |
+| `JKITE_DEFAULT_JAVA_VERSION` | JDK to use when a script names none (default 17) |
+| `JKITE_JDK_INDEX` | read the JVM index from here instead of from Maven Central |
+| `JKITE_JAVA_OPTIONS` | JVM options for JKite itself |
+| `JKITE_DOWNLOAD_RETRY` | extra download attempts (default 5, `0` disables retries) |
+| `JKITE_DOWNLOAD_RETRY_DELAY` | seconds between attempts (default `0`, meaning exponential backoff) |
+| `JKITE_LOCK_TIMEOUT` | seconds to wait for another run that is downloading (default 600) |
+| `JKITE_DIST_URL` | fetch `jkite.jar` from here instead of from the pinned URL |
+| `JKITE_REPO`, `JKITE_REF` | the repository and release the installer installs from |
+| `JKITE_DIST_BASEURL` | install from here instead of from a GitHub release |
 
-Everything JBangLite writes goes under `JBANGLITE_DIR`; nothing is written into
+Everything JKite writes goes under `JKITE_DIR`; nothing is written into
 the project. Several runs at once are safe: each download is taken by one run
 while the others wait, and every file is renamed into place only once it is
 complete, so a build matrix never trips over a half-written file.
 
 ## Downloads ask first
 
-JBangLite fetches three kinds of thing: its own jar, a JDK to run that jar with,
+JKite fetches three kinds of thing: its own jar, a JDK to run that jar with,
 and the dependencies a script declares. When something has to be fetched it says
 what, and on a terminal it asks.
 
 ```
-JBangLite has to download:
-  - jbanglite.jar 0.2.0
+JKite has to download:
+  - jkite.jar 0.2.0
   - a JDK to run it with (Temurin 25.0.3); this machine has none
 
 Continue? [Y/n]:
@@ -207,17 +207,17 @@ about the dependencies. `--update` asks before replacing an installation.
 
 | | |
 | --- | --- |
-| `JBANGLITE_CONFIRM_DOWNLOADS=auto` (default) | ask on a terminal; otherwise say what is being fetched and go ahead, so an unattended build never waits for an answer nobody is there to give |
-| `JBANGLITE_CONFIRM_DOWNLOADS=always` | ask, and fetch nothing when there is no terminal. The setting for a machine meant to stay off the network |
-| `JBANGLITE_CONFIRM_DOWNLOADS=never`, `JBANGLITE_ASSUME_YES=1`, `--yes` | never ask |
+| `JKITE_CONFIRM_DOWNLOADS=auto` (default) | ask on a terminal; otherwise say what is being fetched and go ahead, so an unattended build never waits for an answer nobody is there to give |
+| `JKITE_CONFIRM_DOWNLOADS=always` | ask, and fetch nothing when there is no terminal. The setting for a machine meant to stay off the network |
+| `JKITE_CONFIRM_DOWNLOADS=never`, `JKITE_ASSUME_YES=1`, `--yes` | never ask |
 
 Enter accepts. The question and its answer go to the terminal, never to stdout,
 so a pipeline built on a tool's output is unaffected.
 
 ```yaml
-- run: jbanglite/jbanglite tools/Report.java
+- run: jkite/jkite tools/Report.java
   env:
-    JBANGLITE_CONFIRM_DOWNLOADS: never
+    JKITE_CONFIRM_DOWNLOADS: never
 ```
 
 ## Requirements
@@ -230,14 +230,14 @@ Alpine (musl) is the exception: install a JDK there yourself.
 ## How it works, and contributing
 
 What happens between `git clone` and the tool's first line of output, in three
-diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). How JBangLite is built,
+diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). How JKite is built,
 released and kept in step with JBang: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## License
 
 MIT License, Copyright (c) 2020 Max Rydahl Andersen (the original JBang notice
-is kept unchanged in [LICENSE](LICENSE)); the JBangLite modifications are
-provided under the same license. `jbanglite.jar` bundles MIMA (EPL-2.0), Apache
+is kept unchanged in [LICENSE](LICENSE)); the JKite modifications are
+provided under the same license. `jkite.jar` bundles MIMA (EPL-2.0), Apache
 Maven Resolver, Apache HttpClient, Apache Commons Compress and Gson
 (Apache-2.0) and SLF4J (MIT); see [THIRD-PARTY.md](THIRD-PARTY.md) for details
 and for the origin of code adapted from other projects.

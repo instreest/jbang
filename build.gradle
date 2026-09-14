@@ -3,18 +3,18 @@ plugins {
 	id "com.gradleup.shadow" version "8.3.9"
 }
 
-// JBangLite: a reduced JBang that runs single-file Java programs. The only
-// deliverable is build/libs/jbanglite.jar, which misc/update-dist.sh copies to
+// JKite: a reduced JBang that runs single-file Java programs. The only
+// deliverable is build/libs/jkite.jar, which misc/update-dist.sh copies to
 // dist/ together with the launchers; there is no other distribution.
-// misc/update-dist.sh passes -PjbangVersion so that the jar knows the source
+// misc/update-dist.sh passes -PjkiteVersion so that the jar knows the source
 // revision it was built from.
-version = project.hasProperty('jbangVersion') ? project.property('jbangVersion') : '0.1.0-lite'
+version = project.hasProperty('jkiteVersion') ? project.property('jkiteVersion') : '0.1.0-dev'
 
 repositories {
 	mavenCentral()
 }
 
-// The jar is pinned by SHA-256 where it is installed (jbanglite.properties), so
+// The jar is pinned by SHA-256 where it is installed (jkite.properties), so
 // the build that produces it has to be as fixed as that: the lock files record
 // every resolved version, transitive ones included, and
 // gradle/verification-metadata.xml records the checksum of every artifact that
@@ -77,10 +77,10 @@ dependencies {
 
 test {
 	useJUnitPlatform()
-	// Downloads need the operator's consent (JBANGLITE_NETWORK). Tests have no
+	// Downloads need the operator's consent (JKITE_NETWORK). Tests have no
 	// terminal to give it on, so it is given here; the tests that are about the
 	// consent itself set the variable themselves.
-	environment 'JBANGLITE_NETWORK', 'allow'
+	environment 'JKITE_NETWORK', 'allow'
 	testLogging {
 		events "failed"
 		exceptionFormat "full"
@@ -101,7 +101,7 @@ jar {
 	manifest {
 		attributes(
 			'Main-Class': 'dev.jbang.Main',
-			'JBangLite-Version': project.version
+			'JKite-Version': project.version
 		)
 	}
 }
@@ -119,14 +119,14 @@ shadowJar {
 	transform(ApacheNoticeResourceTransformer) {
 		// Without these the generated header names the Apache Software
 		// Foundation as this project's copyright holder, which it is not.
-		projectName = 'JBangLite'
-		organizationName = 'Max Rydahl Andersen and the JBangLite contributors'
-		organizationURL = 'https://github.com/instreest/jbanglite'
+		projectName = 'JKite'
+		organizationName = 'Max Rydahl Andersen and the JKite contributors'
+		organizationURL = 'https://github.com/instreest/jkite'
 		inceptionYear = '2020'
 	}
 	// keep this fork's own notices next to the bundled code, and the licenses
 	// of the bundled libraries, which the transformers above do not carry over
-	from('LICENSE') { into 'META-INF'; rename { 'LICENSE-jbanglite.txt' } }
+	from('LICENSE') { into 'META-INF'; rename { 'LICENSE-jkite.txt' } }
 	from('THIRD-PARTY.md') { into 'META-INF'; rename { 'THIRD-PARTY.md' } }
 	from('misc/licenses') { into 'META-INF/licenses' }
 	// a bundled library's module-info describes that library, not this jar
@@ -139,13 +139,13 @@ shadowJar {
 		attributes(
 			'Main-Class': 'dev.jbang.Main',
 			// the launchers and the tests read this attribute for --version
-			'JBangLite-Version': project.version,
+			'JKite-Version': project.version,
 			// plexus-utils ships Java 9/10/11 variants of two classes; without
 			// this they are dead weight and the Java 8 versions are used
 			'Multi-Release': 'true'
 		)
 	}
-	archiveFileName = "jbanglite.jar"
+	archiveFileName = "jkite.jar"
 }
 
 assemble.dependsOn shadowJar

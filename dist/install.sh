@@ -1,36 +1,36 @@
 #!/usr/bin/env bash
 #
-# Installs JBangLite into a project: the launcher scripts, this installer and
-# jbanglite.properties go into jbanglite/, which is committed, so the project
-# can be built and run without JBangLite (or a JDK) being installed on the
+# Installs JKite into a project: the launcher scripts, this installer and
+# jkite.properties go into jkite/, which is committed, so the project
+# can be built and run without JKite (or a JDK) being installed on the
 # machine.
 #
-#   curl -fsSL https://github.com/instreest/jbanglite/releases/latest/download/install.sh | bash
+#   curl -fsSL https://github.com/instreest/jkite/releases/latest/download/install.sh | bash
 #
-# Everything comes from a GitHub release, over https. jbanglite.jar and a JDK
-# are not installed here: jbanglite.properties pins the version, URL and
+# Everything comes from a GitHub release, over https. jkite.jar and a JDK
+# are not installed here: jkite.properties pins the version, URL and
 # SHA-256 of each, and the launcher downloads and verifies them once per
-# machine, into ~/.jbanglite. So a project's history carries about 50 kB of
+# machine, into ~/.jkite. So a project's history carries about 50 kB of
 # scripts rather than binaries. A project that would rather vendor the jar can
-# drop a jbanglite.jar into jbanglite/ next to the launcher, and then only a
+# drop a jkite.jar into jkite/ next to the launcher, and then only a
 # JDK is ever fetched.
 #
 # Running it again updates an existing installation: every file, the properties
 # included, is replaced by the one from the chosen release.
 #
-# Usage: install.sh [<target directory>]   (default: ./jbanglite, or the directory
+# Usage: install.sh [<target directory>]   (default: ./jkite, or the directory
 #                                           this script was installed in)
 #
 # Environment:
-#   JBANGLITE_REPO          GitHub repository to install from (default instreest/jbanglite)
-#   JBANGLITE_REF           release tag to install (default: the latest release)
-#   JBANGLITE_DIST_BASEURL  install from here instead of from a GitHub release
+#   JKITE_REPO          GitHub repository to install from (default instreest/jkite)
+#   JKITE_REF           release tag to install (default: the latest release)
+#   JKITE_DIST_BASEURL  install from here instead of from a GitHub release
 set -eu
 
-repo=${JBANGLITE_REPO:-instreest/jbanglite}
-ref=${JBANGLITE_REF:-}
-if [ -n "${JBANGLITE_DIST_BASEURL:-}" ]; then
-  base=$JBANGLITE_DIST_BASEURL
+repo=${JKITE_REPO:-instreest/jkite}
+ref=${JKITE_REF:-}
+if [ -n "${JKITE_DIST_BASEURL:-}" ]; then
+  base=$JKITE_DIST_BASEURL
 elif [ -n "$ref" ]; then
   base="https://github.com/$repo/releases/download/$ref"
 else
@@ -49,8 +49,8 @@ case "$base" in
 esac
 
 # what a project gets; dist/ in the repository holds the same set
-files="jbanglite jbanglite.cmd jbanglite-bootstrap-jdk jbanglite-bootstrap-jdk.cmd
-       jbanglite-bootstrap-jar jbanglite-bootstrap-jar.cmd jbanglite.properties
+files="jkite jkite.cmd jkite-bootstrap-jdk jkite-bootstrap-jdk.cmd
+       jkite-bootstrap-jar jkite-bootstrap-jar.cmd jkite.properties
        install.sh install.cmd README.md LICENSE"
 
 fetch() {  # $1 = file to fetch, $2 = file to write
@@ -71,19 +71,19 @@ fetch() {  # $1 = file to fetch, $2 = file to write
 
 if [ $# -gt 0 ]; then
   dir=$1
-elif [ -n "${BASH_SOURCE[0]:-}" ] && [ "$(basename "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")" = jbanglite ]; then
+elif [ -n "${BASH_SOURCE[0]:-}" ] && [ "$(basename "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)")" = jkite ]; then
   # updating an existing installation
   dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 else
-  dir=$PWD/jbanglite
+  dir=$PWD/jkite
 fi
 
 # Everything is fetched into a staging directory first, so a failed download
 # leaves an existing installation as it was
-staging=$(mktemp -d "${TMPDIR:-/tmp}/jbanglite.XXXXXX")
+staging=$(mktemp -d "${TMPDIR:-/tmp}/jkite.XXXXXX")
 trap 'rm -rf "$staging"' EXIT
 
-echo "Installing JBangLite from $base into $dir" 1>&2
+echo "Installing JKite from $base into $dir" 1>&2
 for f in $files; do
   fetch "$f" "$staging/$f"
 done
@@ -92,6 +92,6 @@ mkdir -p "$dir"
 for f in $files; do
   cp -f "$staging/$f" "$dir/$f"
 done
-chmod +x "$dir/jbanglite" "$dir/jbanglite-bootstrap-jdk" "$dir/jbanglite-bootstrap-jar" "$dir/install.sh"
+chmod +x "$dir/jkite" "$dir/jkite-bootstrap-jdk" "$dir/jkite-bootstrap-jar" "$dir/install.sh"
 
-echo "Installed. Commit $(basename "$dir")/ and run '$(basename "$dir")/jbanglite <script.java>'." 1>&2
+echo "Installed. Commit $(basename "$dir")/ and run '$(basename "$dir")/jkite <script.java>'." 1>&2

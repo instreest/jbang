@@ -82,7 +82,7 @@ dev.jbang.lite.spi
 
 | 自前 | 行数 | 転換候補 | 判断 |
 | --- | --- | --- | --- |
-| `jdk/`（Downloader, Jdk, JdkIndex, JdkManager, Unpacker） | 1039 | **`dev.jbang:devkitman` 0.4.12** | **見送り**（既存の jbanglite スクリプトとの整合性を優先）。以下は参考: **○ 推奨**。JBang 本体も使う。SPI が確認プロンプトの継ぎ目になる。要確認: 既定は Foojay で、現行の Coursier JVM index とは経路が違う（`MetadataJdkInstaller` で寄せられるか要検証）。`JBangJdkProvider` があるのでキャッシュ配置の互換は取りやすい |
+| `jdk/`（Downloader, Jdk, JdkIndex, JdkManager, Unpacker） | 1039 | **`dev.jbang:devkitman` 0.4.12** | **見送り**（既存の jkite スクリプトとの整合性を優先）。以下は参考: **○ 推奨**。JBang 本体も使う。SPI が確認プロンプトの継ぎ目になる。要確認: 既定は Foojay で、現行の Coursier JVM index とは経路が違う（`MetadataJdkInstaller` で寄せられるか要検証）。`JBangJdkProvider` があるのでキャッシュ配置の互換は取りやすい |
 | `JdkHttpTransporterFactory` | 259 | `maven-resolver-transport-jdk` | **△ 保留**。2.x 系にしか無く、今の MIMA 2.4.x は resolver 1.9.x。MIMA 3.0（現在 alpha）が安定したら自前 259 行は丸ごと消せる。**追跡対象** |
 | `util/Json.java` | 206 | gson | **○**。devkitman を入れると gson は推移的に入るので、追加コストが実質ゼロになる |
 | `util/OsDetector.java` | 121 | devkitman `OsUtils` / os-maven-plugin 系 | △。`${os.detected.*}` の互換が要件なので、置換より現状維持が安い |
@@ -95,7 +95,7 @@ dev.jbang.lite.spi
 1. **[実施済]** `spi` パッケージを切り、`DirectiveParser` / `DownloadGate` を導入。
    実装は今のコードのまま、境界だけ入れる（挙動不変、テストで固定）。
 2. **[実施済]** `DownloadGate` に確認メッセージを実装（非対話時の既定と
-   `JBANGLITE_ASSUME_YES` を含む）。
+   `JKITE_ASSUME_YES` を含む）。
 3. **[見送り]** `jdk/` を devkitman に置き換え。`RemoteAccessProvider` を
    `DownloadGate` 経由にする。Coursier index 要件をここで決着させる。
 4. gson 採用で `util/Json.java` を削除。
@@ -119,7 +119,7 @@ dev.jbang.lite.spi
 2. **入力を誰が決めるか** — 自分で URL を決めた信頼できる入力か、
    第三者が中身を決められる入力か。
 3. **供給リスク** — その依存は今後も出続けるか（公開停止・alpha 放置）。
-4. **既存との整合** — キャッシュ配置や jbanglite スクリプトとの互換を壊さないか。
+4. **既存との整合** — キャッシュ配置や jkite スクリプトとの互換を壊さないか。
    ③を見送った理由はこれ。
 
 ## ④ `util/Json.java` → gson：**見送り**
@@ -185,7 +185,7 @@ gson を入れる理由が生まれるのは「JSON を他の用途でも使い�
 ただし `JdkManager.verifyChecksum` は**公開チェックサムが取れない場合は警告のみで続行**
 するので、その経路だけは生の信頼になる。
 
-③を見送った理由（jbanglite スクリプトとの整合性）は JDK の**取得**の話で、
+③を見送った理由（jkite スクリプトとの整合性）は JDK の**取得**の話で、
 **展開**は内部実装なのでこの制約は掛からない。よって選択肢は 2 つ:
 
 - **(A) `commons-compress` を入れる** — 追加依存は 1 つだけ（それ自体は無依存）。
@@ -210,7 +210,7 @@ gson を入れる理由が生まれるのは「JSON を他の用途でも使い�
 
 | | 判断 | 結果 |
 | --- | --- | --- |
-| ⑤ transport | 「無期限保留」から **(c) 純正 HTTP transport に復帰** へ | `JdkHttpTransporterFactory`(259行) と `JBangLiteRuntime`(52行) と その テスト(203行) を削除。MIMA の `StandaloneStaticRuntime` をそのまま使う |
+| ⑤ transport | 「無期限保留」から **(c) 純正 HTTP transport に復帰** へ | `JdkHttpTransporterFactory`(259行) と `JKiteRuntime`(52行) と その テスト(203行) を削除。MIMA の `StandaloneStaticRuntime` をそのまま使う |
 | Unpacker | **(A) commons-compress** | 手書き tar/zip リーダを置き換え。pax・GNU 拡張・リンク・権限は Commons Compress が扱う |
 | ④ Json | **gson に転換** | `util/Json.java`(206行) を削除。gson は transport が連れてくるので追加コストは無い |
 
@@ -228,7 +228,7 @@ gson を入れる理由が生まれるのは「JSON を他の用途でも使い�
   未テスト経路で `NoClassDefFoundError` になるリスクがあるので入れたままにした
 - jar は **2.26 MB → 6.46 MB**。内訳（圧縮後）は commons 系 2.3 MB、
   HttpClient/Core 0.85 MB、resolver/maven 0.55 MB、gson 0.24 MB、
-  JBangLite 自身 0.14 MB
+  JKite 自身 0.14 MB
 
 ## セキュリティ上の効果
 
@@ -286,7 +286,7 @@ tamboui-toolkit, tamboui-aesh-backend, os-source, ...
 ```
 
 パース経路が実際に使うのは jspecify だけ。aesh（readline）や tamboui（TUI）や
-jsoup（HTML）まで `jbanglite.jar` に入ることになる。`-all.jar` が 14.9 MB
+jsoup（HTML）まで `jkite.jar` に入ることになる。`-all.jar` が 14.9 MB
 であることが、その規模を端的に示している。
 
 **「exclude はしない」という方針と正面からぶつかる。** 取りうる道は 3 つ:

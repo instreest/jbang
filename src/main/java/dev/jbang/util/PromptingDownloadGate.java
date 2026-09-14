@@ -7,10 +7,10 @@ import dev.jbang.Settings;
 import dev.jbang.spi.DownloadGate;
 
 /**
- * The {@link DownloadGate} JBangLite uses: it says what is about to be
+ * The {@link DownloadGate} JKite uses: it says what is about to be
  * downloaded and, when there is a terminal to ask on, waits for an answer.
  *
- * JBANGLITE_CONFIRM_DOWNLOADS decides:
+ * JKITE_CONFIRM_DOWNLOADS decides:
  * <dl>
  * <dt>auto (the default)</dt>
  * <dd>ask when there is a terminal, otherwise say what is happening and go
@@ -20,14 +20,14 @@ import dev.jbang.spi.DownloadGate;
  * <dd>ask, and refuse the download when there is no terminal. For a project
  * that means to bring everything it needs with it.</dd>
  * <dt>never</dt>
- * <dd>never ask, like <code>--yes</code> and JBANGLITE_ASSUME_YES.</dd>
+ * <dd>never ask, like <code>--yes</code> and JKITE_ASSUME_YES.</dd>
  * </dl>
  *
  * "A terminal" means one that can actually be opened, which
  * {@link Util#askOnTerminal(String)} does directly. {@link System#console()} is
  * not used for this: since Java 22 it is non-null even when stdin is a pipe, so
  * it would report a terminal where there is none and then read the answer out of
- * the script's own input. JBangLite installs a JDK far newer than 22, so that is
+ * the script's own input. JKite installs a JDK far newer than 22, so that is
  * the usual case rather than an edge one.
  *
  * The question and everything around it go to the terminal and to stderr, never

@@ -6,7 +6,7 @@ import java.util.Objects;
  * A <code>key=value</code> pair read from a directive, e.g. an entry of
  * <code>//MANIFEST</code> or <code>//DOCS</code>.
  *
- * JBangLite's own type: the parser behind {@link DirectiveParser} has one of
+ * JKite's own type: the parser behind {@link DirectiveParser} has one of
  * its own (JBang's <code>KeyValue</code>), and this is what it is mapped to so
  * that no type of the parser reaches the rest of the code.
  */

@@ -22,18 +22,18 @@ import com.github.tomakehurst.wiremock.client.WireMock;
 
 /**
  * Functional tests for the installer (dist/install.sh) and the jar bootstrap
- * it installs: a project gets the launcher scripts and jbanglite.properties,
+ * it installs: a project gets the launcher scripts and jkite.properties,
  * and the jar is downloaded once per machine into the cache rather than
  * committed, unless the project vendors one next to the launcher.
  */
 class TestWrapperInstall extends AbstractScriptTest {
 
 	private static final Path DIST = Paths.get("dist").toAbsolutePath();
-	private static final List<String> FILES = Arrays.asList("jbanglite", "jbanglite.cmd",
-			"jbanglite-bootstrap-jdk", "jbanglite-bootstrap-jdk.cmd",
-			"jbanglite-bootstrap-jar", "jbanglite-bootstrap-jar.cmd", "jbanglite.properties",
+	private static final List<String> FILES = Arrays.asList("jkite", "jkite.cmd",
+			"jkite-bootstrap-jdk", "jkite-bootstrap-jdk.cmd",
+			"jkite-bootstrap-jar", "jkite-bootstrap-jar.cmd", "jkite.properties",
 			"install.sh", "install.cmd", "README.md", "LICENSE");
-	private static final String JAR_PATH = "/releases/download/v9.9.9/jbanglite.jar";
+	private static final String JAR_PATH = "/releases/download/v9.9.9/jkite.jar";
 
 	private Path project;
 	private byte[] jar;
@@ -53,54 +53,54 @@ class TestWrapperInstall extends AbstractScriptTest {
 		RunResult result = install(project);
 		assertEquals(0, result.exitCode, result.stderr);
 
-		Path wrapper = project.resolve("jbanglite");
+		Path wrapper = project.resolve("jkite");
 		for (String name : FILES) {
 			assertTrue(Files.isRegularFile(wrapper.resolve(name)), name + " was not installed");
 		}
-		assertTrue(Files.isExecutable(wrapper.resolve("jbanglite")));
-		assertTrue(Files.isExecutable(wrapper.resolve("jbanglite-bootstrap-jdk")));
-		assertTrue(Files.isExecutable(wrapper.resolve("jbanglite-bootstrap-jar")));
-		assertFalse(Files.exists(wrapper.resolve("jbanglite.jar")), "the jar must not be installed");
+		assertTrue(Files.isExecutable(wrapper.resolve("jkite")));
+		assertTrue(Files.isExecutable(wrapper.resolve("jkite-bootstrap-jdk")));
+		assertTrue(Files.isExecutable(wrapper.resolve("jkite-bootstrap-jar")));
+		assertFalse(Files.exists(wrapper.resolve("jkite.jar")), "the jar must not be installed");
 		assertEquals(FILES.size(), Files.list(wrapper).count(), "nothing but dist/ is installed");
 	}
 
 	@Test
 	void theLauncherDownloadsTheJarAndRunsIt() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
+		Path wrapper = project.resolve("jkite");
 
 		RunResult result = runLauncher(wrapper, "exit", "3");
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("some output"), result.stdout);
 		assertTrue(result.stderr.contains("some error output"), result.stderr);
-		assertTrue(result.stderr.contains("Downloading JBangLite 9.9.9"), result.stderr);
+		assertTrue(result.stderr.contains("Downloading JKite 9.9.9"), result.stderr);
 		wm.verify(1, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
 	@Test
 	void theJarIsCachedSoASecondRunDownloadsNothing() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
+		Path wrapper = project.resolve("jkite");
 		Map<String, String> env = env();
 
-		assertEquals(0, runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env).exitCode);
-		RunResult second = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env);
+		assertEquals(0, runProcess(bashCmd(wrapper.resolve("jkite"), "exit", "0"), env).exitCode);
+		RunResult second = runProcess(bashCmd(wrapper.resolve("jkite"), "exit", "0"), env);
 
 		assertEquals(0, second.exitCode, second.stderr);
-		assertFalse(second.stderr.contains("Downloading JBangLite"), second.stderr);
+		assertFalse(second.stderr.contains("Downloading JKite"), second.stderr);
 		wm.verify(1, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
 	@Test
 	void aJarNextToTheLauncherIsUsedAndNothingIsDownloaded() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
-		createFakeJar(wrapper.resolve("jbanglite.jar"));
+		Path wrapper = project.resolve("jkite");
+		createFakeJar(wrapper.resolve("jkite.jar"));
 
 		RunResult result = runLauncher(wrapper, "exit", "4");
 
 		assertEquals(4, result.exitCode, result.stderr);
-		assertFalse(result.stderr.contains("Downloading JBangLite"), result.stderr);
+		assertFalse(result.stderr.contains("Downloading JKite"), result.stderr);
 		wm.verify(0, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
@@ -109,7 +109,7 @@ class TestWrapperInstall extends AbstractScriptTest {
 		wm.resetAll();
 		serveDist(jar, sha256("something else".getBytes(StandardCharsets.UTF_8)), "9.9.9");
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
+		Path wrapper = project.resolve("jkite");
 
 		RunResult result = runLauncher(wrapper, "exit", "0");
 
@@ -121,23 +121,23 @@ class TestWrapperInstall extends AbstractScriptTest {
 	@Test
 	void theDistributionUrlCanBePointedAtAMirror() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
-		wm.stubFor(WireMock.get(WireMock.urlEqualTo("/mirror/jbanglite.jar"))
+		Path wrapper = project.resolve("jkite");
+		wm.stubFor(WireMock.get(WireMock.urlEqualTo("/mirror/jkite.jar"))
 			.willReturn(WireMock.aResponse().withStatus(200).withBody(jar)));
 		Map<String, String> env = env();
-		env.put("JBANGLITE_DIST_URL", wm.baseUrl() + "/mirror/jbanglite.jar");
+		env.put("JKITE_DIST_URL", wm.baseUrl() + "/mirror/jkite.jar");
 
-		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env);
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "exit", "0"), env);
 
 		assertEquals(0, result.exitCode, result.stderr);
-		wm.verify(1, WireMock.getRequestedFor(WireMock.urlEqualTo("/mirror/jbanglite.jar")));
+		wm.verify(1, WireMock.getRequestedFor(WireMock.urlEqualTo("/mirror/jkite.jar")));
 		wm.verify(0, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
 	@Test
 	void rerunningTheInstallerUpdatesInPlace() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
+		Path wrapper = project.resolve("jkite");
 
 		// a newer revision was published ...
 		wm.resetAll();
@@ -147,40 +147,40 @@ class TestWrapperInstall extends AbstractScriptTest {
 		RunResult result = runProcess(Arrays.asList("bash", wrapper.resolve("install.sh").toString()), env());
 		assertEquals(0, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains(wrapper.toString()), result.stderr);
-		assertTrue(new String(Files.readAllBytes(wrapper.resolve("jbanglite.properties")), StandardCharsets.UTF_8)
+		assertTrue(new String(Files.readAllBytes(wrapper.resolve("jkite.properties")), StandardCharsets.UTF_8)
 			.contains("0000000000000000000000000000000000000000000000000000000000000000"));
 	}
 
 	@Test
 	void aFailedDownloadLeavesAnInstallationAlone() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
-		byte[] before = Files.readAllBytes(wrapper.resolve("jbanglite.properties"));
+		Path wrapper = project.resolve("jkite");
+		byte[] before = Files.readAllBytes(wrapper.resolve("jkite.properties"));
 		wm.resetAll();
 		wm.stubFor(WireMock.get(WireMock.anyUrl()).willReturn(WireMock.aResponse().withStatus(404)));
 
 		RunResult result = runProcess(Arrays.asList("bash", wrapper.resolve("install.sh").toString()), env());
 		assertTrue(result.exitCode != 0, result.stderr);
-		assertArrayEquals(before, Files.readAllBytes(wrapper.resolve("jbanglite.properties")));
+		assertArrayEquals(before, Files.readAllBytes(wrapper.resolve("jkite.properties")));
 	}
 
 	@Test
 	void versionReportsThePinAndTheInstalledJarWithoutDownloading() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
+		Path wrapper = project.resolve("jkite");
 
-		RunResult before = runProcess(bashCmd(wrapper.resolve("jbanglite"), "--version"), env());
+		RunResult before = runProcess(bashCmd(wrapper.resolve("jkite"), "--version"), env());
 		assertEquals(0, before.exitCode, before.stderr);
-		assertTrue(before.stdout.contains("jbanglite 9.9.9"), before.stdout);
+		assertTrue(before.stdout.contains("jkite 9.9.9"), before.stdout);
 		assertTrue(before.stdout.contains("pinned 9.9.9 by"), before.stdout);
 		assertTrue(before.stdout.contains("jar not installed yet"), before.stdout);
 		wm.verify(0, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 
-		assertEquals(0, runProcess(bashCmd(wrapper.resolve("jbanglite"), "exit", "0"), env()).exitCode);
+		assertEquals(0, runProcess(bashCmd(wrapper.resolve("jkite"), "exit", "0"), env()).exitCode);
 
-		RunResult after = runProcess(bashCmd(wrapper.resolve("jbanglite"), "--version"), env());
+		RunResult after = runProcess(bashCmd(wrapper.resolve("jkite"), "--version"), env());
 		assertEquals(0, after.exitCode, after.stderr);
-		assertTrue(after.stdout.contains("jbanglite 9.9.9"), after.stdout);
+		assertTrue(after.stdout.contains("jkite 9.9.9"), after.stdout);
 		assertTrue(after.stdout.contains("pinned 9.9.9 by"), after.stdout);
 		assertTrue(after.stdout.contains("jar 9.9.9 at"), after.stdout);
 		wm.verify(1, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
@@ -189,14 +189,14 @@ class TestWrapperInstall extends AbstractScriptTest {
 	@Test
 	void versionSaysWhenAVendoredJarOverridesThePin() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
-		createFakeJar(wrapper.resolve("jbanglite.jar"), "8.8.8");
+		Path wrapper = project.resolve("jkite");
+		createFakeJar(wrapper.resolve("jkite.jar"), "8.8.8");
 
-		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "--version"), env());
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "--version"), env());
 
 		assertEquals(0, result.exitCode, result.stderr);
 		// the vendored jar is the one that runs, so it names the version
-		assertTrue(result.stdout.contains("jbanglite 8.8.8"), result.stdout);
+		assertTrue(result.stdout.contains("jkite 8.8.8"), result.stdout);
 		assertTrue(result.stdout.contains("pinned 9.9.9 by"), result.stdout);
 		assertTrue(result.stdout.contains("jar 8.8.8 at"), result.stdout);
 		assertTrue(result.stdout.contains("vendored, so this jar runs and not the pinned version"), result.stdout);
@@ -206,30 +206,30 @@ class TestWrapperInstall extends AbstractScriptTest {
 	@Test
 	void updateReinstallsTheDirectoryInPlace() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
-		// a newer JBangLite was released ...
+		Path wrapper = project.resolve("jkite");
+		// a newer JKite was released ...
 		wm.resetAll();
 		serveDist(jar, sha256(jar), "9.9.10");
 
 		// ... and --update brings this installation to it, without a JDK or a jar
-		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "--update"), env());
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "--update"), env());
 
 		assertEquals(0, result.exitCode, result.stderr);
-		assertTrue(new String(Files.readAllBytes(wrapper.resolve("jbanglite.properties")), StandardCharsets.UTF_8)
+		assertTrue(new String(Files.readAllBytes(wrapper.resolve("jkite.properties")), StandardCharsets.UTF_8)
 			.contains("distributionVersion=9.9.10"), "the pin was not updated");
 	}
 
 	@Test
 	void updateWarnsThatAVendoredJarStillWins() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		Path wrapper = project.resolve("jbanglite");
-		createFakeJar(wrapper.resolve("jbanglite.jar"));
+		Path wrapper = project.resolve("jkite");
+		createFakeJar(wrapper.resolve("jkite.jar"));
 
-		RunResult result = runProcess(bashCmd(wrapper.resolve("jbanglite"), "--update"), env());
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "--update"), env());
 
 		assertEquals(0, result.exitCode, result.stderr);
 		assertTrue(result.stderr.contains("still runs"), result.stderr);
-		assertTrue(Files.exists(wrapper.resolve("jbanglite.jar")), "the vendored jar must not be deleted");
+		assertTrue(Files.exists(wrapper.resolve("jkite.jar")), "the vendored jar must not be deleted");
 	}
 
 	/**
@@ -239,26 +239,26 @@ class TestWrapperInstall extends AbstractScriptTest {
 	 */
 	@Test
 	void distHoldsTheCurrentScriptsAndNoJar() throws Exception {
-		for (String name : Arrays.asList("jbanglite", "jbanglite.cmd", "jbanglite-bootstrap-jdk",
-				"jbanglite-bootstrap-jdk.cmd", "jbanglite-bootstrap-jar", "jbanglite-bootstrap-jar.cmd")) {
+		for (String name : Arrays.asList("jkite", "jkite.cmd", "jkite-bootstrap-jdk",
+				"jkite-bootstrap-jdk.cmd", "jkite-bootstrap-jar", "jkite-bootstrap-jar.cmd")) {
 			assertArrayEquals(Files.readAllBytes(BASH_SCRIPT.resolveSibling(name)),
 					Files.readAllBytes(DIST.resolve(name)),
 					"dist/" + name + " is out of date, run misc/update-dist.sh");
 		}
 		assertArrayEquals(Files.readAllBytes(Paths.get("LICENSE")), Files.readAllBytes(DIST.resolve("LICENSE")),
 				"dist/LICENSE is out of date, run misc/update-dist.sh");
-		assertTrue(Files.isRegularFile(DIST.resolve("jbanglite.properties")), "dist/jbanglite.properties is missing");
-		assertFalse(Files.exists(DIST.resolve("jbanglite.jar")),
-				"dist/jbanglite.jar must not be committed, it is a release asset");
+		assertTrue(Files.isRegularFile(DIST.resolve("jkite.properties")), "dist/jkite.properties is missing");
+		assertFalse(Files.exists(DIST.resolve("jkite.jar")),
+				"dist/jkite.jar must not be committed, it is a release asset");
 	}
 
 	/**
-	 * Serves dist/ as the repository would, with a jbanglite.properties that
+	 * Serves dist/ as the repository would, with a jkite.properties that
 	 * points the bootstrap script at this server instead of at GitHub.
 	 */
 	private void serveDist(byte[] jar, String sha256, String version) throws Exception {
 		for (String name : FILES) {
-			byte[] body = name.equals("jbanglite.properties")
+			byte[] body = name.equals("jkite.properties")
 					? ("distributionVersion=" + version + "\n"
 							+ "distributionUrl=" + wm.baseUrl() + JAR_PATH + "\n"
 							+ "distributionSha256Sum=" + sha256 + "\n"
@@ -283,16 +283,16 @@ class TestWrapperInstall extends AbstractScriptTest {
 
 	private RunResult install(Path where) throws Exception {
 		return runProcess(Arrays.asList("bash", DIST.resolve("install.sh").toString(),
-				where.resolve("jbanglite").toString()), env());
+				where.resolve("jkite").toString()), env());
 	}
 
 	private RunResult runLauncher(Path wrapper, String... args) throws Exception {
-		return runProcess(bashCmd(wrapper.resolve("jbanglite"), args), env());
+		return runProcess(bashCmd(wrapper.resolve("jkite"), args), env());
 	}
 
 	private Map<String, String> env() {
 		Map<String, String> env = baseBashEnv("wrapper");
-		env.put("JBANGLITE_DIST_BASEURL", wm.baseUrl() + "/releases/latest/download");
+		env.put("JKITE_DIST_BASEURL", wm.baseUrl() + "/releases/latest/download");
 		env.put("JAVA_HOME", System.getProperty("java.home"));
 		env.put("no_proxy", "localhost,127.0.0.1");
 		env.put("NO_PROXY", "localhost,127.0.0.1");

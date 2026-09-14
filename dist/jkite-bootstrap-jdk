@@ -1,48 +1,48 @@
 #!/usr/bin/env bash
 #
-# Installs the JDK that runs jbanglite.jar when the machine has none: the
-# Temurin that jbanglite.properties pins for this platform, into
-# $JBANGLITE_CACHE_DIR/jdks/bootstrap (~/.jbanglite/cache/jdks/bootstrap). It
+# Installs the JDK that runs jkite.jar when the machine has none: the
+# Temurin that jkite.properties pins for this platform, into
+# $JKITE_CACHE_DIR/jdks/bootstrap (~/.jkite/cache/jdks/bootstrap). It
 # prints that directory on stdout and says nothing else there; progress and
 # errors go to stderr. When the JDK is already installed it only prints.
 #
-# The version, URL and SHA-256 were resolved when JBangLite was released and
+# The version, URL and SHA-256 were resolved when JKite was released and
 # are committed with the project, so there is no index to read and nothing to
 # decide here: download, verify, unpack.
 #
-# The launcher (jbanglite) runs it when it finds no usable JDK; it can just as
+# The launcher (jkite) runs it when it finds no usable JDK; it can just as
 # well be run by hand, or replaced by anything else that puts a JDK there.
 #
-#   jbanglite-bootstrap-jdk            install if needed, print the JDK home
+#   jkite-bootstrap-jdk            install if needed, print the JDK home
 #
 # Environment:
-#   JBANGLITE_DIR, JBANGLITE_CACHE_DIR   where JBangLite keeps things
-#   JBANGLITE_DOWNLOAD_RETRY, JBANGLITE_DOWNLOAD_RETRY_DELAY
-#   JBANGLITE_LOCK_TIMEOUT               seconds to wait for another run's download
+#   JKITE_DIR, JKITE_CACHE_DIR   where JKite keeps things
+#   JKITE_DOWNLOAD_RETRY, JKITE_DOWNLOAD_RETRY_DELAY
+#   JKITE_LOCK_TIMEOUT               seconds to wait for another run's download
 #
 # Needs curl or wget, sha256sum or shasum, and tar with gzip.
 #
-# Several JBangLite runs can be started at the same time (a build matrix, a
-# multi-module build). They share ~/.jbanglite, so the download takes a
+# Several JKite runs can be started at the same time (a build matrix, a
+# multi-module build). They share ~/.jkite, so the download takes a
 # directory lock (mkdir is atomic) and the JDK is unpacked into a directory of
 # this run's own that is renamed into place.
 
 # --- Settings ----------------------------------------------------------------
 
-# Tells this run's temporary files apart from those of a JBangLite running at
+# Tells this run's temporary files apart from those of a JKite running at
 # the same time
 runId=$$
 
 # How long to wait (in seconds) for another run that is downloading the JDK
-lockTimeout=${JBANGLITE_LOCK_TIMEOUT:-600}
+lockTimeout=${JKITE_LOCK_TIMEOUT:-600}
 
 # How often a failed download is retried, and how long to wait in between
 # (0 means an exponential backoff of 1, 2, 4, ... seconds)
-downloadRetry=${JBANGLITE_DOWNLOAD_RETRY:-5}
-downloadRetryDelay=${JBANGLITE_DOWNLOAD_RETRY_DELAY:-0}
+downloadRetry=${JKITE_DOWNLOAD_RETRY:-5}
+downloadRetryDelay=${JKITE_DOWNLOAD_RETRY_DELAY:-0}
 
-if [[ -z "$JBANGLITE_DIR" ]]; then LITEDIR="$HOME/.jbanglite"; else LITEDIR="$JBANGLITE_DIR"; fi
-if [[ -z "$JBANGLITE_CACHE_DIR" ]]; then CACHEDIR="$LITEDIR/cache"; else CACHEDIR="$JBANGLITE_CACHE_DIR"; fi
+if [[ -z "$JKITE_DIR" ]]; then LITEDIR="$HOME/.jkite"; else LITEDIR="$JKITE_DIR"; fi
+if [[ -z "$JKITE_CACHE_DIR" ]]; then CACHEDIR="$LITEDIR/cache"; else CACHEDIR="$JKITE_CACHE_DIR"; fi
 jdkDir="$CACHEDIR/jdks/bootstrap"
 
 script_dir() {
@@ -58,7 +58,7 @@ script_dir() {
 
 # --- The properties ----------------------------------------------------------
 
-# The value of key $1 in jbanglite.properties, empty when it is not there. The
+# The value of key $1 in jkite.properties, empty when it is not there. The
 # file is ours, so this reads what we write: 'key=value' lines, '#' comments.
 property() {
   [ -f "$propertiesFile" ] || return 0
@@ -66,7 +66,7 @@ property() {
     "$propertiesFile" | head -1 | tr -d '\r'
 }
 
-# The name this platform has in jbanglite.properties, e.g. linux-amd64
+# The name this platform has in jkite.properties, e.g. linux-amd64
 platform() {
   local osName archName
   case "$(uname -s)" in
@@ -139,7 +139,7 @@ download() {
     fi
     echo "Download $attempt/$maxAttempts failed. Retry in $sleepSeconds second(s)..." 1>&2
     if [ $attempt -eq 1 ]; then
-      echo "(Set JBANGLITE_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
+      echo "(Set JKITE_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
     fi
     sleep $sleepSeconds
   done
@@ -155,7 +155,7 @@ sha256_of() {
 
 # --- Locking -----------------------------------------------------------------
 
-# Several JBangLite runs can share $JBANGLITE_DIR, so the download takes a
+# Several JKite runs can share $JKITE_DIR, so the download takes a
 # directory lock. mkdir is atomic, so exactly one run gets it; the others wait,
 # and stop waiting as soon as $2 shows the work they waited for is done.
 #   0 - the lock is ours, do the work and release_lock afterwards
@@ -168,12 +168,12 @@ acquire_lock() {  # $1 = lock directory, $2 = path that exists once the work is 
   while ! mkdir "$1" 2> /dev/null; do
     if [ -e "$2" ]; then return 2; fi
     if [ "$waited" -ge "$lockTimeout" ]; then
-      echo "Gave up after $lockTimeout seconds waiting for another JBangLite to finish." 1>&2
-      echo "If no other JBangLite is running, remove $1 and try again." 1>&2
+      echo "Gave up after $lockTimeout seconds waiting for another JKite to finish." 1>&2
+      echo "If no other JKite is running, remove $1 and try again." 1>&2
       return 1
     fi
     if [ "$waited" -eq 0 ]; then
-      echo "Waiting for another JBangLite to finish downloading..." 1>&2
+      echo "Waiting for another JKite to finish downloading..." 1>&2
     fi
     sleep 1
     waited=$((waited + 1))
@@ -204,7 +204,7 @@ install_jdk_locked() {
   # another run may have installed it while we waited for the lock
   if [ -x "$jdkDir/bin/java" ]; then return 0; fi
   mkdir -p "$CACHEDIR/jdks"
-  # this run's own names, so nothing is shared with a JBangLite running at the
+  # this run's own names, so nothing is shared with a JKite running at the
   # same time and the JDK only appears under its real name once it is complete
   archive="$CACHEDIR/bootstrap-jdk-$runId.tar.gz"
   unpackdir="$CACHEDIR/jdks/bootstrap-$runId.tmp"
@@ -233,7 +233,7 @@ install_jdk_locked() {
   rm -rf "$unpackdir"
   mkdir -p "$unpackdir"
   # the archive is a .tar.gz on every platform this script serves; Windows is
-  # jbanglite-bootstrap-jdk.cmd's business
+  # jkite-bootstrap-jdk.cmd's business
   if ! gzip -cd "$archive" | tar xf - -C "$unpackdir"; then
     rm -rf "$unpackdir"; rm -f "$archive"
     echo "Error unpacking the JDK" 1>&2
@@ -257,7 +257,7 @@ install_jdk_locked() {
 # --- Main --------------------------------------------------------------------
 
 abs_jbang_dir=$(script_dir)
-propertiesFile=$abs_jbang_dir/jbanglite.properties
+propertiesFile=$abs_jbang_dir/jkite.properties
 
 if [ ! -x "$jdkDir/bin/java" ]; then
   read_properties || exit 1

@@ -1,48 +1,48 @@
 #!/usr/bin/env bash
 #
-# Installs jbanglite.jar, the JBangLite a project asked for: the version, URL
-# and SHA-256 in the jbanglite.properties next to this script, downloaded into
-# $JBANGLITE_CACHE_DIR/jbanglite/<version> (~/.jbanglite/cache/jbanglite/<version>).
+# Installs jkite.jar, the JKite a project asked for: the version, URL
+# and SHA-256 in the jkite.properties next to this script, downloaded into
+# $JKITE_CACHE_DIR/jkite/<version> (~/.jkite/cache/jkite/<version>).
 # It prints the jar's path on stdout and says nothing else there; progress and
 # errors go to stderr. When the jar is already installed it only prints.
 #
 # The cache is per machine, not per project, so several projects that pin the
-# same version share one download. The launcher (jbanglite) runs this when
-# there is no jbanglite.jar next to it; it can just as well be run by hand, or
+# same version share one download. The launcher (jkite) runs this when
+# there is no jkite.jar next to it; it can just as well be run by hand, or
 # replaced by anything else that puts the jar there.
 #
-#   jbanglite-bootstrap-jar            install if needed, print the jar path
+#   jkite-bootstrap-jar            install if needed, print the jar path
 #
 # Environment:
-#   JBANGLITE_DIR, JBANGLITE_CACHE_DIR       where JBangLite keeps things (~/.jbanglite)
-#   JBANGLITE_DIST_URL               where to fetch the jar from, overriding
+#   JKITE_DIR, JKITE_CACHE_DIR       where JKite keeps things (~/.jkite)
+#   JKITE_DIST_URL               where to fetch the jar from, overriding
 #                                    distributionUrl (a corporate mirror)
-#   JBANGLITE_DOWNLOAD_RETRY, JBANGLITE_DOWNLOAD_RETRY_DELAY
-#   JBANGLITE_LOCK_TIMEOUT           seconds to wait for another run's download
+#   JKITE_DOWNLOAD_RETRY, JKITE_DOWNLOAD_RETRY_DELAY
+#   JKITE_LOCK_TIMEOUT           seconds to wait for another run's download
 #
 # Needs curl or wget, and sha256sum or shasum.
 #
-# Several JBangLite runs can be started at the same time (a build matrix, a
-# multi-module build). They share ~/.jbanglite, so the download takes a directory
+# Several JKite runs can be started at the same time (a build matrix, a
+# multi-module build). They share ~/.jkite, so the download takes a directory
 # lock (mkdir is atomic) and the jar is written to a file of this run's own
 # that is renamed into place.
 
 # --- Settings ----------------------------------------------------------------
 
-# Tells this run's temporary files apart from those of a JBangLite running at
+# Tells this run's temporary files apart from those of a JKite running at
 # the same time
 runId=$$
 
 # How long to wait (in seconds) for another run that is downloading the same jar
-lockTimeout=${JBANGLITE_LOCK_TIMEOUT:-600}
+lockTimeout=${JKITE_LOCK_TIMEOUT:-600}
 
 # How often a failed download is retried, and how long to wait in between
 # (0 means an exponential backoff of 1, 2, 4, ... seconds)
-downloadRetry=${JBANGLITE_DOWNLOAD_RETRY:-5}
-downloadRetryDelay=${JBANGLITE_DOWNLOAD_RETRY_DELAY:-0}
+downloadRetry=${JKITE_DOWNLOAD_RETRY:-5}
+downloadRetryDelay=${JKITE_DOWNLOAD_RETRY_DELAY:-0}
 
-if [[ -z "$JBANGLITE_DIR" ]]; then LITEDIR="$HOME/.jbanglite"; else LITEDIR="$JBANGLITE_DIR"; fi
-if [[ -z "$JBANGLITE_CACHE_DIR" ]]; then CACHEDIR="$LITEDIR/cache"; else CACHEDIR="$JBANGLITE_CACHE_DIR"; fi
+if [[ -z "$JKITE_DIR" ]]; then LITEDIR="$HOME/.jkite"; else LITEDIR="$JKITE_DIR"; fi
+if [[ -z "$JKITE_CACHE_DIR" ]]; then CACHEDIR="$LITEDIR/cache"; else CACHEDIR="$JKITE_CACHE_DIR"; fi
 
 script_dir() {
   local script dir
@@ -69,13 +69,13 @@ read_properties() {
     return 1
   fi
   distributionVersion=$(property distributionVersion)
-  distributionUrl=${JBANGLITE_DIST_URL:-$(property distributionUrl)}
+  distributionUrl=${JKITE_DIST_URL:-$(property distributionUrl)}
   distributionSha256Sum=$(property distributionSha256Sum)
   if [ -z "$distributionVersion" ] || [ -z "$distributionUrl" ]; then
     echo "$propertiesFile needs a distributionVersion and a distributionUrl" 1>&2
     return 1
   fi
-  # Only https, so that neither a tampered properties file nor JBANGLITE_DIST_URL
+  # Only https, so that neither a tampered properties file nor JKITE_DIST_URL
   # can point the download at a plaintext host. A loopback address is allowed so
   # that the tests can serve the jar locally.
   case "$distributionUrl" in
@@ -119,7 +119,7 @@ download() {
     fi
     echo "Download $attempt/$maxAttempts failed. Retry in $sleepSeconds second(s)..." 1>&2
     if [ $attempt -eq 1 ]; then
-      echo "(Set JBANGLITE_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
+      echo "(Set JKITE_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
     fi
     sleep $sleepSeconds
   done
@@ -135,7 +135,7 @@ sha256_of() {
 
 # --- Locking -----------------------------------------------------------------
 
-# Several JBangLite runs can share $JBANGLITE_DIR, so the download takes a
+# Several JKite runs can share $JKITE_DIR, so the download takes a
 # directory lock. mkdir is atomic, so exactly one run gets it; the others wait,
 # and stop waiting as soon as $2 shows the work they waited for is done.
 #   0 - the lock is ours, do the work and release_lock afterwards
@@ -148,12 +148,12 @@ acquire_lock() {  # $1 = lock directory, $2 = path that exists once the work is 
   while ! mkdir "$1" 2> /dev/null; do
     if [ -e "$2" ]; then return 2; fi
     if [ "$waited" -ge "$lockTimeout" ]; then
-      echo "Gave up after $lockTimeout seconds waiting for another JBangLite to finish." 1>&2
-      echo "If no other JBangLite is running, remove $1 and try again." 1>&2
+      echo "Gave up after $lockTimeout seconds waiting for another JKite to finish." 1>&2
+      echo "If no other JKite is running, remove $1 and try again." 1>&2
       return 1
     fi
     if [ "$waited" -eq 0 ]; then
-      echo "Waiting for another JBangLite to finish downloading..." 1>&2
+      echo "Waiting for another JKite to finish downloading..." 1>&2
     fi
     sleep 1
     waited=$((waited + 1))
@@ -186,15 +186,15 @@ install_jar_locked() {
   # another run may have installed it while we waited for the lock
   if [ -f "$jarPath" ]; then return 0; fi
   mkdir -p "$jarDir"
-  # this run's own file, so nothing is shared with a JBangLite running at the
+  # this run's own file, so nothing is shared with a JKite running at the
   # same time, and the jar only appears under its real name once it is complete
-  tmp="$jarDir/jbanglite-$runId.tmp"
+  tmp="$jarDir/jkite-$runId.tmp"
 
-  echo "Downloading JBangLite $distributionVersion..." 1>&2
+  echo "Downloading JKite $distributionVersion..." 1>&2
   download "$distributionUrl" "$tmp"
   if [ $retval -ne 0 ]; then
     rm -f "$tmp"
-    echo "Error downloading JBangLite from $distributionUrl" 1>&2
+    echo "Error downloading JKite from $distributionUrl" 1>&2
     return 1
   fi
 
@@ -222,11 +222,11 @@ install_jar_locked() {
 # --- Main --------------------------------------------------------------------
 
 abs_jbang_dir=$(script_dir)
-propertiesFile=$abs_jbang_dir/jbanglite.properties
+propertiesFile=$abs_jbang_dir/jkite.properties
 
 read_properties || exit 1
-jarDir="$CACHEDIR/jbanglite/$distributionVersion"
-jarPath="$jarDir/jbanglite.jar"
+jarDir="$CACHEDIR/jkite/$distributionVersion"
+jarPath="$jarDir/jkite.jar"
 
 if [ ! -f "$jarPath" ]; then
   install_jar

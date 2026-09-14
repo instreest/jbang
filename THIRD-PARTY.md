@@ -1,12 +1,12 @@
 # Third-party notices
 
-JBangLite is a reduced fork of [JBang](https://github.com/jbangdev/jbang),
+JKite is a reduced fork of [JBang](https://github.com/jbangdev/jbang),
 Copyright (c) 2020 Max Rydahl Andersen, distributed under the MIT License
 (see [LICENSE](LICENSE)). The original copyright and permission notice is kept
-unchanged; the modifications made for JBangLite are contributed under the same
+unchanged; the modifications made for JKite are contributed under the same
 MIT License.
 
-JBangLite is not affiliated with, endorsed by, or supported by the JBang
+JKite is not affiliated with, endorsed by, or supported by the JBang
 project. The name says where the code comes from, nothing more.
 
 ## Code derived from other projects
@@ -19,7 +19,7 @@ project. The name says where the code comes from, nothing more.
 | `OsDetector.java` (OS and architecture normalisation tables) | [os-maven-plugin](https://github.com/trustin/os-maven-plugin) by Trustin Lee, as also used by the Nisse os-detector in JBang | Apache License 2.0 |
 
 `Placeholders.java` expands the same `${...}` syntax as the
-`PropertiesValueResolver` JBang carries, but is JBangLite's own code: that file
+`PropertiesValueResolver` JBang carries, but is JKite's own code: that file
 reached JBang from the JBoss projects with a licence history we could not
 establish, so it was reimplemented rather than mirrored.
 
@@ -33,7 +33,7 @@ each distributor's own site, and the license of the JDK that gets installed is
 the one of that distribution (Eclipse Temurin, the default, is GPLv2 with the
 Classpath Exception).
 
-## Libraries bundled in `jbanglite.jar`
+## Libraries bundled in `jkite.jar`
 
 | Library | License |
 | --- | --- |
@@ -54,7 +54,7 @@ JVM index are fetched by `jdk/Downloader.java` on `java.net.HttpURLConnection`,
 since those come from the distributors' own sites rather than from a Maven
 repository.
 
-`jbanglite.jar` carries the notices of everything it bundles:
+`jkite.jar` carries the notices of everything it bundles:
 
 | In the jar | |
 | --- | --- |
@@ -64,7 +64,7 @@ repository.
 | `META-INF/licenses/BSD-3-Clause-asm.txt` | ASM |
 | `META-INF/licenses/EPL-2.0.txt` | MIMA |
 | `META-INF/licenses/MPL-2.0.txt` | the public suffix list carried by Apache HttpClient |
-| `META-INF/LICENSE-jbanglite.txt` | JBang, and this fork |
+| `META-INF/LICENSE-jkite.txt` | JBang, and this fork |
 | `META-INF/THIRD-PARTY.md` | this file |
 
 Neither the Eclipse Public License 2.0 (MIMA) nor the Mozilla Public License

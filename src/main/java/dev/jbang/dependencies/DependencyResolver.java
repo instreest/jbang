@@ -50,7 +50,7 @@ import dev.jbang.util.Util;
  * Resolves Maven coordinates (including their transitive dependencies) to
  * local files using Maven Resolver through MIMA. Only Maven Central is used
  * as remote repository (plus mirrors/proxies from ~/.m2/settings.xml); the
- * local repository is the standard ~/.m2/repository unless JBANGLITE_MAVEN_REPO is set.
+ * local repository is the standard ~/.m2/repository unless JKITE_MAVEN_REPO is set.
  */
 public final class DependencyResolver {
 	private final Set<MavenRepo> repositories = new LinkedHashSet<>();
@@ -172,7 +172,7 @@ public final class DependencyResolver {
 		}
 	}
 
-	/** A Maven Resolver session, configured the way JBangLite needs it. */
+	/** A Maven Resolver session, configured the way JKite needs it. */
 	private static final class Session implements Closeable {
 	private final Context context;
 
@@ -183,7 +183,7 @@ public final class DependencyResolver {
 	private Session(boolean offline, boolean updateCache, List<MavenRepo> repositories, boolean silent) {
 		Map<String, String> userProperties = new HashMap<>();
 		// avoid being blocked by servers that reject the default "Java" user agent
-		userProperties.put("aether.connector.userAgent", "JBangLite/" + Util.getVersion());
+		userProperties.put("aether.connector.userAgent", "JKite/" + Util.getVersion());
 
 		ContextOverrides.Builder overrides = ContextOverrides.create()
 			.userProperties(userProperties)

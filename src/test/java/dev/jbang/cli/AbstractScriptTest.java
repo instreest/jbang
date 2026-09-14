@@ -39,8 +39,8 @@ import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
  */
 abstract class AbstractScriptTest {
 
-	protected static final Path BASH_SCRIPT = Paths.get("src/main/scripts/jbanglite").toAbsolutePath();
-	protected static final Path CMD_SCRIPT = Paths.get("src/main/scripts/jbanglite.cmd").toAbsolutePath();
+	protected static final Path BASH_SCRIPT = Paths.get("src/main/scripts/jkite").toAbsolutePath();
+	protected static final Path CMD_SCRIPT = Paths.get("src/main/scripts/jkite.cmd").toAbsolutePath();
 
 	protected WireMockServer wm;
 
@@ -155,28 +155,28 @@ abstract class AbstractScriptTest {
 
 	/**
 	 * Copies the bash launcher and its bootstrap script into a directory of
-	 * their own with a fake jbanglite.jar next to them, as installed into a
+	 * their own with a fake jkite.jar next to them, as installed into a
 	 * project, and returns the launcher.
 	 */
 	protected Path bashLauncherWithJar() throws IOException {
 		Path dir = Files.createDirectories(tempDir.resolve("bin"));
-		Path launcher = dir.resolve("jbanglite");
+		Path launcher = dir.resolve("jkite");
 		Files.copy(BASH_SCRIPT, launcher, StandardCopyOption.REPLACE_EXISTING);
-		Files.copy(BASH_SCRIPT.resolveSibling("jbanglite-bootstrap-jdk"), dir.resolve("jbanglite-bootstrap-jdk"),
+		Files.copy(BASH_SCRIPT.resolveSibling("jkite-bootstrap-jdk"), dir.resolve("jkite-bootstrap-jdk"),
 				StandardCopyOption.REPLACE_EXISTING);
 		// the JDK the bootstrap script would install, pinned at an address that
 		// nothing answers, so a test that reaches it fails fast instead of
 		// fetching 200 MB
-		Files.write(dir.resolve("jbanglite.properties"),
+		Files.write(dir.resolve("jkite.properties"),
 				("bootstrapJdkVersion=99.0.0\n"
 						+ "bootstrapJdkUrl." + indexPlatform() + "=https://127.0.0.1:1/nowhere/jdk.tar.gz\n"
 						+ "bootstrapJdkSha256Sum." + indexPlatform() + "=0000000000000000000000000000000000000000000000000000000000000000\n")
 					.getBytes(StandardCharsets.UTF_8));
-		createFakeJar(dir.resolve("jbanglite.jar"));
+		createFakeJar(dir.resolve("jkite.jar"));
 		return launcher;
 	}
 
-	/** The name this platform has in jbanglite.properties, e.g. linux-amd64. */
+	/** The name this platform has in jkite.properties, e.g. linux-amd64. */
 	protected static String indexPlatform() {
 		String os = System.getProperty("os.name").toLowerCase();
 		String name = os.contains("mac") ? "darwin" : os.contains("win") ? "windows" : "linux";
@@ -191,15 +191,15 @@ abstract class AbstractScriptTest {
 
 	/**
 	 * Writes a jar whose main class is {@link FakeJBang}, stamped with the given
-	 * JBangLite-Version when one is given, as a real jbanglite.jar is. That is the
+	 * JKite-Version when one is given, as a real jkite.jar is. That is the
 	 * attribute the launchers read out of the manifest for --version.
 	 */
-	protected static void createFakeJar(Path jar, String jbangVersion) throws IOException {
+	protected static void createFakeJar(Path jar, String jkiteVersion) throws IOException {
 		Manifest manifest = new Manifest();
 		manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
 		manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, FakeJBang.class.getName());
-		if (jbangVersion != null) {
-			manifest.getMainAttributes().putValue("JBangLite-Version", jbangVersion);
+		if (jkiteVersion != null) {
+			manifest.getMainAttributes().putValue("JKite-Version", jkiteVersion);
 		}
 		String classResource = FakeJBang.class.getName().replace('.', '/') + ".class";
 		try (InputStream input = FakeJBang.class.getClassLoader().getResourceAsStream(classResource);
@@ -214,8 +214,8 @@ abstract class AbstractScriptTest {
 	}
 
 	/**
-	 * Stand-in for jbanglite.jar: writes to stdout and stderr and exits with the
-	 * given code ("exit N"), and answers --version with the JBangLite-Version in its
+	 * Stand-in for jkite.jar: writes to stdout and stderr and exits with the
+	 * given code ("exit N"), and answers --version with the JKite-Version in its
 	 * own manifest, as the real jar does. A launcher has nothing else to do with
 	 * the jar than to run it, so this is all a launcher test needs.
 	 */
@@ -223,7 +223,7 @@ abstract class AbstractScriptTest {
 		public static void main(String[] args) throws IOException {
 			if (args.length > 0 && args[0].equals("--version")) {
 				try (InputStream in = FakeJBang.class.getResourceAsStream("/META-INF/MANIFEST.MF")) {
-					System.out.println(new Manifest(in).getMainAttributes().getValue("JBangLite-Version"));
+					System.out.println(new Manifest(in).getMainAttributes().getValue("JKite-Version"));
 				}
 				return;
 			}
@@ -238,16 +238,16 @@ abstract class AbstractScriptTest {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Returns a base environment map for the tests with JBANGLITE_DIR,
-	 * JBANGLITE_CACHE_DIR set. JAVA_HOME is removed.
+	 * Returns a base environment map for the tests with JKITE_DIR,
+	 * JKITE_CACHE_DIR set. JAVA_HOME is removed.
 	 * Subclasses should add their specific env vars on top.
 	 */
 	protected Map<String, String> baseBashEnv(String suffix) {
 		Path jbdir = tempSubDir("jbdir-" + suffix);
 		Path tdir = tempSubDir("cache-" + suffix);
 		Map<String, String> env = new HashMap<>(System.getenv());
-		env.put("JBANGLITE_DIR", jbdir.toString());
-		env.put("JBANGLITE_CACHE_DIR", tdir.toString());
+		env.put("JKITE_DIR", jbdir.toString());
+		env.put("JKITE_CACHE_DIR", tdir.toString());
 		env.remove("JAVA_HOME");
 		return env;
 	}

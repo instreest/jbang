@@ -31,7 +31,7 @@ import dev.jbang.util.Util;
  * <li>the JVM running JBang</li>
  * <li>JAVA_HOME</li>
  * <li>javac found on the PATH</li>
- * <li>JDKs installed by JBang in the cache ($JBANGLITE_CACHE_DIR/jdks)</li>
+ * <li>JDKs installed by JBang in the cache ($JKITE_CACHE_DIR/jdks)</li>
  * <li>download and install into the cache</li>
  * </ol>
  */
@@ -135,7 +135,7 @@ public final class JdkManager {
 
 	/**
 	 * Downloads and installs a JDK satisfying the request into
-	 * $JBANGLITE_CACHE_DIR/jdks/&lt;version&gt;. The archive's SHA-256 is verified
+	 * $JKITE_CACHE_DIR/jdks/&lt;version&gt;. The archive's SHA-256 is verified
 	 * against the checksum published next to it. A lock file makes concurrent
 	 * JBang processes wait for each other instead of installing on top of one
 	 * another. Nothing outside that directory is touched: running a script

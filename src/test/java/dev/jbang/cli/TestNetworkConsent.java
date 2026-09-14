@@ -17,23 +17,23 @@ import org.junit.jupiter.api.Test;
 /**
  * The launcher fetches the jar and a JDK before any JVM exists, so the gate in
  * the jar cannot cover those two. It asks about them itself, under the same
- * contract the jar uses: JBANGLITE_CONFIRM_DOWNLOADS is auto, always or never,
- * and JBANGLITE_ASSUME_YES or --yes answers yes in advance.
+ * contract the jar uses: JKITE_CONFIRM_DOWNLOADS is auto, always or never,
+ * and JKITE_ASSUME_YES or --yes answers yes in advance.
  */
 class TestNetworkConsent extends AbstractScriptTest {
 
 	/** A launcher with no jar next to it, pinned at an address nothing answers. */
 	private Path launcherWithoutJar() throws IOException {
 		Path dir = Files.createDirectories(tempDir.resolve("bin"));
-		Path launcher = dir.resolve("jbanglite");
+		Path launcher = dir.resolve("jkite");
 		Files.copy(BASH_SCRIPT, launcher, StandardCopyOption.REPLACE_EXISTING);
-		Files.copy(BASH_SCRIPT.resolveSibling("jbanglite-bootstrap-jar"), dir.resolve("jbanglite-bootstrap-jar"),
+		Files.copy(BASH_SCRIPT.resolveSibling("jkite-bootstrap-jar"), dir.resolve("jkite-bootstrap-jar"),
 				StandardCopyOption.REPLACE_EXISTING);
-		Files.copy(BASH_SCRIPT.resolveSibling("jbanglite-bootstrap-jdk"), dir.resolve("jbanglite-bootstrap-jdk"),
+		Files.copy(BASH_SCRIPT.resolveSibling("jkite-bootstrap-jdk"), dir.resolve("jkite-bootstrap-jdk"),
 				StandardCopyOption.REPLACE_EXISTING);
-		Files.write(dir.resolve("jbanglite.properties"),
+		Files.write(dir.resolve("jkite.properties"),
 				("distributionVersion=9.9.9\n"
-						+ "distributionUrl=https://127.0.0.1:1/nowhere/jbanglite.jar\n"
+						+ "distributionUrl=https://127.0.0.1:1/nowhere/jkite.jar\n"
 						+ "distributionSha256Sum=00\n"
 						+ "bootstrapJdkVersion=99.0.0\n"
 						+ "bootstrapJdkUrl." + indexPlatform() + "=https://127.0.0.1:1/nowhere/jdk.tar.gz\n"
@@ -53,15 +53,15 @@ class TestNetworkConsent extends AbstractScriptTest {
 		Files.write(script, "class Hello {}".getBytes(StandardCharsets.UTF_8));
 	}
 
-	/** @param mode null to leave JBANGLITE_CONFIRM_DOWNLOADS unset */
+	/** @param mode null to leave JKITE_CONFIRM_DOWNLOADS unset */
 	private Map<String, String> env(String mode) {
 		Map<String, String> env = baseBashEnv("consent");
 		env.put("JAVA_HOME", System.getProperty("java.home"));
-		env.remove("JBANGLITE_ASSUME_YES");
+		env.remove("JKITE_ASSUME_YES");
 		if (mode == null) {
-			env.remove("JBANGLITE_CONFIRM_DOWNLOADS");
+			env.remove("JKITE_CONFIRM_DOWNLOADS");
 		} else {
-			env.put("JBANGLITE_CONFIRM_DOWNLOADS", mode);
+			env.put("JKITE_CONFIRM_DOWNLOADS", mode);
 		}
 		return env;
 	}
@@ -70,9 +70,9 @@ class TestNetworkConsent extends AbstractScriptTest {
 	void autoWithNobodyToAskSaysWhatItFetchesAndCarriesOn() throws Exception {
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env(null));
 
-		assertTrue(result.stderr.contains("jbanglite.jar 9.9.9"),
+		assertTrue(result.stderr.contains("jkite.jar 9.9.9"),
 				"it should say what it is about to download: " + result.stderr);
-		assertTrue(result.stderr.contains("Error downloading JBangLite"),
+		assertTrue(result.stderr.contains("Error downloading JKite"),
 				"auto carries on when there is nobody to ask: " + result.stderr);
 	}
 
@@ -81,10 +81,10 @@ class TestNetworkConsent extends AbstractScriptTest {
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("always"));
 
 		assertNotEquals(0, result.exitCode);
-		assertTrue(result.stderr.contains("jbanglite.jar 9.9.9"), result.stderr);
-		assertTrue(result.stderr.contains("JBANGLITE_CONFIRM_DOWNLOADS=always"),
+		assertTrue(result.stderr.contains("jkite.jar 9.9.9"), result.stderr);
+		assertTrue(result.stderr.contains("JKITE_CONFIRM_DOWNLOADS=always"),
 				"it should name the setting that stopped it: " + result.stderr);
-		assertTrue(!result.stderr.contains("Error downloading JBangLite"),
+		assertTrue(!result.stderr.contains("Error downloading JKite"),
 				"nothing should have been fetched: " + result.stderr);
 	}
 
@@ -92,18 +92,18 @@ class TestNetworkConsent extends AbstractScriptTest {
 	void neverGoesStraightToTheDownload() throws Exception {
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("never"));
 
-		assertTrue(result.stderr.contains("Error downloading JBangLite"), result.stderr);
-		assertTrue(!result.stderr.contains("JBangLite has to download"),
+		assertTrue(result.stderr.contains("Error downloading JKite"), result.stderr);
+		assertTrue(!result.stderr.contains("JKite has to download"),
 				"never says nothing: " + result.stderr);
 	}
 
 	@Test
 	void assumeYesAnswersInAdvance() throws Exception {
 		Map<String, String> env = env("always");
-		env.put("JBANGLITE_ASSUME_YES", "1");
+		env.put("JKITE_ASSUME_YES", "1");
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env);
 
-		assertTrue(result.stderr.contains("Error downloading JBangLite"),
+		assertTrue(result.stderr.contains("Error downloading JKite"),
 				"always plus assume-yes downloads: " + result.stderr);
 	}
 
@@ -111,7 +111,7 @@ class TestNetworkConsent extends AbstractScriptTest {
 	void theYesOptionAnswersInAdvanceToo() throws Exception {
 		RunResult result = runProcess(bashCmd(launcher, "--yes", script.toString()), env("always"));
 
-		assertTrue(result.stderr.contains("Error downloading JBangLite"),
+		assertTrue(result.stderr.contains("Error downloading JKite"),
 				"--yes reaches the launcher, not only the jar: " + result.stderr);
 	}
 
@@ -119,8 +119,8 @@ class TestNetworkConsent extends AbstractScriptTest {
 	void anUnknownModeIsIgnoredWithAWarning() throws Exception {
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("maybe"));
 
-		assertTrue(result.stderr.contains("Ignoring invalid JBANGLITE_CONFIRM_DOWNLOADS"), result.stderr);
-		assertTrue(result.stderr.contains("Error downloading JBangLite"),
+		assertTrue(result.stderr.contains("Ignoring invalid JKITE_CONFIRM_DOWNLOADS"), result.stderr);
+		assertTrue(result.stderr.contains("Error downloading JKite"),
 				"an unknown mode falls back to auto: " + result.stderr);
 	}
 
@@ -143,11 +143,11 @@ class TestNetworkConsent extends AbstractScriptTest {
 	void theWindowsLauncherUsesTheSameContract() throws Exception {
 		String cmd = new String(Files.readAllBytes(CMD_SCRIPT), StandardCharsets.UTF_8);
 
-		assertTrue(cmd.contains("JBANGLITE_CONFIRM_DOWNLOADS"),
-				"jbanglite.cmd does not look at JBANGLITE_CONFIRM_DOWNLOADS");
-		assertTrue(cmd.contains("JBANGLITE_ASSUME_YES"), "jbanglite.cmd ignores JBANGLITE_ASSUME_YES");
-		assertTrue(cmd.contains("Continue? [Y/n]"), "jbanglite.cmd does not ask before downloading");
+		assertTrue(cmd.contains("JKITE_CONFIRM_DOWNLOADS"),
+				"jkite.cmd does not look at JKITE_CONFIRM_DOWNLOADS");
+		assertTrue(cmd.contains("JKITE_ASSUME_YES"), "jkite.cmd ignores JKITE_ASSUME_YES");
+		assertTrue(cmd.contains("Continue? [Y/n]"), "jkite.cmd does not ask before downloading");
 		assertTrue(cmd.contains("There is no terminal to ask on"),
-				"jbanglite.cmd does not handle having nobody to ask");
+				"jkite.cmd does not handle having nobody to ask");
 	}
 }

@@ -12,8 +12,8 @@ import dev.jbang.util.Util;
  * (and tools such as java-call-hierarchy-exporter) keep working:
  *
  * <pre>
- * $JBANGLITE_DIR (~/.jbanglite)
- *   cache/            ($JBANGLITE_CACHE_DIR)
+ * $JKITE_DIR (~/.jkite)
+ *   cache/            ($JKITE_CACHE_DIR)
  *     jars/           compiled scripts
  *     jdks/           JDKs installed by JBang
  *     stdin/          scripts read from stdin, by content hash
@@ -22,22 +22,22 @@ import dev.jbang.util.Util;
  * </pre>
  */
 public final class Settings {
-	public static final String ENV_DIR = "JBANGLITE_DIR";
-	public static final String ENV_CACHE_DIR = "JBANGLITE_CACHE_DIR";
-	public static final String ENV_MAVEN_REPO = "JBANGLITE_MAVEN_REPO";
-	public static final String ENV_DEFAULT_JAVA_VERSION = "JBANGLITE_DEFAULT_JAVA_VERSION";
-	public static final String ENV_JDK_INDEX = "JBANGLITE_JDK_INDEX";
-	public static final String ENV_DOWNLOAD_RETRY = "JBANGLITE_DOWNLOAD_RETRY";
-	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JBANGLITE_DOWNLOAD_RETRY_DELAY";
+	public static final String ENV_DIR = "JKITE_DIR";
+	public static final String ENV_CACHE_DIR = "JKITE_CACHE_DIR";
+	public static final String ENV_MAVEN_REPO = "JKITE_MAVEN_REPO";
+	public static final String ENV_DEFAULT_JAVA_VERSION = "JKITE_DEFAULT_JAVA_VERSION";
+	public static final String ENV_JDK_INDEX = "JKITE_JDK_INDEX";
+	public static final String ENV_DOWNLOAD_RETRY = "JKITE_DOWNLOAD_RETRY";
+	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JKITE_DOWNLOAD_RETRY_DELAY";
 	/** auto / always / never: whether a download is confirmed before it starts. */
-	public static final String ENV_CONFIRM_DOWNLOADS = "JBANGLITE_CONFIRM_DOWNLOADS";
-	public static final String ENV_ASSUME_YES = "JBANGLITE_ASSUME_YES";
+	public static final String ENV_CONFIRM_DOWNLOADS = "JKITE_CONFIRM_DOWNLOADS";
+	public static final String ENV_ASSUME_YES = "JKITE_ASSUME_YES";
 
 	public static final String CP_SEPARATOR = File.pathSeparator;
 	public static final String DEPENDENCY_CACHE_FILE = "dependency_cache.txt";
 
 	public static final int DEFAULT_JAVA_VERSION = 17;
-	/** The one JDK distribution JBangLite installs: Eclipse Temurin. */
+	/** The one JDK distribution JKite installs: Eclipse Temurin. */
 	public static final String JDK_DISTRO = "temurin";
 	/**
 	 * The host {@link #JDK_DISTRO} publishes its archives on. The JVM index says
@@ -57,7 +57,7 @@ public final class Settings {
 
 	public static Path getConfigDir() {
 		String jd = System.getenv(ENV_DIR);
-		Path dir = jd != null ? Paths.get(jd) : Paths.get(System.getProperty("user.home")).resolve(".jbanglite");
+		Path dir = jd != null ? Paths.get(jd) : Paths.get(System.getProperty("user.home")).resolve(".jkite");
 		return mkdirs(dir);
 	}
 
@@ -77,7 +77,7 @@ public final class Settings {
 		return getCacheDir().resolve(DEPENDENCY_CACHE_FILE);
 	}
 
-	/** Optional override of the local Maven repository (JBANGLITE_MAVEN_REPO). */
+	/** Optional override of the local Maven repository (JKITE_MAVEN_REPO). */
 	public static Path getLocalMavenRepoOverride() {
 		String repo = System.getenv(ENV_MAVEN_REPO);
 		return repo != null ? Paths.get(repo) : null;
@@ -115,7 +115,7 @@ public final class Settings {
 		return v != null && !v.trim().isEmpty() ? v.trim().toLowerCase() : "auto";
 	}
 
-	/** JBANGLITE_ASSUME_YES, the environment's form of <code>--yes</code>. */
+	/** JKITE_ASSUME_YES, the environment's form of <code>--yes</code>. */
 	public static boolean isAssumeYes() {
 		String v = System.getenv(ENV_ASSUME_YES);
 		if (v == null) {

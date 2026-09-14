@@ -9,7 +9,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-UPSTREAM_URL=${JBANGLITE_UPSTREAM_URL:-https://github.com/jbangdev/jbang}
+UPSTREAM_URL=${JKITE_UPSTREAM_URL:-https://github.com/jbangdev/jbang}
 REF=${1:-upstream/main}
 MIRROR=misc/upstream-mirror.txt
 SHIMS=misc/upstream-shims.txt
@@ -35,7 +35,7 @@ if [ -n "$old" ] && [ "$old" != "$new" ]; then
   echo "Changes to the mirrored files between $old and $new:"
   git --no-pager log --oneline "$old..$new" -- $files || true
   echo
-  echo "Changes upstream made to the files JBangLite only shims:"
+  echo "Changes upstream made to the files JKite only shims:"
   shims=$(grep -vE '^\s*(#|$)' "$SHIMS")
   # shellcheck disable=SC2086
   git --no-pager log --oneline "$old..$new" -- $shims || true

@@ -1,4 +1,4 @@
-# Developing JBangLite
+# Developing JKite
 
 The shape of a run, and where the network is touched, is in
 [ARCHITECTURE.md](ARCHITECTURE.md). This file is about working on the code.
@@ -9,12 +9,12 @@ The shape of a run, and where the network is touched, is in
 ./gradlew build
 ```
 
-produces `build/libs/jbanglite.jar`, self-contained, and runs the tests.
-`-PjbangVersion=x.y.z` sets the version the jar reports.
+produces `build/libs/jkite.jar`, self-contained, and runs the tests.
+`-PjkiteVersion=x.y.z` sets the version the jar reports.
 
 The jar targets Java 11 and is built with whatever JDK Gradle runs on.
 
-A project installing JBangLite pins the jar by SHA-256, so the build that
+A project installing JKite pins the jar by SHA-256, so the build that
 produces that jar is pinned to the same degree:
 
 | | |
@@ -38,12 +38,12 @@ under [Tests and CI](#tests-and-ci).
 
 ```bash
 misc/update-dist.sh 0.3.0
-gh release create v0.3.0 dist/* build/libs/jbanglite.jar
+gh release create v0.3.0 dist/* build/libs/jkite.jar
 git add dist && git commit -m "Release 0.3.0"
 ```
 
 `misc/update-dist.sh` copies the launcher scripts into `dist/`, builds the jar,
-and writes `dist/jbanglite.properties`: the version, URL and SHA-256 of the jar,
+and writes `dist/jkite.properties`: the version, URL and SHA-256 of the jar,
 and the same three for the Temurin JDK of every platform a checkout may be on.
 It reads those from the [Coursier](https://github.com/coursier/jvm-index) JVM
 index on Maven Central, once, here. The scripts a project commits therefore
@@ -60,17 +60,17 @@ refresh fails the build.
 
 Temurin publishes no Windows ARM64 build of Java 25, so `windows-arm64` is
 pinned to the x64 archive, which Windows on ARM runs under emulation. This JDK
-only has to start `jbanglite.jar`; the JDK a script asks for with `//JAVA` is
+only has to start `jkite.jar`; the JDK a script asks for with `//JAVA` is
 installed by the jar. Drop the mapping in `update-dist.sh` once Temurin ships
 one.
 
 ## Staying in step with JBang
 
 JBang sits behind one interface, `DirectiveParser` in `dev.jbang.spi`, which
-turns a source file into a `SourceDirectives` built from JBangLite's own types.
+turns a source file into a `SourceDirectives` built from JKite's own types.
 `MirroredDirectiveParser` is the implementation in use and the only class that
 names `Directives` and `KeyValue`, so the mirrored parser is an implementation
-detail rather than JBangLite's API. `TestDirectiveParser` states the contract on
+detail rather than JKite's API. `TestDirectiveParser` states the contract on
 the interface alone, so a second implementation is held to the same test and
 wired in at `Providers`, with nothing above the interface changing.
 
@@ -90,7 +90,7 @@ directive handling can be taken over without merging:
 | --- | --- | --- |
 | Mirror | the files in `misc/upstream-mirror.txt`, among them `Directives.java` and its test | copied from JBang unchanged, never edited here |
 | Shims | the files in `misc/upstream-shims.txt` (`Util`, `JavaUtil`, `DependencyUtil`) | upstream's API with a reduced implementation, checked by hand when upstream changes them |
-| JBangLite | everything else | this fork's own code |
+| JKite | everything else | this fork's own code |
 
 ```bash
 misc/sync-upstream.sh            # take the mirrored files from upstream/main
@@ -115,7 +115,7 @@ other by package; renaming them would mean editing every sync.
 
 runs JBang's own `TestDirectives`, the contract tests that hold any
 `DirectiveParser` and the download gate to the same behaviour, unit tests for
-the pieces JBangLite wrote (the JVM index, archive unpacking, placeholder
+the pieces JKite wrote (the JVM index, archive unpacking, placeholder
 expansion), and functional tests that run the launcher scripts and the installer
 against a local server.
 
@@ -132,21 +132,21 @@ release, and git stores the scripts with LF endings, so they also answer whether
 
 The launcher does two things and then gets out of the way:
 
-1. **Find the jar.** A `jbanglite.jar` next to the launcher if the project
-   vendored one, otherwise the one `jbanglite-bootstrap-jar` installs from the
-   pinned URL into `$JBANGLITE_CACHE_DIR/jbanglite/<version>`.
+1. **Find the jar.** A `jkite.jar` next to the launcher if the project
+   vendored one, otherwise the one `jkite-bootstrap-jar` installs from the
+   pinned URL into `$JKITE_CACHE_DIR/jkite/<version>`.
 2. **Find a JDK.** In order: the bootstrap JDK from an earlier run, `JAVA_HOME`,
    `javac` on the `PATH`. A JDK 11 or newer is required; a JRE is not enough,
    because scripts are compiled. `javac` is asked for its own `java.home`
    (`javac -J-XshowSettings:properties -version`) so that a shim (jenv, SDKMAN,
    the Windows `javapath` stub) leads to the real JDK. If none is found,
-   `jbanglite-bootstrap-jdk` installs the pinned Temurin.
+   `jkite-bootstrap-jdk` installs the pinned Temurin.
 3. **`exec` the jar with that JDK.** The jar then starts the script as a child
    process sharing stdin, stdout and stderr, and exits with the script's status.
    Nothing is captured and nothing is re-parsed by a shell, so
-   `jbanglite Tool.java | sort` streams and `$?` is the script's. The price is
-   that the JBangLite JVM stays around, idle, while the script runs;
-   `JBANGLITE_JAVA_OPTIONS` tunes it.
+   `jkite Tool.java | sort` streams and `$?` is the script's. The price is
+   that the JKite JVM stays around, idle, while the script runs;
+   `JKITE_JAVA_OPTIONS` tunes it.
 
 Both bootstrap scripts have the same shape: they print the one path they found
 or installed on stdout, say everything else on stderr, verify a SHA-256 before
@@ -156,7 +156,7 @@ colliding. Each can be run by hand, tested on its own, or replaced by anything
 else that puts a jar or a JDK where the launcher looks.
 
 The `.cmd` scripts use only `curl`, `tar` and `certutil`, which Windows ships;
-no PowerShell is involved. `jbanglite` hands over to `jbanglite.cmd` on Windows
+no PowerShell is involved. `jkite` hands over to `jkite.cmd` on Windows
 shells (Git Bash, MSYS2, Cygwin), so nothing else is needed there either.
 
 Both sides ask before they download, and both decide whether there is anyone to
@@ -189,7 +189,7 @@ reproducible; `25` or `25+` accepts any matching release.
 
 ## Dependencies
 
-`jbanglite.jar` bundles Maven Resolver through
+`jkite.jar` bundles Maven Resolver through
 [MIMA](https://github.com/maveniverse/mima), with the HTTP transport Maven
 itself ships; Commons Compress for the JDK archives; Gson for the JVM index; the
 slf4j no-op binding the resolver needs; and the jspecify annotations the
@@ -210,7 +210,7 @@ one that fails in the path nobody tested, and the jar is downloaded once per
 machine into a shared cache, so its 6 MB buys more than it costs.
 
 Class-file inspection for the main class, jar creation and OS detection use the
-JDK's standard library only. `jbanglite.jar` needs Java 11 or later to run
+JDK's standard library only. `jkite.jar` needs Java 11 or later to run
 (JBang targets Java 8); the JDK a script runs on is whatever `//JAVA` asks for.
 
 `misc/licenses/` holds the licence texts of the bundled libraries, which the
