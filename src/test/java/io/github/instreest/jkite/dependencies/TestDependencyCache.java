@@ -37,11 +37,20 @@ class TestDependencyCache {
 		return dir.resolve("dependency_cache.txt");
 	}
 
+	/**
+	 * The file a coordinate's jar is written to. Not the coordinate itself:
+	 * Windows has no ":" in a file name, and a repository does not use one
+	 * either.
+	 */
+	private Path jarOf(String coord) {
+		return dir.resolve(coord.replace(':', '-') + ".jar");
+	}
+
 	/** Artifacts of real files, because a fingerprint is taken of one. */
 	private List<ArtifactInfo> artifacts(String... coords) {
 		return Arrays.stream(coords)
 			.map(c -> {
-				Path jar = dir.resolve(c + ".jar");
+				Path jar = jarOf(c);
 				try {
 					Files.write(jar, c.getBytes(StandardCharsets.UTF_8));
 				} catch (IOException e) {
@@ -76,7 +85,7 @@ class TestDependencyCache {
 		assertEquals(2, read.size());
 		// the coordinate comes back naming the type it was given by default
 		assertEquals("com.example:one:1.0@jar", read.get(0).getCoordinate().toMavenString());
-		assertEquals(dir.resolve("com.example:two:2.0.jar"), read.get(1).getFile());
+		assertEquals(jarOf("com.example:two:2.0"), read.get(1).getFile());
 		assertTrue(read.get(1).isUpToDate(), "the file is untouched, so the entry still stands");
 	}
 
