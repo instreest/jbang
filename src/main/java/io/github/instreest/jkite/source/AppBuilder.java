@@ -7,6 +7,7 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -40,6 +41,10 @@ import dev.jbang.util.Util;
  */
 public class AppBuilder {
 	public static final String ATTR_BUILD_JDK = "Build-Jdk";
+
+	/** The time every entry in a built jar carries, so that the jar is the
+	 * same file whenever it is built from the same inputs. */
+	private static final LocalDateTime PACKAGED_AT = LocalDateTime.of(2000, 1, 1, 0, 0, 0);
 
 	private final Project project;
 
@@ -206,13 +211,26 @@ public class AppBuilder {
 		// script do not write into each other's jar
 		Path tmp = Files.createTempFile(jar.getParent(), jar.getFileName().toString(), ".tmp");
 		try {
-			try (OutputStream os = Files.newOutputStream(tmp); JarOutputStream jos = new JarOutputStream(os, manifest);
+			try (OutputStream os = Files.newOutputStream(tmp); JarOutputStream jos = new JarOutputStream(os);
 					Stream<Path> files = Files.walk(compileDir)) {
+				// the manifest is written here rather than by the constructor
+				// that takes one, which would stamp its entry with the time of
+				// the build and make the jar a different file every time
+				JarEntry manifestEntry = new JarEntry(JarFile.MANIFEST_NAME);
+				manifestEntry.setTimeLocal(PACKAGED_AT);
+				jos.putNextEntry(manifestEntry);
+				manifest.write(jos);
+				jos.closeEntry();
 				List<Path> entries = files.filter(Files::isRegularFile).sorted().collect(Collectors.toList());
 				for (Path f : entries) {
 					String name = compileDir.relativize(f).toString().replace('\\', '/');
 					JarEntry entry = new JarEntry(name);
-					entry.setTime(f.toFile().lastModified());
+					// a fixed time rather than the file's: the build directory
+					// says the jar is the one those inputs produce, and a jar
+					// that carries the minute it was packed is a different file
+					// every time it is packed. setTimeLocal so that the zip's
+					// own field does not depend on the time zone either.
+					entry.setTimeLocal(PACKAGED_AT);
 					jos.putNextEntry(entry);
 					try (InputStream is = Files.newInputStream(f)) {
 						byte[] buf = new byte[65536];
