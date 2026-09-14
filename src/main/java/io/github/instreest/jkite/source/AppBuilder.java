@@ -3,6 +3,7 @@ package io.github.instreest.jkite.source;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -31,9 +32,11 @@ import dev.jbang.util.Util;
  * <code>//COMPILE_OPTIONS</code>, <code>//FILES</code>, <code>//MANIFEST</code>,
  * <code>//MAIN</code> and <code>//PREVIEW</code>.
  *
- * An existing jar is reused when the sources and resources are unchanged (the
- * build directory name contains a hash of them), the dependencies are still
- * present and it was built with a JDK that satisfies the requested version.
+ * An existing jar is reused when nothing the build depends on has changed (the
+ * build directory name contains a hash of it, see {@link Project#getStableId()}),
+ * the dependencies are still present and it was built with a JDK that satisfies
+ * the requested version - and, for //PREVIEW, with exactly the JDK that will
+ * run it.
  */
 public class AppBuilder {
 	public static final String ATTR_BUILD_JDK = "Build-Jdk";
@@ -101,9 +104,18 @@ public class AppBuilder {
 						+ " which does not satisfy the requested version " + requested + ".");
 				return false;
 			}
-			if (project.getJdk().majorVersion() < built) {
+			int current = project.getJdk().majorVersion();
+			if (current < built) {
 				Util.verboseMsg("Building as the jar was built with Java " + built
 						+ " which is newer than the JDK available now.");
+				return false;
+			}
+			// A class file that uses preview features is only loadable by the
+			// JVM of exactly the version that compiled it, so for //PREVIEW a
+			// newer JDK is not good enough: the jar would not start at all.
+			if (project.enablePreview() && current != built) {
+				Util.verboseMsg("Building as the jar was built with the preview features of Java " + built
+						+ ", which Java " + current + " does not load.");
 				return false;
 			}
 			if (project.getMainClass() == null) {
@@ -193,24 +205,36 @@ public class AppBuilder {
 		// a temporary file of our own, so that concurrent builds of the same
 		// script do not write into each other's jar
 		Path tmp = Files.createTempFile(jar.getParent(), jar.getFileName().toString(), ".tmp");
-		try (OutputStream os = Files.newOutputStream(tmp); JarOutputStream jos = new JarOutputStream(os, manifest);
-				Stream<Path> files = Files.walk(compileDir)) {
-			List<Path> entries = files.filter(Files::isRegularFile).sorted().collect(Collectors.toList());
-			for (Path f : entries) {
-				String name = compileDir.relativize(f).toString().replace('\\', '/');
-				JarEntry entry = new JarEntry(name);
-				entry.setTime(f.toFile().lastModified());
-				jos.putNextEntry(entry);
-				try (InputStream is = Files.newInputStream(f)) {
-					byte[] buf = new byte[65536];
-					int n;
-					while ((n = is.read(buf)) > 0) {
-						jos.write(buf, 0, n);
+		try {
+			try (OutputStream os = Files.newOutputStream(tmp); JarOutputStream jos = new JarOutputStream(os, manifest);
+					Stream<Path> files = Files.walk(compileDir)) {
+				List<Path> entries = files.filter(Files::isRegularFile).sorted().collect(Collectors.toList());
+				for (Path f : entries) {
+					String name = compileDir.relativize(f).toString().replace('\\', '/');
+					JarEntry entry = new JarEntry(name);
+					entry.setTime(f.toFile().lastModified());
+					jos.putNextEntry(entry);
+					try (InputStream is = Files.newInputStream(f)) {
+						byte[] buf = new byte[65536];
+						int n;
+						while ((n = is.read(buf)) > 0) {
+							jos.write(buf, 0, n);
+						}
 					}
+					jos.closeEntry();
 				}
-				jos.closeEntry();
 			}
+			try {
+				Files.move(tmp, jar, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			} catch (AtomicMoveNotSupportedException e) {
+				// not every filesystem can do it; the rename is still the last
+				// step, so a reader sees either the old jar or the new one
+				Files.move(tmp, jar, StandardCopyOption.REPLACE_EXISTING);
+			}
+		} finally {
+			// a jar that was never finished must not be left behind in the
+			// cache directory, where nothing would ever clean it up
+			Util.deletePath(tmp, true);
 		}
-		Files.move(tmp, jar, StandardCopyOption.REPLACE_EXISTING);
 	}
 }
