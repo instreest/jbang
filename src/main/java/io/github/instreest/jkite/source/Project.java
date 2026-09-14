@@ -1,10 +1,13 @@
 package io.github.instreest.jkite.source;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -16,10 +19,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import dev.jbang.ExitException;
 import io.github.instreest.jkite.Settings;
+import io.github.instreest.jkite.Version;
 import io.github.instreest.jkite.dependencies.ArtifactInfo;
 import io.github.instreest.jkite.dependencies.DependencyResolver;
 import dev.jbang.dependencies.MavenRepo;
@@ -47,8 +50,9 @@ import dev.jbang.util.Util;
  *
  * The build output goes to
  * <code>$JKITE_CACHE_DIR/jars/&lt;file&gt;.&lt;hash&gt;/&lt;base&gt;.jar</code>,
- * where the hash covers the contents of all sources and resources, so a change
- * in any of them triggers a rebuild.
+ * where the hash is the one {@link #getStableId()} computes: it covers the
+ * bytes of every source and resource and everything else that decides what the
+ * build does, so a change in any of them triggers a rebuild.
  */
 public class Project {
 	public static final String ATTR_ADD_EXPORTS = "Add-Exports";
@@ -69,8 +73,13 @@ public class Project {
 			return source;
 		}
 
+		/** The path this file gets inside the jar. */
+		public Path entryName() {
+			return target != null ? target : source.getFileName();
+		}
+
 		public Path to(Path parent) {
-			Path to = parent.resolve(target != null ? target : source.getFileName()).normalize();
+			Path to = parent.resolve(entryName()).normalize();
 			if (!to.startsWith(parent.normalize())) {
 				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 						"Refusing to write outside " + parent + ": " + to);
@@ -104,6 +113,8 @@ public class Project {
 
 	private String javaVersion;
 	private String mainClass;
+	/** //MAIN as the directives gave it, which setMainClass does not change. */
+	private String declaredMainClass;
 	private boolean enablePreview;
 
 	private JdkManager jdkManager;
@@ -153,6 +164,7 @@ public class Project {
 
 		if (main) {
 			mainClass = directives.mainMethod();
+			declaredMainClass = mainClass;
 			enablePreview = directives.enablePreview();
 			// as JBang does for Java sources, so that debugging and named
 			// parameters keep working
@@ -323,21 +335,80 @@ public class Project {
 			.collect(Collectors.joining(Settings.CP_SEPARATOR));
 	}
 
+	/**
+	 * Names the build this project would produce: the same id means the same
+	 * jar, so a jar found under it can be used as it is.
+	 *
+	 * It covers the bytes of every source and resource, the name each resource
+	 * gets inside the jar, and everything else that decides what javac and the
+	 * packaging do: the compile options, the requested Java version, the main
+	 * class, the manifest entries and jkite's own version. Those come from
+	 * directives, which are in the sources already, but a <code>${...}</code>
+	 * in one of them resolves against the properties and the environment, so
+	 * the same text can mean two different builds. What the build is made of is
+	 * the resolved value, so that is what is hashed.
+	 *
+	 * Files are hashed as bytes, one at a time: a resource that is not text is
+	 * not flattened into replacement characters first, and a large one is not
+	 * read into memory to be hashed.
+	 */
 	public String getStableId() {
 		if (stableId == null) {
-			Stream<String> srcs = sources.stream().map(Util::readString);
-			Stream<String> ress = resources.stream().map(r -> safeRead(r.getSource()));
-			stableId = Util.getStableID(Stream.concat(srcs, ress));
+			MessageDigest digest = newDigest();
+			// what the build is, beyond the files it is made from
+			update(digest, "jkite", Version.current());
+			update(digest, "java", javaVersion);
+			update(digest, "preview", Boolean.toString(enablePreview));
+			update(digest, "main", declaredMainClass);
+			compileOptions.forEach(option -> update(digest, "option", option));
+			manifestAttributes.forEach((key, value) -> update(digest, "manifest", key + "=" + value));
+			// the files, by content rather than by the text they decode to
+			sources.forEach(src -> update(digest, "source", src.getFileName() + " " + contentHash(src)));
+			resources.forEach(res -> update(digest, "resource",
+					res.entryName() + " " + contentHash(res.getSource())));
+			stableId = hex(digest.digest());
 		}
 		return stableId;
 	}
 
-	private static String safeRead(Path file) {
+	private static MessageDigest newDigest() {
 		try {
-			return Util.readString(file);
-		} catch (Exception e) {
-			return "";
+			return MessageDigest.getInstance("SHA-256");
+		} catch (NoSuchAlgorithmException e) {
+			throw new ExitException(ExitException.EXIT_INTERNAL_ERROR, e);
 		}
+	}
+
+	/**
+	 * Adds one named value to the id. The name and a separator go in with it,
+	 * so that two different lists of values cannot add up to the same bytes.
+	 */
+	private static void update(MessageDigest digest, String name, String value) {
+		String text = value != null ? value : "";
+		String entry = name + " " + text.length() + " " + text + "\n";
+		digest.update(entry.getBytes(StandardCharsets.UTF_8));
+	}
+
+	/**
+	 * The SHA-256 of a file's bytes. A file that cannot be read gets a marker
+	 * instead: the build that follows will fail on it and say so, which is a
+	 * better answer than refusing to name the build at all.
+	 */
+	private static String contentHash(Path file) {
+		try {
+			return Util.sha256(file);
+		} catch (IOException | RuntimeException e) {
+			Util.verboseMsg("Could not read " + file + " while naming the build: " + e);
+			return "unreadable";
+		}
+	}
+
+	private static String hex(byte[] bytes) {
+		StringBuilder sb = new StringBuilder();
+		for (byte b : bytes) {
+			sb.append(String.format("%02x", b));
+		}
+		return sb.toString();
 	}
 
 	public Path getBuildDir() {

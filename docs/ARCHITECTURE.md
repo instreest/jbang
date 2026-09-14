@@ -106,5 +106,15 @@ flowchart TD
 on jkite's own `SourceDirectives`, so the mirrored copy of JBang's parser is
 an implementation detail rather than this project's API.
 
-The built jar is cached under a directory named after a hash of every source
-and resource, so an unchanged tool is never compiled twice.
+The built jar is cached under a directory named after a hash of everything the
+build is made of: the bytes of every source and resource the script declares,
+the name each resource gets inside the jar, the compile options, the requested
+Java version, the manifest entries and jkite's own version. So an unchanged
+tool is never compiled twice, and a tool that would build differently is never
+served from the jar of the build before it.
+
+What the hash does not see is a `.java` file the script never declares. When a
+script has no `//DEPS`, javac is given no class path, and its default one - the
+directory the run started in - is where it also looks for sources; a file it
+finds that way is compiled into the jar without being part of the hash. Declare
+every source with `//SOURCES` and that cannot happen.
