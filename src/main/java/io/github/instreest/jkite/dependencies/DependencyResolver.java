@@ -59,7 +59,6 @@ import io.github.instreest.jkite.Version;
 public final class DependencyResolver {
 	private final Set<MavenRepo> repositories = new LinkedHashSet<>();
 	private final Set<String> dependencies = new LinkedHashSet<>();
-	private final Set<String> classPaths = new LinkedHashSet<>();
 
 	public DependencyResolver addRepositories(List<MavenRepo> repos) {
 		repositories.addAll(repos);
@@ -71,23 +70,9 @@ public final class DependencyResolver {
 		return this;
 	}
 
-	public DependencyResolver addClassPath(String classPath) {
-		classPaths.add(classPath);
-		return this;
-	}
-
-	/**
-	 * Resolves the collected dependencies and appends any explicit class path
-	 * entries (such as the jars of sub-projects) to the result.
-	 */
+	/** Resolves the collected dependencies. */
 	public List<ArtifactInfo> resolve() {
-		List<ArtifactInfo> artifacts = new ArrayList<>(
-				resolve(new ArrayList<>(dependencies), new ArrayList<>(repositories)));
-		for (String cp : classPaths) {
-			// NB: File is more lenient about odd paths than Path
-			artifacts.add(new ArtifactInfo(null, new java.io.File(cp).toPath()));
-		}
-		return artifacts;
+		return resolve(new ArrayList<>(dependencies), new ArrayList<>(repositories));
 	}
 
 	/**
