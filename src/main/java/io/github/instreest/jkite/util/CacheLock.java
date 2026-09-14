@@ -22,6 +22,10 @@ import dev.jbang.util.Util;
  * locking (some network mounts do not), and the work is still worth doing
  * without one. {@link #isHeld()} says which happened, so a caller for whom that
  * matters can say so or take another precaution.
+ *
+ * It holds between processes, which is what shares a cache directory. Asking
+ * for a lock that this same JVM already holds is one of the cases that cannot
+ * be taken, and it goes on unlocked like any other.
  */
 public final class CacheLock implements AutoCloseable {
 	private final Path file;

@@ -77,10 +77,13 @@ dependencies {
 
 test {
 	useJUnitPlatform()
-	// Downloads need the operator's consent (JKITE_NETWORK). Tests have no
-	// terminal to give it on, so it is given here; the tests that are about the
-	// consent itself set the variable themselves.
-	environment 'JKITE_NETWORK', 'allow'
+	// A download asks before it starts, and a test run has no terminal to answer
+	// on. Left to itself the gate would say what it is fetching and carry on,
+	// which is what "auto" does with nobody to ask - but then CI would depend on
+	// that default staying permissive. It is said here instead. The tests that
+	// are about the gate remove this from the environment they hand their
+	// subprocesses.
+	environment 'JKITE_CONFIRM_DOWNLOADS', 'never'
 	testLogging {
 		events "failed"
 		exceptionFormat "full"

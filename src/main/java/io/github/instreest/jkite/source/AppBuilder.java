@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.IntSupplier;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
@@ -102,29 +103,10 @@ public class AppBuilder {
 		try (JarFile jf = new JarFile(jar.toFile())) {
 			Attributes attrs = jf.getManifest() != null ? jf.getManifest().getMainAttributes() : null;
 			String buildJdk = attrs != null ? attrs.getValue(ATTR_BUILD_JDK) : null;
-			if (buildJdk == null) {
-				Util.verboseMsg("Building as previously built jar found but it has incomplete meta data.");
-				return false;
-			}
-			int built = JavaUtil.parseJavaVersion(buildJdk);
-			String requested = project.getJavaVersion();
-			if (!JavaUtil.satisfiesRequestedVersion(requested, built)) {
-				Util.verboseMsg("Building as the jar was built with Java " + built
-						+ " which does not satisfy the requested version " + requested + ".");
-				return false;
-			}
-			int current = project.getJdk().majorVersion();
-			if (current < built) {
-				Util.verboseMsg("Building as the jar was built with Java " + built
-						+ " which is newer than the JDK available now.");
-				return false;
-			}
-			// A class file that uses preview features is only loadable by the
-			// JVM of exactly the version that compiled it, so for //PREVIEW a
-			// newer JDK is not good enough: the jar would not start at all.
-			if (project.enablePreview() && current != built) {
-				Util.verboseMsg("Building as the jar was built with the preview features of Java " + built
-						+ ", which Java " + current + " does not load.");
+			String reason = cannotReuse(buildJdk, project.getJavaVersion(),
+					() -> project.getJdk().majorVersion(), project.enablePreview());
+			if (reason != null) {
+				Util.verboseMsg("Building as " + reason + ".");
 				return false;
 			}
 			if (project.getMainClass() == null) {
@@ -171,6 +153,40 @@ public class AppBuilder {
 			return false;
 		}
 		return true;
+	}
+
+	/**
+	 * Why a jar built with <code>buildJdk</code> cannot serve a run that asks
+	 * for <code>requested</code>, or null when it can. Told apart from the jar
+	 * it was read out of because this is the part with the arithmetic in it.
+	 *
+	 * <code>currentJdk</code> is asked for rather than given, and only once the
+	 * requested version has had its say: finding out which JDK is here can mean
+	 * installing one, and a jar that is out of date on its version alone is out
+	 * of date whichever JDK would have run it.
+	 */
+	static String cannotReuse(String buildJdk, String requested, IntSupplier currentJdk, boolean preview) {
+		if (buildJdk == null) {
+			return "previously built jar found but it has incomplete meta data";
+		}
+		int built = JavaUtil.parseJavaVersion(buildJdk);
+		if (!JavaUtil.satisfiesRequestedVersion(requested, built)) {
+			return "the jar was built with Java " + built
+					+ " which does not satisfy the requested version " + requested;
+		}
+		int current = currentJdk.getAsInt();
+		if (current < built) {
+			return "the jar was built with Java " + built
+					+ " which is newer than the JDK available now";
+		}
+		// A class file that uses preview features is only loadable by the JVM of
+		// exactly the version that compiled it, so for //PREVIEW a newer JDK is
+		// not good enough: the jar would not start at all.
+		if (preview && current != built) {
+			return "the jar was built with the preview features of Java " + built
+					+ ", which Java " + current + " does not load";
+		}
+		return null;
 	}
 
 	private void compile(Path compileDir) throws IOException {
