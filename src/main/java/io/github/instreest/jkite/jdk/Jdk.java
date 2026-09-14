@@ -10,18 +10,50 @@ import java.util.stream.Stream;
 import dev.jbang.util.Util;
 
 /**
- * An installed JDK: its home directory and version. Version detection follows
- * jbang-devkitman (MIT, see THIRD-PARTY.md).
+ * An installed JDK: its home directory, its version and where it was found.
+ * Version detection follows jbang-devkitman (MIT, see THIRD-PARTY.md).
  */
 public final class Jdk {
+
+	/**
+	 * Where a JDK was found. jkite looks in four places and takes the first
+	 * that answers, so this says which one did - it is what <code>--verbose</code>
+	 * prints when a run cannot be explained by the <code>//JAVA</code> line alone.
+	 *
+	 * The label is a field rather than the constant's own name: what is printed
+	 * is then something this enum decides, in one place, and renaming a constant
+	 * cannot quietly change what a reader sees.
+	 */
+	public enum Origin {
+		/** The JVM that is running jkite. */
+		CURRENT("current"),
+		/** What JAVA_HOME points at. */
+		JAVA_HOME("JAVA_HOME"),
+		/** The JDK the javac on the PATH belongs to. */
+		PATH("PATH"),
+		/** One jkite downloaded into its own cache. */
+		CACHE("jkite");
+
+		private final String label;
+
+		Origin(String label) {
+			this.label = label;
+		}
+
+		/** How this place is named in output. */
+		public String label() {
+			return label;
+		}
+	}
+
 	private static final Pattern QUOTED = Pattern.compile("\"([^\"]+)\"");
 
 	private final Path home;
 	private final String version;
 	private final int majorVersion;
-	private final String origin;
+	private final Origin origin;
 
-	Jdk(Path home, String version, String origin) {
+	Jdk(Path home, String version, Origin origin) {
 		this.home = home;
 		this.version = version;
 		this.majorVersion = parseJavaVersion(version);
@@ -40,8 +72,8 @@ public final class Jdk {
 		return majorVersion;
 	}
 
-	/** Where the JDK was found (e.g. "JAVA_HOME", "PATH", "jbang"). */
-	public String origin() {
+	/** Which of the four places this JDK was found in. */
+	public Origin origin() {
 		return origin;
 	}
 
@@ -76,7 +108,7 @@ public final class Jdk {
 	 * Creates a Jdk for the given home directory if it contains a JDK (javac and
 	 * a version that could be determined), otherwise returns null.
 	 */
-	static Jdk of(Path home, String origin) {
+	static Jdk of(Path home, Origin origin) {
 		if (home == null || !Files.isDirectory(home) || !hasJavac(home)) {
 			return null;
 		}

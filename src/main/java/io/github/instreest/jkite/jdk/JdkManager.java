@@ -59,7 +59,7 @@ public final class JdkManager {
 		if (jdk == null) {
 			jdk = install(version);
 		}
-		Util.verboseMsg("Using JDK: " + jdk + " [" + jdk.origin() + "]");
+		Util.verboseMsg("Using JDK: " + jdk + " [" + jdk.origin().label() + "]");
 		InstallRecord.read(jdk.home()).ifPresent(record -> Util.verboseMsg("   installed: " + record.describe()));
 		return jdk;
 	}
@@ -76,21 +76,21 @@ public final class JdkManager {
 	public List<Jdk> listInstalled() {
 		if (installed == null) {
 			List<Jdk> jdks = new ArrayList<>();
-			add(jdks, Jdk.of(jre2jdk(Paths.get(System.getProperty("java.home"))), "current"));
+			add(jdks, Jdk.of(jre2jdk(Paths.get(System.getProperty("java.home"))), Jdk.Origin.CURRENT));
 			String javaHome = System.getenv("JAVA_HOME");
 			if (javaHome != null && !javaHome.isEmpty()) {
-				add(jdks, Jdk.of(jre2jdk(Paths.get(javaHome)), "JAVA_HOME"));
+				add(jdks, Jdk.of(jre2jdk(Paths.get(javaHome)), Jdk.Origin.JAVA_HOME));
 			}
 			Path javac = Util.searchPath("javac");
 			if (javac != null) {
 				try {
 					Path home = javac.toRealPath().getParent().getParent();
-					add(jdks, Jdk.of(home, "PATH"));
+					add(jdks, Jdk.of(home, Jdk.Origin.PATH));
 				} catch (IOException e) {
 					Util.verboseMsg("Could not resolve javac on PATH: " + e);
 				}
 			}
-			listJBangJdks().forEach(j -> add(jdks, j));
+			listCachedJdks().forEach(j -> add(jdks, j));
 			installed = jdks;
 		}
 		return installed;
@@ -110,8 +110,8 @@ public final class JdkManager {
 		}
 	}
 
-	/** JDKs installed in jkite's own cache, newest first. */
-	public List<Jdk> listJBangJdks() {
+	/** JDKs jkite downloaded into its own cache, newest first. */
+	public List<Jdk> listCachedJdks() {
 		if (!Files.isDirectory(jdksDir)) {
 			return new ArrayList<>();
 		}
@@ -119,7 +119,7 @@ public final class JdkManager {
 			return dirs
 				.filter(Files::isDirectory)
 				.filter(d -> !d.getFileName().toString().endsWith(".tmp"))
-				.map(d -> Jdk.of(d, "jbang"))
+				.map(d -> Jdk.of(d, Jdk.Origin.CACHE))
 				.filter(Objects::nonNull)
 				.sorted(Comparator
 					.comparing((Jdk j) -> RequestedVersion.componentsOf(j.version()),
@@ -165,7 +165,7 @@ public final class JdkManager {
 			// waiting for the lock; the directory is named after the entry, so
 			// finding a JDK there means there is nothing left to download
 			installed = null;
-			Jdk existing = Jdk.of(jdkDir, "jbang");
+			Jdk existing = Jdk.of(jdkDir, Jdk.Origin.CACHE);
 			if (existing != null) {
 				Util.verboseMsg("JDK " + entry.version + " is already installed: " + existing);
 				return finish(existing);
@@ -222,7 +222,7 @@ public final class JdkManager {
 			// into the tree before it is moved, so that a JDK in the cache is
 			// never there without the record of what it was installed from
 			InstallRecord.write(tmpDir, entry, verified);
-			if (Jdk.of(jdkDir, "jbang") == null) {
+			if (Jdk.of(jdkDir, Jdk.Origin.CACHE) == null) {
 				Util.deletePath(jdkDir, true);
 				Files.move(tmpDir, jdkDir);
 			} else {
@@ -239,7 +239,7 @@ public final class JdkManager {
 		} finally {
 			Util.deletePath(pkg, true);
 		}
-		Jdk jdk = Jdk.of(jdkDir, "jbang");
+		Jdk jdk = Jdk.of(jdkDir, Jdk.Origin.CACHE);
 		if (jdk == null) {
 			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Failed to find JDK in: " + jdkDir);
 		}
