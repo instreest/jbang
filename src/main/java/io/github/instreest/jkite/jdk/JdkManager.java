@@ -60,6 +60,7 @@ public final class JdkManager {
 			jdk = install(version);
 		}
 		Util.verboseMsg("Using JDK: " + jdk + " [" + jdk.origin() + "]");
+		InstallRecord.read(jdk.home()).ifPresent(record -> Util.verboseMsg("   installed: " + record.describe()));
 		return jdk;
 	}
 
@@ -212,12 +213,15 @@ public final class JdkManager {
 		try {
 			requireExpectedHost(entry);
 			Downloader.download(entry.url, pkg);
-			verifyChecksum(entry, pkg);
+			String verified = verifyChecksum(entry, pkg);
 			Util.infoMsg("Installing JDK " + entry.version + "...");
 			Unpacker.unpackJdk(pkg, tmpDir);
 			if (!Jdk.resolveVersion(tmpDir).isPresent()) {
 				throw new IOException("The JDK package does not seem to contain a valid JDK");
 			}
+			// into the tree before it is moved, so that a JDK in the cache is
+			// never there without the record of what it was installed from
+			InstallRecord.write(tmpDir, entry, verified);
 			if (Jdk.of(jdkDir, "jbang") == null) {
 				Util.deletePath(jdkDir, true);
 				Files.move(tmpDir, jdkDir);
@@ -263,8 +267,10 @@ public final class JdkManager {
 	 * mismatch and a checksum that cannot be read abort the installation: a
 	 * checksum that is merely unreachable would otherwise be a way to have the
 	 * archive accepted unverified.
+	 *
+	 * @return the digest that was verified, for {@link InstallRecord}
 	 */
-	private void verifyChecksum(JdkIndex.Entry entry, Path pkg) throws IOException {
+	private String verifyChecksum(JdkIndex.Entry entry, Path pkg) throws IOException {
 		Optional<String> published = Downloader.tryReadString(entry.url + ".sha256.txt");
 		if (!published.isPresent()) {
 			throw new IOException("No SHA-256 published next to " + entry.url
@@ -278,6 +284,7 @@ public final class JdkManager {
 					+ ": expected " + expected + " but got " + actual);
 		}
 		Util.verboseMsg("SHA-256 verified: " + actual);
+		return actual;
 	}
 
 	private Jdk finish(Jdk jdk) {

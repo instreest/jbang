@@ -88,6 +88,14 @@ The first two happen in the shell, before any JVM exists; the last two happen
 in the jar. Each side asks before it fetches, which is why a cold first run
 asks twice. `JKITE_CONFIRM_DOWNLOADS` governs both.
 
+A checksum is checked when something is downloaded and, where it can be
+afforded, whenever what was downloaded is used again: the launcher hashes
+`jkite.jar` on every run, and a resolved dependency is kept only while its size
+and digest still match. A JDK is too big for that - a few hundred megabytes over
+tens of thousands of files - so it is recorded rather than re-checked: what was
+downloaded and what its SHA-256 was goes into `.jkite-install` inside the JDK's
+own directory, which `--verbose` reads back.
+
 ## Inside the jar
 
 ```mermaid
