@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import io.github.instreest.jkite.Settings;
 import io.github.instreest.jkite.util.CacheLock;
+import io.github.instreest.jkite.util.Fingerprint;
 import dev.jbang.util.Util;
 import dev.jbang.dependencies.MavenCoordinate;
 
@@ -24,8 +25,14 @@ import dev.jbang.dependencies.MavenCoordinate;
  *
  * <pre>
  * [key]
- * coordinate&lt;TAB&gt;file&lt;TAB&gt;timestamp
+ * coordinate&lt;TAB&gt;file&lt;TAB&gt;size:sha-256
  * </pre>
+ *
+ * The third field is the {@link Fingerprint} the file had when it was
+ * resolved, which is what says whether the entry still describes what is on
+ * disk. An entry written by an older version records a modification time
+ * there instead; it does not parse as a fingerprint, so the entry is dropped
+ * and resolved once more.
  *
  * The file holds the entries of every script on this machine, so a run that
  * stores its own must not lose anyone else's: it re-reads the file and writes
@@ -95,8 +102,12 @@ final class DependencyCache {
 			return null;
 		}
 		try {
+			Fingerprint fingerprint = Fingerprint.parse(parts[2]);
+			if (fingerprint == null) {
+				return null;
+			}
 			MavenCoordinate coord = parts[0].isEmpty() ? null : MavenCoordinate.fromString(parts[0]);
-			return new ArtifactInfo(coord, Paths.get(parts[1]), Long.parseLong(parts[2]));
+			return new ArtifactInfo(coord, Paths.get(parts[1]), fingerprint);
 		} catch (RuntimeException e) {
 			return null;
 		}
@@ -131,7 +142,14 @@ final class DependencyCache {
 	 */
 	static Map<String, List<ArtifactInfo>> merge(Path file, String key, List<ArtifactInfo> artifacts) {
 		Map<String, List<ArtifactInfo>> entries = read(file);
-		entries.put(key, artifacts);
+		if (artifacts.stream().allMatch(a -> a.getFingerprint() != null)) {
+			entries.put(key, artifacts);
+		} else {
+			// an entry whose files could not be read is an entry that can never
+			// be checked again; resolving once more is the cheaper mistake
+			Util.verboseMsg("Not caching [" + key + "]: not every artifact could be read");
+			entries.remove(key);
+		}
 		write(entries, file);
 		return entries;
 	}
@@ -145,7 +163,7 @@ final class DependencyCache {
 						out.write("[" + e.getKey() + "]\n");
 						for (ArtifactInfo ai : e.getValue()) {
 							String coord = ai.getCoordinate() != null ? ai.getCoordinate().toMavenString() : "";
-							out.write(coord + "\t" + ai.getFile() + "\t" + ai.getTimestamp() + "\n");
+							out.write(coord + "\t" + ai.getFile() + "\t" + ai.getFingerprint() + "\n");
 						}
 						out.write("\n");
 					}

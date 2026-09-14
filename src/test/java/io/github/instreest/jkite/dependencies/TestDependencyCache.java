@@ -27,6 +27,9 @@ import dev.jbang.dependencies.MavenCoordinate;
  */
 class TestDependencyCache {
 
+	/** The SHA-256 of the nine bytes "something", for the hand-written files. */
+	private static final String DIGEST = "3fc9b689459d738f8c88a3a48aa9e33542016b7a4052e001aaa536fca74813cb";
+
 	@TempDir
 	Path dir;
 
@@ -34,9 +37,18 @@ class TestDependencyCache {
 		return dir.resolve("dependency_cache.txt");
 	}
 
-	private static List<ArtifactInfo> artifacts(String... coords) {
+	/** Artifacts of real files, because a fingerprint is taken of one. */
+	private List<ArtifactInfo> artifacts(String... coords) {
 		return Arrays.stream(coords)
-			.map(c -> new ArtifactInfo(MavenCoordinate.fromString(c), Paths.get("/does/not/matter/" + c + ".jar"), 1L))
+			.map(c -> {
+				Path jar = dir.resolve(c + ".jar");
+				try {
+					Files.write(jar, c.getBytes(StandardCharsets.UTF_8));
+				} catch (IOException e) {
+					throw new java.io.UncheckedIOException(e);
+				}
+				return new ArtifactInfo(MavenCoordinate.fromString(c), jar);
+			})
 			.collect(java.util.stream.Collectors.toList());
 	}
 
@@ -64,8 +76,8 @@ class TestDependencyCache {
 		assertEquals(2, read.size());
 		// the coordinate comes back naming the type it was given by default
 		assertEquals("com.example:one:1.0@jar", read.get(0).getCoordinate().toMavenString());
-		assertEquals(Paths.get("/does/not/matter/com.example:two:2.0.jar"), read.get(1).getFile());
-		assertEquals(1L, read.get(1).getTimestamp());
+		assertEquals(dir.resolve("com.example:two:2.0.jar"), read.get(1).getFile());
+		assertTrue(read.get(1).isUpToDate(), "the file is untouched, so the entry still stands");
 	}
 
 	/**
@@ -77,10 +89,10 @@ class TestDependencyCache {
 	void aDamagedLineDropsItsWholeEntry() throws IOException {
 		Files.write(file(), String.join("\n",
 				"[good]",
-				"com.example:one:1.0\t/does/not/matter/one.jar\t1",
+				"com.example:one:1.0\t/does/not/matter/one.jar\t9:" + DIGEST,
 				"",
 				"[damaged]",
-				"com.example:two:1.0\t/does/not/matter/two.jar\t1",
+				"com.example:two:1.0\t/does/not/matter/two.jar\t9:" + DIGEST,
 				"this line is not an artifact",
 				"").getBytes(StandardCharsets.UTF_8));
 
@@ -90,12 +102,29 @@ class TestDependencyCache {
 		assertFalse(read.containsKey("damaged"), "an entry that cannot be read whole is not an entry");
 	}
 
+	/**
+	 * What an older version wrote in the third field was a modification time.
+	 * It is not a fingerprint, so the entry is resolved once more rather than
+	 * being trusted on a field nobody can check.
+	 */
 	@Test
-	void anEntryWithAnUnreadableTimestampIsDroppedToo() throws IOException {
+	void anEntryFromTheTimestampFormatIsDropped() throws IOException {
 		Files.write(file(), String.join("\n",
-				"[damaged]",
-				"com.example:two:1.0\t/does/not/matter/two.jar\tnot-a-number",
+				"[from an older jkite]",
+				"com.example:two:1.0\t/does/not/matter/two.jar\t1789374264623",
 				"").getBytes(StandardCharsets.UTF_8));
+
+		assertEquals(Collections.emptySet(), DependencyCache.read(file()).keySet());
+	}
+
+	/** An entry that could never be checked again is not worth writing down. */
+	@Test
+	void anArtifactThatCouldNotBeReadIsNotCached() {
+		List<ArtifactInfo> unreadable = Collections.singletonList(
+				new ArtifactInfo(MavenCoordinate.fromString("com.example:gone:1.0"),
+						dir.resolve("never-written.jar")));
+
+		DependencyCache.merge(file(), "key", unreadable);
 
 		assertEquals(Collections.emptySet(), DependencyCache.read(file()).keySet());
 	}

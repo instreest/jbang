@@ -1,23 +1,46 @@
 package io.github.instreest.jkite.dependencies;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import io.github.instreest.jkite.util.Fingerprint;
+import dev.jbang.util.Util;
 import dev.jbang.dependencies.MavenCoordinate;
 
-/** A resolved artifact: its coordinate, local file and the file's timestamp. */
+/**
+ * A resolved artifact: its coordinate, the local file it resolved to, and the
+ * fingerprint that file had when it was resolved.
+ *
+ * A cached resolution is a list of these, and it is worth reusing only while
+ * every file in it is still the file the resolution produced. That is what
+ * {@link #isUpToDate()} asks, and it asks it of the bytes: see
+ * {@link Fingerprint} for why the modification time is no answer.
+ */
 public final class ArtifactInfo {
 	private final MavenCoordinate coordinate;
 	private final Path file;
-	private final long timestamp;
+	private final Fingerprint fingerprint;
 
 	public ArtifactInfo(MavenCoordinate coordinate, Path file) {
-		this(coordinate, file, Files.exists(file) ? file.toFile().lastModified() : 0);
+		this(coordinate, file, fingerprintOf(file));
 	}
 
-	public ArtifactInfo(MavenCoordinate coordinate, Path file, long timestamp) {
+	public ArtifactInfo(MavenCoordinate coordinate, Path file, Fingerprint fingerprint) {
 		this.coordinate = coordinate;
 		this.file = file;
-		this.timestamp = timestamp;
+		this.fingerprint = fingerprint;
+	}
+
+	private static Fingerprint fingerprintOf(Path file) {
+		try {
+			return Fingerprint.of(file);
+		} catch (IOException | RuntimeException e) {
+			// a resolution that produced a file we cannot read is already
+			// wrong; say so where it is used rather than failing here
+			Util.verboseMsg("Could not read the resolved " + file + ": " + e);
+			return null;
+		}
 	}
 
 	public MavenCoordinate getCoordinate() {
@@ -28,18 +51,14 @@ public final class ArtifactInfo {
 		return file;
 	}
 
-	public long getTimestamp() {
-		return timestamp;
+	/** What the file held when it was resolved, or null if it could not be read. */
+	public Fingerprint getFingerprint() {
+		return fingerprint;
 	}
 
-	/**
-	 * True if the file still exists with the timestamp we recorded. Some JDKs
-	 * round timestamps to seconds, so a difference in the millisecond part is
-	 * tolerated.
-	 */
+	/** True while the file is still the one this artifact was resolved to. */
 	public boolean isUpToDate() {
-		long ts = file.toFile().lastModified();
-		return Files.isReadable(file) && (timestamp == ts || (ts % 1000 == 0 && timestamp / 1000 == ts / 1000));
+		return fingerprint != null ? fingerprint.matches(file) : Files.isReadable(file);
 	}
 
 	@Override
