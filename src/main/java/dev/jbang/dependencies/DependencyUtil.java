@@ -14,7 +14,7 @@ import java.util.regex.Pattern;
 
 public class DependencyUtil {
 	// JKite shim: same API as upstream except resolveDependencies(), which
-	// lives in dev.jbang.dependencies.DependencyResolver here. Keep the rest in
+	// lives in io.github.instreest.jkite.dependencies.DependencyResolver here. Keep the rest in
 	// sync with upstream when it changes (see misc/upstream-mirror.txt).
 
 

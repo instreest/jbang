@@ -58,7 +58,7 @@ MavenCoordinate.DEFAULT
 JBang 由来の型を**アプリ内部に漏らさない**のが要点。
 
 ```
-dev.jbang.lite.spi
+io.github.instreest.jkite.spi
   ScriptSpec          // パース結果の自前 DTO（deps, repos, sources, files,
                       // javaVersion, mainClass, module, options ...）
   ScriptParser        // ScriptSpec parse(Path, Map<String,String> props)

@@ -66,7 +66,7 @@ one.
 
 ## Staying in step with JBang
 
-JBang sits behind one interface, `DirectiveParser` in `dev.jbang.spi`, which
+JBang sits behind one interface, `DirectiveParser` in `io.github.instreest.jkite.spi`, which
 turns a source file into a `SourceDirectives` built from JKite's own types.
 `MirroredDirectiveParser` is the implementation in use and the only class that
 names `Directives` and `KeyValue`, so the mirrored parser is an implementation
@@ -86,11 +86,11 @@ is the sync becoming expensive in practice, not the artifact appearing;
 Below that interface the tree is in three parts, so that JBang's fixes to the
 directive handling can be taken over without merging:
 
-| | Contents | Maintenance |
-| --- | --- | --- |
-| Mirror | the files in `misc/upstream-mirror.txt`, among them `Directives.java` and its test | copied from JBang unchanged, never edited here |
-| Shims | the files in `misc/upstream-shims.txt` (`Util`, `JavaUtil`, `DependencyUtil`) | upstream's API with a reduced implementation, checked by hand when upstream changes them |
-| JKite | everything else | this fork's own code |
+| | Contents | Package | Maintenance |
+| --- | --- | --- | --- |
+| Mirror | the files in `misc/upstream-mirror.txt`, among them `Directives.java` and its test | `dev.jbang.*` | copied from JBang unchanged, never edited here |
+| Shims | the files in `misc/upstream-shims.txt` (`Util`, `JavaUtil`, `DependencyUtil`) | `dev.jbang.*` | upstream's API with a reduced implementation, checked by hand when upstream changes them |
+| JKite | everything else | `io.github.instreest.jkite.*` | this fork's own code |
 
 ```bash
 misc/sync-upstream.sh            # take the mirrored files from upstream/main
@@ -103,9 +103,18 @@ touched the shims, and records the synced revision in `misc/upstream-ref.txt`.
 Because it only copies whole files, an upstream commit that also changes
 hundreds of unrelated files costs nothing here.
 
-The Java packages are `dev.jbang.*`, which is upstream's namespace. They stay
-that way because the mirrored files are copied byte for byte and reference each
-other by package; renaming them would mean editing every sync.
+The two namespaces in that table are the point, not an accident. JBang's code
+keeps JBang's package, because that is whose code it is and because a mirrored
+file is copied byte for byte - its `package` line included - so a sync stays a
+plain `git checkout` with nothing to rewrite. JKite's own code sits under
+`io.github.instreest.jkite.*`, the reverse-DNS of the repository that publishes
+it, which is what a project with no domain of its own uses. So an
+`import dev.jbang.` in this tree says in one line that what follows came
+from upstream.
+
+The split costs the mirrored files no edit: they reference nothing outside the
+mirror and the shims. Only the shims cross over - `Util` reaches JKite's
+`Settings` - and they are hand-maintained anyway.
 
 ## Tests and CI
 

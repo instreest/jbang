@@ -7,14 +7,14 @@ unchanged; the modifications made for JKite are contributed under the same
 MIT License.
 
 JKite is not affiliated with, endorsed by, or supported by the JBang
-project. The name says where the code comes from, nothing more.
+project. Its name is its own; where the code comes from is said here.
 
 ## Code derived from other projects
 
 | Files | Origin | License |
 | --- | --- | --- |
 | the files listed in `misc/upstream-mirror.txt` (among them `Directives.java`, `MavenCoordinate.java`, `JitPackUtil.java` and their test) | [jbangdev/jbang](https://github.com/jbangdev/jbang), Copyright (c) 2020 Max Rydahl Andersen, copied unchanged | MIT |
-| the files listed in `misc/upstream-shims.txt` and the rest of `src/main/java/dev/jbang/*` and `src/main/scripts/*` | [jbangdev/jbang](https://github.com/jbangdev/jbang), Copyright (c) 2020 Max Rydahl Andersen, derived | MIT |
+| the files listed in `misc/upstream-shims.txt`, and the parts of `src/main/java/io/github/instreest/jkite/*` and `src/main/scripts/*` that are derived from upstream | [jbangdev/jbang](https://github.com/jbangdev/jbang), Copyright (c) 2020 Max Rydahl Andersen, derived | MIT |
 | `Jdk.java`, `JdkManager.java`, the root-folder stripping and `Contents/Home` selection of `Unpacker.java`, parts of `Util.java` (OS/architecture detection, link handling) | [jbangdev/jbang-devkitman](https://github.com/jbangdev/jbang-devkitman), Copyright (c) Max Rydahl Andersen and contributors | MIT |
 | `OsDetector.java` (OS and architecture normalisation tables) | [os-maven-plugin](https://github.com/trustin/os-maven-plugin) by Trustin Lee, as also used by the Nisse os-detector in JBang | Apache License 2.0 |
 

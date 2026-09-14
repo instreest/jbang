@@ -100,7 +100,7 @@ tasks.withType(AbstractArchiveTask) {
 jar {
 	manifest {
 		attributes(
-			'Main-Class': 'dev.jbang.Main',
+			'Main-Class': 'io.github.instreest.jkite.Main',
 			'JKite-Version': project.version
 		)
 	}
@@ -137,7 +137,7 @@ shadowJar {
 	exclude 'META-INF/DEPENDENCIES'
 	manifest {
 		attributes(
-			'Main-Class': 'dev.jbang.Main',
+			'Main-Class': 'io.github.instreest.jkite.Main',
 			// the launchers and the tests read this attribute for --version
 			'JKite-Version': project.version,
 			// plexus-utils ships Java 9/10/11 variants of two classes; without

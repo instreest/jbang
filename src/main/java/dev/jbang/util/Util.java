@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import dev.jbang.ExitException;
-import dev.jbang.Settings;
+import io.github.instreest.jkite.Settings;
 
 /**
  * Small collection of helpers: messages, OS detection, file globbing, hashing
