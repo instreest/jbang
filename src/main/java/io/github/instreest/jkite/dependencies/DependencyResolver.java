@@ -47,6 +47,7 @@ import io.github.instreest.jkite.spi.Providers;
 import dev.jbang.util.Util;
 import dev.jbang.dependencies.MavenCoordinate;
 import dev.jbang.dependencies.MavenRepo;
+import io.github.instreest.jkite.Version;
 
 /**
  * Resolves Maven coordinates (including their transitive dependencies) to
@@ -185,7 +186,7 @@ public final class DependencyResolver {
 	private Session(boolean offline, boolean updateCache, List<MavenRepo> repositories, boolean silent) {
 		Map<String, String> userProperties = new HashMap<>();
 		// avoid being blocked by servers that reject the default "Java" user agent
-		userProperties.put("aether.connector.userAgent", "jkite/" + Util.getVersion());
+		userProperties.put("aether.connector.userAgent", "jkite/" + Version.current());
 
 		ContextOverrides.Builder overrides = ContextOverrides.create()
 			.userProperties(userProperties)

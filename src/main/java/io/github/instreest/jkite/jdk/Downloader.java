@@ -10,6 +10,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.Optional;
 import io.github.instreest.jkite.Settings;
 import dev.jbang.util.Util;
+import io.github.instreest.jkite.Version;
 
 /**
  * Minimal HTTPS downloader. Only https is accepted, both for the URL asked for
@@ -97,7 +98,7 @@ final class Downloader {
 			conn.setInstanceFollowRedirects(false);
 			conn.setConnectTimeout(CONNECT_TIMEOUT);
 			conn.setReadTimeout(READ_TIMEOUT);
-			conn.setRequestProperty("User-Agent", "jkite/" + Util.getVersion());
+			conn.setRequestProperty("User-Agent", "jkite/" + Version.current());
 			int status = conn.getResponseCode();
 			if (status >= 300 && status < 400) {
 				String location = conn.getHeaderField("Location");

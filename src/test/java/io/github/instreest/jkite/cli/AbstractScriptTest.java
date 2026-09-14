@@ -191,8 +191,9 @@ abstract class AbstractScriptTest {
 
 	/**
 	 * Writes a jar whose main class is {@link FakeJBang}, stamped with the given
-	 * Jkite-Version when one is given, as a real jkite.jar is. That is the
-	 * attribute the launchers read out of the manifest for --version.
+	 * Jkite-Version when one is given, as a real jkite.jar is: the launchers
+	 * ask the jar for its version by running it, and this is what it answers
+	 * from.
 	 */
 	protected static void createFakeJar(Path jar, String jkiteVersion) throws IOException {
 		Manifest manifest = new Manifest();

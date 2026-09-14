@@ -101,6 +101,10 @@ jar {
 	manifest {
 		attributes(
 			'Main-Class': 'io.github.instreest.jkite.Main',
+			// the attribute Package.getImplementationVersion() reads back
+			'Implementation-Version': project.version,
+			// and the one that says a manifest is ours, among the many a class
+			// path holds
 			'Jkite-Version': project.version
 		)
 	}
@@ -138,7 +142,12 @@ shadowJar {
 	manifest {
 		attributes(
 			'Main-Class': 'io.github.instreest.jkite.Main',
-			// the launchers and the tests read this attribute for --version
+			// what Version.current() asks for first: Package resolves it to the
+			// jar this class came from, not to whichever jar is first on the
+			// class path
+			'Implementation-Version': project.version,
+			// and the one that marks a manifest as ours, for when Package
+			// cannot answer
 			'Jkite-Version': project.version,
 			// plexus-utils ships Java 9/10/11 variants of two classes; without
 			// this they are dead weight and the Java 8 versions are used

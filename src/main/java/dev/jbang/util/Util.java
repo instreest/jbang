@@ -582,22 +582,4 @@ public final class Util {
 		}
 		return null;
 	}
-
-	public static String getVersion() {
-		String v = Util.class.getPackage() != null ? Util.class.getPackage().getImplementationVersion() : null;
-		if (v == null) {
-			try {
-				java.net.URL res = Util.class.getResource("/META-INF/MANIFEST.MF");
-				if (res != null) {
-					try (InputStream is = res.openStream()) {
-						java.util.jar.Manifest mf = new java.util.jar.Manifest(is);
-						v = mf.getMainAttributes().getValue("Jkite-Version");
-					}
-				}
-			} catch (IOException e) {
-				// ignore
-			}
-		}
-		return v != null ? v : "unknown";
-	}
 }
