@@ -1,9 +1,16 @@
 package io.github.instreest.jkite;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import dev.jbang.ExitException;
 import dev.jbang.util.Util;
 
 /**
@@ -15,11 +22,14 @@ import dev.jbang.util.Util;
  * $JKITE_DIR (~/.jkite)
  *   cache/            ($JKITE_CACHE_DIR)
  *     jars/           compiled scripts
- *     jdks/           JDKs installed by JBang
- *     stdin/          scripts read from stdin, by content hash
- *     urls/           downloaded files
+ *     jdks/           JDKs installed by jkite
+ *     urls/           files being downloaded
+ *     .locks/         held while a cache entry is written
  *     dependency_cache.txt
  * </pre>
+ *
+ * Every one of them can be thrown away: the next run builds or fetches what it
+ * needs again. <code>--clear-cache</code> does exactly that.
  */
 public final class Settings {
 	public static final String ENV_DIR = "JKITE_DIR";
@@ -68,7 +78,7 @@ public final class Settings {
 	}
 
 	public static Path getCacheDir(CacheClass cclass) {
-		String v = System.getenv(ENV_CACHE_DIR + "_" + cclass.name().toUpperCase());
+		String v = System.getenv(ENV_CACHE_DIR + "_" + cclass.name().toUpperCase(Locale.ROOT));
 		Path dir = v != null ? Paths.get(v) : getCacheDir().resolve(cclass.name());
 		return mkdirs(dir);
 	}
@@ -137,9 +147,64 @@ public final class Settings {
 		return defaultValue;
 	}
 
+	/**
+	 * Throws away what the cache can produce again: the built jars, whatever a
+	 * download left behind, and the resolved class paths. The installed JDKs
+	 * are left where they are - they are pinned, there are few of them, and
+	 * fetching one again costs minutes - and so is jkite's own jar, which is
+	 * running.
+	 *
+	 * @return one line per thing it did, for the caller to print
+	 */
+	public static List<String> clearCache() {
+		List<String> report = new ArrayList<>();
+		report.add(removeContents(getCacheDir(CacheClass.jars), "built jars"));
+		report.add(removeContents(getCacheDir(CacheClass.urls), "unfinished downloads"));
+		Path deps = getDependencyCacheFile();
+		if (Files.exists(deps)) {
+			report.add(Util.deletePath(deps, true)
+					? "removed the resolved dependencies of " + deps
+					: "could not remove " + deps);
+		}
+		report.add("kept the JDKs in " + getCacheDir(CacheClass.jdks)
+				+ " (remove that directory by hand to fetch them again)");
+		return report;
+	}
+
+	private static String removeContents(Path dir, String what) {
+		int removed = 0;
+		int kept = 0;
+		try (Stream<Path> entries = Files.list(dir)) {
+			for (Path entry : entries.collect(Collectors.toList())) {
+				if (Util.deletePath(entry, true)) {
+					removed++;
+				} else {
+					kept++;
+				}
+			}
+		} catch (IOException e) {
+			return "could not read " + dir + ": " + e;
+		}
+		return "removed " + removed + " " + what + " from " + dir
+				+ (kept > 0 ? " (" + kept + " could not be removed)" : "");
+	}
+
+	/** The lock files that keep concurrent runs out of each other's writes. */
+	public static Path getLockDir() {
+		return mkdirs(getCacheDir().resolve(".locks"));
+	}
+
+	/**
+	 * Creates the directory if it is not there yet. A failure is reported here,
+	 * where the directory and the variable that named it are still known;
+	 * leaving it to whatever writes there next turns "the cache directory
+	 * cannot be created" into an unrelated-looking error further on.
+	 */
 	private static Path mkdirs(Path dir) {
-		if (!Files.isDirectory(dir)) {
-			dir.toFile().mkdirs();
+		if (!Files.isDirectory(dir) && !dir.toFile().mkdirs() && !Files.isDirectory(dir)) {
+			throw new ExitException(ExitException.EXIT_UNEXPECTED_STATE,
+					"Could not create the directory " + dir + ". Set " + ENV_DIR + " or " + ENV_CACHE_DIR
+							+ " to a directory that can be written to.");
 		}
 		return dir;
 	}

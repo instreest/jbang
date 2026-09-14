@@ -30,8 +30,9 @@ import dev.jbang.ExitException;
  * </pre>
  *
  * There are no subcommands: jkite does one thing, which is to build the
- * script and run it, and <code>--help</code> and <code>--version</code> are
- * the only options that do something else. Everything about the script - its
+ * script and run it. <code>--help</code>, <code>--version</code> and
+ * <code>--clear-cache</code> are the only options that do something else, and
+ * each of them answers and exits. Everything about the script - its
  * Java version, dependencies, main class - is what its <code>//</code>
  * directives say; the options only tune the run. They are read getopt style,
  * up to the script: every option is accepted anywhere before it,
@@ -122,6 +123,9 @@ public final class Main {
 				case "--fresh":
 					Util.setFresh(true);
 					break;
+				case "--clear-cache":
+					Settings.clearCache().forEach(realOut::println);
+					throw new ExitException(ExitException.EXIT_OK);
 				case "-o":
 				case "--offline":
 					Util.setOffline(true);
@@ -254,6 +258,7 @@ public final class Main {
 		realOut.println("  --verbose            Print what is being done");
 		realOut.println("  --quiet              Only print errors");
 		realOut.println("  --fresh              Ignore caches and rebuild/re-resolve everything");
+		realOut.println("  --clear-cache        Remove the built jars and resolved dependencies, and exit");
 		realOut.println("  -o, --offline        Never access the network");
 		realOut.println("  -Dkey=value          System property for directive substitution and the script");
 		realOut.println("  -R<option>           Additional JVM option when running");

@@ -151,6 +151,7 @@ jkite [<options>] <script.java> [<args>...]
 | `--verbose` | print what is being done |
 | `--quiet` | only print errors |
 | `--fresh` | ignore the caches and rebuild |
+| `--clear-cache` | remove the built jars and resolved dependencies, and exit |
 | `-o`, `--offline` | never access the network |
 | `-Dkey=value` | a system property, for `${...}` in directives and for the script |
 | `-R<option>` | an extra JVM option for the script |
