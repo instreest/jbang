@@ -133,7 +133,7 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		int i = 0;
 		// leading "NAME", "value" pairs are environment variables
 		while (args.length - i > 2
-				&& (args[i].startsWith("JBANG_") || args[i].equals("JAVA_HOME") || args[i].equals("PATH"))) {
+				&& (args[i].startsWith("JKITE_") || args[i].equals("JAVA_HOME") || args[i].equals("PATH"))) {
 			env.put(args[i], args[i + 1]);
 			i += 2;
 		}

@@ -1,3 +1,4 @@
+import org.gradle.api.tasks.PathSensitivity
 plugins {
 	id "java"
 	id "com.gradleup.shadow" version "8.3.9"
@@ -77,6 +78,13 @@ dependencies {
 
 test {
 	useJUnitPlatform()
+	// The launcher tests run the scripts out of the source tree, which Gradle
+	// cannot see from the Java sources. Without this, editing a script leaves
+	// the test task up to date and the tests that cover it never run.
+	inputs.files(fileTree('src/main/scripts')).withPropertyName('scripts')
+		.withPathSensitivity(PathSensitivity.RELATIVE)
+	inputs.files(fileTree('dist')).withPropertyName('dist')
+		.withPathSensitivity(PathSensitivity.RELATIVE)
 	// A download asks before it starts, and a test run has no terminal to answer
 	// on. Left to itself the gate would say what it is fetching and carry on,
 	// which is what "auto" does with nobody to ask - but then CI would depend on
