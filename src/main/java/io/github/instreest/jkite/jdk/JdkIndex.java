@@ -73,7 +73,7 @@ public final class JdkIndex {
 
 	/**
 	 * Loads (and caches) the index for the current platform. The environment
-	 * variable JBANG_JDK_INDEX overrides where it comes from: it is either a
+	 * variable JKITE_JDK_INDEX overrides where it comes from: it is either a
 	 * path to a JSON file in the same format or a Maven coordinate.
 	 */
 	public static JdkIndex instance() {
@@ -151,7 +151,7 @@ public final class JdkIndex {
 			break;
 		case alpine_linux:
 			// the index only lists glibc builds; they do not run on musl, so an
-			// Alpine user has to point JBANG_JDK_INDEX at a suitable index
+			// Alpine user has to point JKITE_JDK_INDEX at a suitable index
 			Util.warnMsg("The JDK index has no musl (Alpine) builds; "
 					+ "set " + Settings.ENV_JDK_INDEX + " or install a JDK yourself");
 			osName = "linux";

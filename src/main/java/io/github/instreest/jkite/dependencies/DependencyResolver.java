@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -91,8 +92,8 @@ public final class DependencyResolver {
 
 	/**
 	 * Resolves the given coordinates and returns the artifacts on the class path
-	 * in dependency order. Results are cached on disk (keyed by the list of
-	 * coordinates) and reused as long as the files are unchanged.
+	 * in dependency order. Results are cached on disk (see {@link #cacheKey})
+	 * and reused as long as the files are unchanged.
 	 */
 	public static List<ArtifactInfo> resolve(List<String> deps, List<MavenRepo> repos) {
 		if (deps.isEmpty()) {
@@ -104,8 +105,7 @@ public final class DependencyResolver {
 			Util.verboseMsg("Repositories: "
 					+ repos.stream().map(MavenRepo::toString).collect(Collectors.joining(", ")));
 		}
-		String key = repos.stream().map(MavenRepo::toString).collect(Collectors.joining(","))
-				+ "|" + String.join(Settings.CP_SEPARATOR, depIds);
+		String key = cacheKey(depIds, repos);
 		if (!Util.isFresh()) {
 			List<ArtifactInfo> cached = DependencyCache.find(key);
 			if (cached != null) {
@@ -117,7 +117,9 @@ public final class DependencyResolver {
 			// what the local Maven repository already holds needs no download and
 			// is therefore not worth asking about; --fresh skips the shortcut
 			// because it exists to go to the remote repositories again
-			List<ArtifactInfo> local = Util.isFresh() ? null : resolveFromLocalRepo(depIds, repos);
+			List<ArtifactInfo> local = Util.isFresh() || hasSnapshot(depIds)
+					? null
+					: resolveFromLocalRepo(depIds, repos);
 			if (local != null) {
 				Util.verboseMsg("Resolved artifact(s) without downloading: " + local);
 				DependencyCache.store(key, local);
@@ -137,6 +139,31 @@ public final class DependencyResolver {
 			Util.verboseMsg("Resolved artifact(s): " + artifacts);
 			return artifacts;
 		}
+	}
+
+	/**
+	 * What a cached resolution was a resolution of: the coordinates, the
+	 * repositories they were looked for in, and the local repository the result
+	 * points into. The last one because the files a cache entry names live in
+	 * that repository; pointed at another one, the same coordinates are another
+	 * set of files, and answering from the entry would quietly keep using the
+	 * old repository.
+	 */
+	private static String cacheKey(List<String> depIds, List<MavenRepo> repos) {
+		Path localRepo = Settings.getLocalMavenRepoOverride();
+		return repos.stream().map(MavenRepo::toString).collect(Collectors.joining(","))
+				+ "|" + (localRepo != null ? localRepo.toAbsolutePath() : "")
+				+ "|" + String.join(Settings.CP_SEPARATOR, depIds);
+	}
+
+	/**
+	 * True when one of the coordinates names a snapshot. The local repository
+	 * holds whichever snapshot was last downloaded, and there is no telling
+	 * from here whether a newer one has been published, so the shortcut below
+	 * does not apply: asking a snapshot's repository is the point of a snapshot.
+	 */
+	private static boolean hasSnapshot(List<String> depIds) {
+		return depIds.stream().anyMatch(id -> id.toUpperCase(Locale.ROOT).contains("-SNAPSHOT"));
 	}
 
 	/**
