@@ -113,6 +113,11 @@ Java version, the manifest entries and jkite's own version. So an unchanged
 tool is never compiled twice, and a tool that would build differently is never
 served from the jar of the build before it.
 
+The jar that comes out is written down too: its size and digest go into
+`<name>.jar.id` next to it, and a jar that no longer matches is built again
+instead of being run. Every entry in it carries a fixed timestamp, so the same
+inputs produce the same bytes and that check means something.
+
 What the hash does not see is a `.java` file the script never declares. When a
 script has no `//DEPS`, javac is given no class path, and its default one - the
 directory the run started in - is where it also looks for sources; a file it

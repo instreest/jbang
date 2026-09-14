@@ -24,6 +24,7 @@ import io.github.instreest.jkite.dependencies.ArtifactInfo;
 import io.github.instreest.jkite.jdk.Jdk;
 import dev.jbang.util.CommandBuffer;
 import dev.jbang.util.JavaUtil;
+import io.github.instreest.jkite.util.Fingerprint;
 import io.github.instreest.jkite.util.MainClassFinder;
 import dev.jbang.util.Util;
 
@@ -91,6 +92,9 @@ public class AppBuilder {
 			Util.verboseMsg("Build required as " + jar + " not readable or not found.");
 			return false;
 		}
+		if (!isTheJarThatWasBuilt(jar)) {
+			return false;
+		}
 		if (!project.resolveClassPath().stream().allMatch(ArtifactInfo::isUpToDate)) {
 			Util.verboseMsg("Building as previously built jar found but its dependencies are not up-to-date.");
 			return false;
@@ -131,6 +135,42 @@ public class AppBuilder {
 			Util.verboseMsg("Building as previously built jar could not be read: " + e);
 			return false;
 		}
+	}
+
+	/** Where the fingerprint of a built jar is kept, next to the jar. */
+	private static Path fingerprintFile(Path jar) {
+		return jar.resolveSibling(jar.getFileName() + ".id");
+	}
+
+	/**
+	 * True when the jar is the one this build directory says it is.
+	 *
+	 * The directory is named after the inputs, so a jar in it is the jar those
+	 * inputs produce - as long as it is still the file that was put there. A
+	 * jar the build never finished writing cannot end up here (it is renamed
+	 * into place), but a cache lives on a disk for months and is written to by
+	 * whoever has the account. The fingerprint is what says so, and it is
+	 * cheap: these jars hold a few classes.
+	 */
+	private boolean isTheJarThatWasBuilt(Path jar) {
+		Path file = fingerprintFile(jar);
+		Fingerprint expected = null;
+		try {
+			expected = Files.isReadable(file) ? Fingerprint.parse(Util.readString(file).trim()) : null;
+		} catch (RuntimeException e) {
+			Util.verboseMsg("Could not read " + file + ": " + e);
+		}
+		if (expected == null) {
+			// jars built before this was written down, and jars whose
+			// fingerprint was lost, are built once more and get one
+			Util.verboseMsg("Building as " + jar + " has no fingerprint to check it against.");
+			return false;
+		}
+		if (!expected.matches(jar)) {
+			Util.warnMsg("The cached " + jar + " is not the jar that was built there. Building it again.");
+			return false;
+		}
+		return true;
 	}
 
 	private void compile(Path compileDir) throws IOException {
@@ -249,6 +289,10 @@ public class AppBuilder {
 				// step, so a reader sees either the old jar or the new one
 				Files.move(tmp, jar, StandardCopyOption.REPLACE_EXISTING);
 			}
+			// after the jar, not before: the two cannot be put in place as one,
+			// and a jar without its fingerprint is built again, while a
+			// fingerprint without its jar would be a promise about nothing
+			Util.writeString(fingerprintFile(jar), Fingerprint.of(jar).toString());
 		} finally {
 			// a jar that was never finished must not be left behind in the
 			// cache directory, where nothing would ever clean it up

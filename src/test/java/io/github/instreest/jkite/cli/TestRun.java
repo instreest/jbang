@@ -7,11 +7,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
 
@@ -113,6 +115,48 @@ class TestRun extends AbstractScriptTest {
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("some output"), result.stdout);
 		assertTrue(result.stderr.contains("some error output"), result.stderr);
+	}
+
+	/**
+	 * A jar in a build directory is the jar those inputs produce, and jkite says
+	 * so by recording its fingerprint next to it. A jar that is not that one is
+	 * built again rather than handed to java.
+	 *
+	 * The jar this test damages still opens as a jar - the manifest and the
+	 * entries are all readable - so every other check passes it. Only java
+	 * refuses it, with "Invalid or corrupt jarfile", which is what a run would
+	 * have ended in.
+	 */
+	@Test
+	void aCachedJarThatIsNotTheOneBuiltThereIsBuiltAgain() throws Exception {
+		Path script = tempDir.resolve("Hello.java");
+		Files.write(script, ("public class Hello { public static void main(String... a) {"
+				+ " System.out.println(\"hello from the jar\"); } }\n").getBytes(StandardCharsets.UTF_8));
+		Map<String, String> env = env();
+
+		RunResult first = runProcess(jkite(script.toString()), env);
+		assertEquals(0, first.exitCode, first.stderr);
+		assertTrue(first.stdout.contains("hello from the jar"), first.stdout);
+
+		Path jar = builtJar();
+		Files.write(jar, "x".getBytes(StandardCharsets.UTF_8), StandardOpenOption.APPEND);
+
+		RunResult second = runProcess(jkite(script.toString()), env);
+
+		assertEquals(0, second.exitCode, second.stderr);
+		assertTrue(second.stdout.contains("hello from the jar"), second.stdout);
+		assertTrue(second.stderr.contains("is not the jar that was built there"), second.stderr);
+	}
+
+	/** The one jar under the cache directory this test's runs share. */
+	private Path builtJar() throws Exception {
+		Path jars = tempSubDir("cache-run").resolve("jars");
+		try (Stream<Path> dirs = Files.list(jars)) {
+			return dirs.map(d -> d.resolve("Hello.jar"))
+				.filter(Files::isRegularFile)
+				.findFirst()
+				.orElseThrow(() -> new AssertionError("no jar was built under " + jars));
+		}
 	}
 
 	/** jkite's main class on this JVM, the test classpath included. */
