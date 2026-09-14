@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -13,6 +14,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import io.github.instreest.jkite.Settings;
+import io.github.instreest.jkite.util.CacheLock;
 import dev.jbang.util.Util;
 import dev.jbang.dependencies.MavenCoordinate;
 
@@ -24,8 +26,16 @@ import dev.jbang.dependencies.MavenCoordinate;
  * [key]
  * coordinate&lt;TAB&gt;file&lt;TAB&gt;timestamp
  * </pre>
+ *
+ * The file holds the entries of every script on this machine, so a run that
+ * stores its own must not lose anyone else's: it re-reads the file and writes
+ * the merged result, under a lock, rather than writing back the copy it read
+ * when it started.
  */
 final class DependencyCache {
+	/** The name of the lock taken while the file is rewritten. */
+	private static final String LOCK = "dependency_cache";
+
 	private static Map<String, List<ArtifactInfo>> cache;
 
 	private DependencyCache() {
@@ -33,35 +43,63 @@ final class DependencyCache {
 
 	private static Map<String, List<ArtifactInfo>> load() {
 		if (cache == null) {
-			cache = new LinkedHashMap<>();
-			Path file = Settings.getDependencyCacheFile();
-			if (Files.isRegularFile(file)) {
-				try (BufferedReader rdr = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-					String line;
-					List<ArtifactInfo> current = null;
-					while ((line = rdr.readLine()) != null) {
-						if (line.isEmpty()) {
-							continue;
-						}
-						if (line.startsWith("[") && line.endsWith("]")) {
-							current = new ArrayList<>();
-							cache.put(line.substring(1, line.length() - 1), current);
-						} else if (current != null) {
-							String[] parts = line.split("\t");
-							if (parts.length == 3) {
-								MavenCoordinate coord = parts[0].isEmpty() ? null
-										: MavenCoordinate.fromString(parts[0]);
-								current.add(new ArtifactInfo(coord, Paths.get(parts[1]), Long.parseLong(parts[2])));
-							}
-						}
-					}
-				} catch (IOException | RuntimeException e) {
-					Util.warnMsg("Ignoring unreadable dependency cache " + file + ": " + e.getMessage());
-					cache.clear();
-				}
-			}
+			cache = read(Settings.getDependencyCacheFile());
 		}
 		return cache;
+	}
+
+	/**
+	 * Reads the file. A line that cannot be read takes its whole entry with it:
+	 * a class path with one artifact missing still looks usable and would fail
+	 * much later, when the script cannot find a class.
+	 */
+	static Map<String, List<ArtifactInfo>> read(Path file) {
+		Map<String, List<ArtifactInfo>> entries = new LinkedHashMap<>();
+		if (!Files.isRegularFile(file)) {
+			return entries;
+		}
+		try (BufferedReader rdr = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+			String line;
+			String key = null;
+			List<ArtifactInfo> current = null;
+			while ((line = rdr.readLine()) != null) {
+				if (line.isEmpty()) {
+					continue;
+				}
+				if (line.startsWith("[") && line.endsWith("]")) {
+					key = line.substring(1, line.length() - 1);
+					current = new ArrayList<>();
+					entries.put(key, current);
+				} else if (current != null) {
+					ArtifactInfo artifact = parse(line);
+					if (artifact == null) {
+						Util.verboseMsg("Dropping the damaged entry [" + key + "] of " + file + ": " + line);
+						entries.remove(key);
+						current = null;
+					} else {
+						current.add(artifact);
+					}
+				}
+			}
+		} catch (IOException | RuntimeException e) {
+			Util.warnMsg("Ignoring unreadable dependency cache " + file + ": " + e.getMessage());
+			return new LinkedHashMap<>();
+		}
+		return entries;
+	}
+
+	/** One artifact line, or null when it is not one. */
+	private static ArtifactInfo parse(String line) {
+		String[] parts = line.split("\t");
+		if (parts.length != 3) {
+			return null;
+		}
+		try {
+			MavenCoordinate coord = parts[0].isEmpty() ? null : MavenCoordinate.fromString(parts[0]);
+			return new ArtifactInfo(coord, Paths.get(parts[1]), Long.parseLong(parts[2]));
+		} catch (RuntimeException e) {
+			return null;
+		}
 	}
 
 	static List<ArtifactInfo> find(String key) {
@@ -80,25 +118,45 @@ final class DependencyCache {
 	}
 
 	static void store(String key, List<ArtifactInfo> artifacts) {
-		Map<String, List<ArtifactInfo>> c = load();
-		c.put(key, artifacts);
-		Path file = Settings.getDependencyCacheFile();
+		try (CacheLock lock = CacheLock.acquire(LOCK, null)) {
+			cache = merge(Settings.getDependencyCacheFile(), key, artifacts);
+		}
+	}
+
+	/**
+	 * Adds one entry to what the file holds <em>now</em> and writes the result
+	 * back, rather than to the copy this run read when it started: another run
+	 * may have stored its own entry in between, and that one is in the file but
+	 * not in our copy of it.
+	 */
+	static Map<String, List<ArtifactInfo>> merge(Path file, String key, List<ArtifactInfo> artifacts) {
+		Map<String, List<ArtifactInfo>> entries = read(file);
+		entries.put(key, artifacts);
+		write(entries, file);
+		return entries;
+	}
+
+	private static void write(Map<String, List<ArtifactInfo>> entries, Path file) {
 		try {
 			Path tmp = Files.createTempFile(file.getParent(), file.getFileName().toString(), ".tmp");
-			try (Writer out = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
-				for (Map.Entry<String, List<ArtifactInfo>> e : c.entrySet()) {
-					out.write("[" + e.getKey() + "]\n");
-					for (ArtifactInfo ai : e.getValue()) {
-						String coord = ai.getCoordinate() != null ? ai.getCoordinate().toMavenString() : "";
-						out.write(coord + "\t" + ai.getFile() + "\t" + ai.getTimestamp() + "\n");
-					}
-					out.write("\n");
-				}
-			}
 			try {
-				Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-			} catch (IOException e) {
-				Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+				try (Writer out = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
+					for (Map.Entry<String, List<ArtifactInfo>> e : entries.entrySet()) {
+						out.write("[" + e.getKey() + "]\n");
+						for (ArtifactInfo ai : e.getValue()) {
+							String coord = ai.getCoordinate() != null ? ai.getCoordinate().toMavenString() : "";
+							out.write(coord + "\t" + ai.getFile() + "\t" + ai.getTimestamp() + "\n");
+						}
+						out.write("\n");
+					}
+				}
+				try {
+					Files.move(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+				} catch (AtomicMoveNotSupportedException e) {
+					Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+				}
+			} finally {
+				Util.deletePath(tmp, true);
 			}
 		} catch (IOException e) {
 			Util.errorMsg("Issue writing to dependency cache", e);

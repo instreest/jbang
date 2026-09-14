@@ -1,10 +1,7 @@
 package io.github.instreest.jkite.jdk;
 
 import java.io.IOException;
-import java.io.RandomAccessFile;
 import java.net.URI;
-import java.nio.channels.FileChannel;
-import java.nio.channels.FileLock;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -20,6 +17,7 @@ import dev.jbang.ExitException;
 import io.github.instreest.jkite.Settings;
 import io.github.instreest.jkite.spi.DownloadGate;
 import io.github.instreest.jkite.spi.Providers;
+import io.github.instreest.jkite.util.CacheLock;
 import io.github.instreest.jkite.util.RequestedVersion;
 import dev.jbang.util.Util;
 
@@ -28,10 +26,10 @@ import dev.jbang.util.Util;
  * download URLs listed in the {@link JdkIndex}. Search order for a requested
  * version:
  * <ol>
- * <li>the JVM running JBang</li>
+ * <li>the JVM running jkite</li>
  * <li>JAVA_HOME</li>
  * <li>javac found on the PATH</li>
- * <li>JDKs installed by JBang in the cache ($JKITE_CACHE_DIR/jdks)</li>
+ * <li>JDKs installed by jkite in the cache ($JKITE_CACHE_DIR/jdks)</li>
  * <li>download and install into the cache</li>
  * </ol>
  */
@@ -111,7 +109,7 @@ public final class JdkManager {
 		}
 	}
 
-	/** JDKs installed in the JBang cache, newest first. */
+	/** JDKs installed in jkite's own cache, newest first. */
 	public List<Jdk> listJBangJdks() {
 		if (!Files.isDirectory(jdksDir)) {
 			return new ArrayList<>();
@@ -137,7 +135,7 @@ public final class JdkManager {
 	 * Downloads and installs a JDK satisfying the request into
 	 * $JKITE_CACHE_DIR/jdks/&lt;version&gt;. The archive's SHA-256 is verified
 	 * against the checksum published next to it. A lock file makes concurrent
-	 * JBang processes wait for each other instead of installing on top of one
+	 * jkite processes wait for each other instead of installing on top of one
 	 * another. Nothing outside that directory is touched: running a script
 	 * never changes which JDK the next run picks.
 	 */
@@ -156,7 +154,12 @@ public final class JdkManager {
 							+ "into " + jdksDir)));
 		JdkIndex.Entry entry = selectEntry(version);
 		Path jdkDir = jdksDir.resolve(entry.version);
-		try (Lock lock = Lock.acquire(jdksDir.resolve(".locks").resolve(entry.version + ".lock"))) {
+		try (CacheLock lock = CacheLock.acquireAt(jdksDir.resolve(".locks").resolve(entry.version + ".lock"),
+				"Waiting for another jkite process to finish installing a JDK...")) {
+			if (!lock.isHeld()) {
+				Util.warnMsg("Could not lock the JDK directory. If another jkite is installing a JDK"
+						+ " at the same time, one of the two installations may fail.");
+			}
 			// another process may have installed this exact entry while we were
 			// waiting for the lock; the directory is named after the entry, so
 			// finding a JDK there means there is nothing left to download
@@ -196,7 +199,10 @@ public final class JdkManager {
 	}
 
 	private Jdk download(JdkIndex.Entry entry, Path jdkDir) {
-		Path tmpDir = jdksDir.resolve(entry.version + ".tmp");
+		// named after this process, so that an installation running without a
+		// lock (a filesystem that cannot lock) unpacks into a directory of its
+		// own instead of into the one another run is unpacking into
+		Path tmpDir = jdksDir.resolve(entry.version + "." + ProcessHandle.current().pid() + ".tmp");
 		Path pkg = Settings.getCacheDir(Settings.CacheClass.urls)
 			.resolve("bootstrap-jdk-" + entry.version + "." + entry.archiveType);
 		Util.deletePath(tmpDir, true);
@@ -212,8 +218,14 @@ public final class JdkManager {
 			if (!Jdk.resolveVersion(tmpDir).isPresent()) {
 				throw new IOException("The JDK package does not seem to contain a valid JDK");
 			}
-			Util.deletePath(jdkDir, true);
-			Files.move(tmpDir, jdkDir);
+			if (Jdk.of(jdkDir, "jbang") == null) {
+				Util.deletePath(jdkDir, true);
+				Files.move(tmpDir, jdkDir);
+			} else {
+				// another run installed it while this one was downloading, and
+				// its copy is as good as ours
+				Util.verboseMsg("JDK " + entry.version + " was installed by another process, keeping that one");
+			}
 		} catch (IOException | RuntimeException e) {
 			Util.deletePath(tmpDir, true);
 			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
@@ -289,47 +301,4 @@ public final class JdkManager {
 		return jdkHome;
 	}
 
-	/** An inter-process lock held for the duration of an installation. */
-	private static final class Lock implements AutoCloseable {
-		private final Path file;
-		private final RandomAccessFile raf;
-		private final FileLock lock;
-
-		private Lock(Path file, RandomAccessFile raf, FileLock lock) {
-			this.file = file;
-			this.raf = raf;
-			this.lock = lock;
-		}
-
-		static Lock acquire(Path file) {
-			try {
-				Files.createDirectories(file.toAbsolutePath().getParent());
-				RandomAccessFile raf = new RandomAccessFile(file.toFile(), "rw");
-				FileChannel channel = raf.getChannel();
-				FileLock lock = channel.tryLock();
-				if (lock == null) {
-					Util.infoMsg("Waiting for another JBang process to finish installing a JDK...");
-					lock = channel.lock();
-				}
-				return new Lock(file, raf, lock);
-			} catch (IOException | RuntimeException e) {
-				Util.verboseMsg("Could not lock " + file + ", continuing without a lock: " + e);
-				return new Lock(file, null, null);
-			}
-		}
-
-		@Override
-		public void close() {
-			try {
-				if (lock != null) {
-					lock.release();
-				}
-				if (raf != null) {
-					raf.close();
-				}
-			} catch (IOException e) {
-				Util.verboseMsg("Could not release the lock on " + file + ": " + e);
-			}
-		}
-	}
 }
