@@ -23,13 +23,13 @@ import dev.jbang.util.Util;
 import dev.jbang.ExitException;
 
 /**
- * JKite command line.
+ * jkite command line.
  *
  * <pre>
  * jkite [options] &lt;script.java&gt; [args...]
  * </pre>
  *
- * There are no subcommands: JKite does one thing, which is to build the
+ * There are no subcommands: jkite does one thing, which is to build the
  * script and run it, and <code>--help</code> and <code>--version</code> are
  * the only options that do something else. Everything about the script - its
  * Java version, dependencies, main class - is what its <code>//</code>
@@ -189,7 +189,7 @@ public final class Main {
 			}
 			if (!file.toString().endsWith(".java")) {
 				throw new ExitException(ExitException.EXIT_INVALID_INPUT,
-						"Only .java source files are supported by JKite: '" + script + "'");
+						"Only .java source files are supported by jkite: '" + script + "'");
 			}
 			return new Project(file, properties);
 		}
@@ -239,7 +239,7 @@ public final class Main {
 		realOut.println();
 		realOut.println("Builds and runs a single-file Java program. What it needs - its Java version,");
 		realOut.println("dependencies, sources - is declared in the program with //JAVA, //DEPS and");
-		realOut.println("//SOURCES directives, and JKite fetches all of it.");
+		realOut.println("//SOURCES directives, and jkite fetches all of it.");
 		realOut.println();
 		realOut.println("Usage:");
 		realOut.println("  jkite [<options>] <script.java> [<args>...]");
@@ -250,7 +250,7 @@ public final class Main {
 		realOut.println("Options:");
 		realOut.println("  -h, --help           Print this help and exit");
 		realOut.println("  -V, --version        Print the version and exit");
-		realOut.println("  --update [<ref>]     Update this JKite installation and exit");
+		realOut.println("  --update [<ref>]     Update this jkite installation and exit");
 		realOut.println("  --verbose            Print what is being done");
 		realOut.println("  --quiet              Only print errors");
 		realOut.println("  --fresh              Ignore caches and rebuild/re-resolve everything");
@@ -259,7 +259,7 @@ public final class Main {
 		realOut.println("  -R<option>           Additional JVM option when running");
 		realOut.println("  -y, --yes            Download what is missing without asking");
 		realOut.println();
-		realOut.println("Before a JDK or a dependency is downloaded, JKite says so and, when it");
+		realOut.println("Before a JDK or a dependency is downloaded, jkite says so and, when it");
 		realOut.println("is run from a terminal, asks. JKITE_CONFIRM_DOWNLOADS=never (or");
 		realOut.println("JKITE_ASSUME_YES=1, or --yes) never asks, =always refuses to download");
 		realOut.println("when there is no terminal to ask on.");

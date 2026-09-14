@@ -1,7 +1,7 @@
 @echo off
-rem Installs JKite into a project: the launcher scripts, this installer and
+rem Installs jkite into a project: the launcher scripts, this installer and
 rem jkite.properties go into jkite\, which is committed, so the project
-rem can be built and run without JKite (or a JDK) being installed on the
+rem can be built and run without jkite (or a JDK) being installed on the
 rem machine.
 rem
 rem Everything comes from a GitHub release, over https. jkite.jar and a JDK
@@ -59,7 +59,7 @@ rem leaves an existing installation as it was
 set "staging=%TEMP%\jkite-%RANDOM%%RANDOM%"
 mkdir "%staging%" || exit /b 1
 
-echo Installing JKite from !base! into !dir! 1>&2
+echo Installing jkite from !base! into !dir! 1>&2
 rem what a project gets; dist\ in the repository holds the same set
 for %%F in (jkite jkite.cmd jkite-bootstrap-jdk jkite-bootstrap-jdk.cmd jkite-bootstrap-jar jkite-bootstrap-jar.cmd jkite.properties install.sh install.cmd README.md LICENSE) do (
   curl -fsSL --proto "=https,http" --proto-redir "=https" "!base!/%%F" -o "%staging%\%%F" || goto :failed

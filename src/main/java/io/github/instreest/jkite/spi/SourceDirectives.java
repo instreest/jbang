@@ -6,10 +6,10 @@ import java.util.List;
 import dev.jbang.dependencies.MavenRepo;
 
 /**
- * The <code>//</code>-directives of one source file, as JKite needs them.
+ * The <code>//</code>-directives of one source file, as jkite needs them.
  *
  * This is the boundary towards JBang: {@link DirectiveParser} produces it, and
- * nothing above it knows which parser did. The types here are JKite's own,
+ * nothing above it knows which parser did. The types here are jkite's own,
  * with one deliberate exception: {@link MavenRepo} is a plain value type shared
  * with the dependency resolver, and duplicating it would buy nothing.
  *

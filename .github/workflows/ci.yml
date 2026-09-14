@@ -1,4 +1,4 @@
-# Builds and tests JKite on Linux and Windows.
+# Builds and tests jkite on Linux and Windows.
 #
 # Windows is the reason this workflow exists. The launcher and the two
 # bootstrap scripts are written twice, once for POSIX shells and once for
@@ -36,7 +36,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # A JDK to build with. JKite targets Java 11 (--release 11), so this
+      # A JDK to build with. jkite targets Java 11 (--release 11), so this
       # only has to be new enough for Gradle.
       - uses: actions/setup-java@v4
         with:

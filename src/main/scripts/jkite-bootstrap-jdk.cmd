@@ -7,7 +7,7 @@ rem (%userprofile%\.jkite\cache\jdks\bootstrap). It prints that directory
 rem on stdout and says nothing else there; progress and errors go to stderr.
 rem When the JDK is already installed it only prints.
 rem
-rem The version, URL and SHA-256 were resolved when JKite was released and
+rem The version, URL and SHA-256 were resolved when jkite was released and
 rem are committed with the project, so there is no index to read and nothing to
 rem decide here: download, verify, unpack.
 rem
@@ -19,11 +19,11 @@ rem
 rem   jkite-bootstrap-jdk.cmd        install if needed, print the JDK home
 rem
 rem Environment:
-rem   JKITE_DIR, JKITE_CACHE_DIR   where JKite keeps things
+rem   JKITE_DIR, JKITE_CACHE_DIR   where jkite keeps things
 rem   JKITE_DOWNLOAD_RETRY, JKITE_DOWNLOAD_RETRY_DELAY
 rem   JKITE_LOCK_TIMEOUT               seconds to wait for another run's download
 rem
-rem Several JKite runs can be started at the same time (a build matrix, a
+rem Several jkite runs can be started at the same time (a build matrix, a
 rem multi-module build). They share ~\.jkite, so the download takes a
 rem directory lock (mkdir is atomic: :acquire_lock / :release_lock) and the JDK
 rem is unpacked into a directory of this run's own that is renamed into place.
@@ -57,7 +57,7 @@ if not "%JKITE_DOWNLOAD_RETRY%"=="" set "download_retry=%JKITE_DOWNLOAD_RETRY%"
 set "download_retry_delay=0"
 if not "%JKITE_DOWNLOAD_RETRY_DELAY%"=="" set "download_retry_delay=%JKITE_DOWNLOAD_RETRY_DELAY%"
 
-rem The directories JKite keeps its JDKs, jars and caches in.
+rem The directories jkite keeps its JDKs, jars and caches in.
 set "jkite_dir=%userprofile%\.jkite"
 if not "%JKITE_DIR%"=="" set "jkite_dir=%JKITE_DIR%"
 set "cache_dir=%jkite_dir%\cache"
@@ -72,7 +72,7 @@ rem The name this platform has in jkite.properties
 set "platform=windows-amd64"
 if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "platform=windows-arm64"
 
-rem Tells this run's temporary files apart from those of a JKite running at
+rem Tells this run's temporary files apart from those of a jkite running at
 rem the same time
 set "run_id=%RANDOM%%RANDOM%"
 
@@ -202,11 +202,11 @@ set /a lock_waited=0
 mkdir "%lock_dir%" 2>nul && exit /b 0
 if exist "%lock_done%" exit /b 2
 if %lock_waited% GEQ %lock_timeout% (
-  echo Gave up after %lock_timeout% seconds waiting for another JKite to finish. 1>&2
-  echo If no other JKite is running, remove %lock_dir% and try again. 1>&2
+  echo Gave up after %lock_timeout% seconds waiting for another jkite to finish. 1>&2
+  echo If no other jkite is running, remove %lock_dir% and try again. 1>&2
   exit /b 1
 )
-if %lock_waited% EQU 0 echo Waiting for another JKite to finish downloading... 1>&2
+if %lock_waited% EQU 0 echo Waiting for another jkite to finish downloading... 1>&2
 call :sleep 1
 set /a lock_waited+=1
 goto :acquire_lock_try

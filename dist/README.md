@@ -1,4 +1,4 @@
-# JKite
+# jkite
 
 This directory lets you run this project's `.java` tools without installing
 anything first — not even a JDK.
@@ -9,7 +9,7 @@ jkite\jkite.cmd path\to\Tool.java  # Windows
 ```
 
 Everything here is committed with the project, the way a Gradle or Maven
-wrapper is. It is [JKite](https://github.com/instreest/jkite), a
+wrapper is. It is [jkite](https://github.com/instreest/jkite), a
 reduced fork of [JBang](https://github.com/jbangdev/jbang), not affiliated with
 the JBang project.
 
@@ -33,7 +33,7 @@ safe: one run downloads while the others wait.
 | File | |
 | --- | --- |
 | `jkite`, `jkite.cmd` | the launchers |
-| `jkite.properties` | which JKite and which JDK this project uses: version, URL and SHA-256 |
+| `jkite.properties` | which jkite and which JDK this project uses: version, URL and SHA-256 |
 | `jkite-bootstrap-jar`, `.cmd` | download and verify `jkite.jar` |
 | `jkite-bootstrap-jdk`, `.cmd` | download and verify a JDK when the machine has none |
 | `install.sh`, `install.cmd` | install and update this directory |
@@ -64,7 +64,7 @@ jkite/jkite --update v0.3.0     # or a particular one
 
 `jkite\jkite.cmd --update` does the same on Windows. It replaces every
 file here and needs neither the jar nor a JDK. Commit the result, and bear in
-mind that it makes this project run a JKite its maintainer has not tried.
+mind that it makes this project run a jkite its maintainer has not tried.
 
 `JKITE_DIST_URL` points the jar download at a mirror for one run, for a
 machine that cannot reach GitHub releases.

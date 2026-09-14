@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Refreshes dist/, which is JKite as a project installs it (see
+# Refreshes dist/, which is jkite as a project installs it (see
 # dist/install.sh): the launcher scripts and LICENSE are copied there from the
 # sources, and jkite.properties is written to pin both downloads a project
 # can need - jkite.jar and, for a machine with no Java at all, a JDK to

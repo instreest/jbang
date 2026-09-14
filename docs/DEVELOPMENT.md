@@ -1,4 +1,4 @@
-# Developing JKite
+# Developing jkite
 
 The shape of a run, and where the network is touched, is in
 [ARCHITECTURE.md](ARCHITECTURE.md). This file is about working on the code.
@@ -14,7 +14,7 @@ produces `build/libs/jkite.jar`, self-contained, and runs the tests.
 
 The jar targets Java 11 and is built with whatever JDK Gradle runs on.
 
-A project installing JKite pins the jar by SHA-256, so the build that
+A project installing jkite pins the jar by SHA-256, so the build that
 produces that jar is pinned to the same degree:
 
 | | |
@@ -67,10 +67,10 @@ one.
 ## Staying in step with JBang
 
 JBang sits behind one interface, `DirectiveParser` in `io.github.instreest.jkite.spi`, which
-turns a source file into a `SourceDirectives` built from JKite's own types.
+turns a source file into a `SourceDirectives` built from jkite's own types.
 `MirroredDirectiveParser` is the implementation in use and the only class that
 names `Directives` and `KeyValue`, so the mirrored parser is an implementation
-detail rather than JKite's API. `TestDirectiveParser` states the contract on
+detail rather than jkite's API. `TestDirectiveParser` states the contract on
 the interface alone, so a second implementation is held to the same test and
 wired in at `Providers`, with nothing above the interface changing.
 
@@ -90,7 +90,7 @@ directive handling can be taken over without merging:
 | --- | --- | --- | --- |
 | Mirror | the files in `misc/upstream-mirror.txt`, among them `Directives.java` and its test | `dev.jbang.*` | copied from JBang unchanged, never edited here |
 | Shims | the files in `misc/upstream-shims.txt` (`Util`, `JavaUtil`, `DependencyUtil`) | `dev.jbang.*` | upstream's API with a reduced implementation, checked by hand when upstream changes them |
-| JKite | everything else | `io.github.instreest.jkite.*` | this fork's own code |
+| jkite | everything else | `io.github.instreest.jkite.*` | this fork's own code |
 
 ```bash
 misc/sync-upstream.sh            # take the mirrored files from upstream/main
@@ -106,14 +106,14 @@ hundreds of unrelated files costs nothing here.
 The two namespaces in that table are the point, not an accident. JBang's code
 keeps JBang's package, because that is whose code it is and because a mirrored
 file is copied byte for byte - its `package` line included - so a sync stays a
-plain `git checkout` with nothing to rewrite. JKite's own code sits under
+plain `git checkout` with nothing to rewrite. jkite's own code sits under
 `io.github.instreest.jkite.*`, the reverse-DNS of the repository that publishes
 it, which is what a project with no domain of its own uses. So an
 `import dev.jbang.` in this tree says in one line that what follows came
 from upstream.
 
 The split costs the mirrored files no edit: they reference nothing outside the
-mirror and the shims. Only the shims cross over - `Util` reaches JKite's
+mirror and the shims. Only the shims cross over - `Util` reaches jkite's
 `Settings` - and they are hand-maintained anyway.
 
 ## Tests and CI
@@ -124,7 +124,7 @@ mirror and the shims. Only the shims cross over - `Util` reaches JKite's
 
 runs JBang's own `TestDirectives`, the contract tests that hold any
 `DirectiveParser` and the download gate to the same behaviour, unit tests for
-the pieces JKite wrote (the JVM index, archive unpacking, placeholder
+the pieces jkite wrote (the JVM index, archive unpacking, placeholder
 expansion), and functional tests that run the launcher scripts and the installer
 against a local server.
 
@@ -154,7 +154,7 @@ The launcher does two things and then gets out of the way:
    process sharing stdin, stdout and stderr, and exits with the script's status.
    Nothing is captured and nothing is re-parsed by a shell, so
    `jkite Tool.java | sort` streams and `$?` is the script's. The price is
-   that the JKite JVM stays around, idle, while the script runs;
+   that the jkite JVM stays around, idle, while the script runs;
    `JKITE_JAVA_OPTIONS` tunes it.
 
 Both bootstrap scripts have the same shape: they print the one path they found

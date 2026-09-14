@@ -1,4 +1,4 @@
-# JKite
+# jkite
 
 **Ship a Java tool that anyone can run straight after `git clone`.** Commit a
 `jkite/` directory next to your tool, and whoever checks the project out
@@ -21,13 +21,13 @@ That works because the tool declares what it needs, in the tool:
 //SOURCES report/*.java
 ```
 
-JKite reads those directives, installs a JDK if the machine has none,
+jkite reads those directives, installs a JDK if the machine has none,
 resolves the dependencies from Maven Central, compiles, and runs. Every
 download is pinned to a version and checked against a SHA-256 committed with
 your project, and is fetched once per machine, so the second tool and the
 second checkout cost nothing.
 
-The directives are JBang's, parsed by JBang's own parser. JKite is a
+The directives are JBang's, parsed by JBang's own parser. jkite is a
 reduced fork of [JBang](https://github.com/jbangdev/jbang) that does this one
 thing. It is not affiliated with, endorsed by, or supported by the JBang
 project; please report problems here, not to them.
@@ -38,7 +38,7 @@ For the tool's author, once:
 
 ```bash
 curl -fsSL https://github.com/instreest/jkite/releases/latest/download/install.sh | bash
-git add jkite && git commit -m "Add JKite"
+git add jkite && git commit -m "Add jkite"
 ```
 
 For everyone else, nothing. Put this in your project's README:
@@ -82,7 +82,7 @@ only a JDK is ever fetched.
 
 ## Updating
 
-Which JKite a project runs is a property of the project, as it is for the
+Which jkite a project runs is a property of the project, as it is for the
 Gradle and Maven wrappers: it is what `jkite/jkite.properties` says, it
 is committed, and whoever clones the project gets it. The tool's author
 updates it; everyone else receives it with `git pull`.
@@ -90,7 +90,7 @@ updates it; everyone else receives it with `git pull`.
 ```bash
 jkite/jkite --update            # the newest release
 jkite/jkite --update v0.3.0     # or a particular one
-git add jkite && git commit -m "Update JKite to 0.3.0"
+git add jkite && git commit -m "Update jkite to 0.3.0"
 ```
 
 `--update` re-runs the installer next to it and replaces every file. It is
@@ -136,7 +136,7 @@ for JBang still runs: `//MODULE`, `//CDS`, `//JAVAAGENT`, `//GAV`,
 
 ## Options
 
-There are no subcommands. JKite runs the script, and only `--help`,
+There are no subcommands. jkite runs the script, and only `--help`,
 `--version` and `--update` do something else.
 
 ```
@@ -172,7 +172,7 @@ tool needs, not whoever runs it.
 | `JKITE_MAVEN_REPO` | local Maven repository to use instead of `~/.m2/repository` |
 | `JKITE_DEFAULT_JAVA_VERSION` | JDK to use when a script names none (default 17) |
 | `JKITE_JDK_INDEX` | read the JVM index from here instead of from Maven Central |
-| `JKITE_JAVA_OPTIONS` | JVM options for JKite itself |
+| `JKITE_JAVA_OPTIONS` | JVM options for jkite itself |
 | `JKITE_DOWNLOAD_RETRY` | extra download attempts (default 5, `0` disables retries) |
 | `JKITE_DOWNLOAD_RETRY_DELAY` | seconds between attempts (default `0`, meaning exponential backoff) |
 | `JKITE_LOCK_TIMEOUT` | seconds to wait for another run that is downloading (default 600) |
@@ -180,19 +180,19 @@ tool needs, not whoever runs it.
 | `JKITE_REPO`, `JKITE_REF` | the repository and release the installer installs from |
 | `JKITE_DIST_BASEURL` | install from here instead of from a GitHub release |
 
-Everything JKite writes goes under `JKITE_DIR`; nothing is written into
+Everything jkite writes goes under `JKITE_DIR`; nothing is written into
 the project. Several runs at once are safe: each download is taken by one run
 while the others wait, and every file is renamed into place only once it is
 complete, so a build matrix never trips over a half-written file.
 
 ## Downloads ask first
 
-JKite fetches three kinds of thing: its own jar, a JDK to run that jar with,
+jkite fetches three kinds of thing: its own jar, a JDK to run that jar with,
 and the dependencies a script declares. When something has to be fetched it says
 what, and on a terminal it asks.
 
 ```
-JKite has to download:
+jkite has to download:
   - jkite.jar 0.2.0
   - a JDK to run it with (Temurin 25.0.3); this machine has none
 
@@ -230,13 +230,13 @@ Alpine (musl) is the exception: install a JDK there yourself.
 ## How it works, and contributing
 
 What happens between `git clone` and the tool's first line of output, in three
-diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). How JKite is built,
+diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). How jkite is built,
 released and kept in step with JBang: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## License
 
 MIT License, Copyright (c) 2020 Max Rydahl Andersen (the original JBang notice
-is kept unchanged in [LICENSE](LICENSE)); the JKite modifications are
+is kept unchanged in [LICENSE](LICENSE)); the jkite modifications are
 provided under the same license. `jkite.jar` bundles MIMA (EPL-2.0), Apache
 Maven Resolver, Apache HttpClient, Apache Commons Compress and Gson
 (Apache-2.0) and SLF4J (MIT); see [THIRD-PARTY.md](THIRD-PARTY.md) for details

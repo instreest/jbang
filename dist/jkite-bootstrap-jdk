@@ -6,7 +6,7 @@
 # prints that directory on stdout and says nothing else there; progress and
 # errors go to stderr. When the JDK is already installed it only prints.
 #
-# The version, URL and SHA-256 were resolved when JKite was released and
+# The version, URL and SHA-256 were resolved when jkite was released and
 # are committed with the project, so there is no index to read and nothing to
 # decide here: download, verify, unpack.
 #
@@ -16,20 +16,20 @@
 #   jkite-bootstrap-jdk            install if needed, print the JDK home
 #
 # Environment:
-#   JKITE_DIR, JKITE_CACHE_DIR   where JKite keeps things
+#   JKITE_DIR, JKITE_CACHE_DIR   where jkite keeps things
 #   JKITE_DOWNLOAD_RETRY, JKITE_DOWNLOAD_RETRY_DELAY
 #   JKITE_LOCK_TIMEOUT               seconds to wait for another run's download
 #
 # Needs curl or wget, sha256sum or shasum, and tar with gzip.
 #
-# Several JKite runs can be started at the same time (a build matrix, a
+# Several jkite runs can be started at the same time (a build matrix, a
 # multi-module build). They share ~/.jkite, so the download takes a
 # directory lock (mkdir is atomic) and the JDK is unpacked into a directory of
 # this run's own that is renamed into place.
 
 # --- Settings ----------------------------------------------------------------
 
-# Tells this run's temporary files apart from those of a JKite running at
+# Tells this run's temporary files apart from those of a jkite running at
 # the same time
 runId=$$
 
@@ -155,7 +155,7 @@ sha256_of() {
 
 # --- Locking -----------------------------------------------------------------
 
-# Several JKite runs can share $JKITE_DIR, so the download takes a
+# Several jkite runs can share $JKITE_DIR, so the download takes a
 # directory lock. mkdir is atomic, so exactly one run gets it; the others wait,
 # and stop waiting as soon as $2 shows the work they waited for is done.
 #   0 - the lock is ours, do the work and release_lock afterwards
@@ -168,12 +168,12 @@ acquire_lock() {  # $1 = lock directory, $2 = path that exists once the work is 
   while ! mkdir "$1" 2> /dev/null; do
     if [ -e "$2" ]; then return 2; fi
     if [ "$waited" -ge "$lockTimeout" ]; then
-      echo "Gave up after $lockTimeout seconds waiting for another JKite to finish." 1>&2
-      echo "If no other JKite is running, remove $1 and try again." 1>&2
+      echo "Gave up after $lockTimeout seconds waiting for another jkite to finish." 1>&2
+      echo "If no other jkite is running, remove $1 and try again." 1>&2
       return 1
     fi
     if [ "$waited" -eq 0 ]; then
-      echo "Waiting for another JKite to finish downloading..." 1>&2
+      echo "Waiting for another jkite to finish downloading..." 1>&2
     fi
     sleep 1
     waited=$((waited + 1))
@@ -204,7 +204,7 @@ install_jdk_locked() {
   # another run may have installed it while we waited for the lock
   if [ -x "$jdkDir/bin/java" ]; then return 0; fi
   mkdir -p "$CACHEDIR/jdks"
-  # this run's own names, so nothing is shared with a JKite running at the
+  # this run's own names, so nothing is shared with a jkite running at the
   # same time and the JDK only appears under its real name once it is complete
   archive="$CACHEDIR/bootstrap-jdk-$runId.tar.gz"
   unpackdir="$CACHEDIR/jdks/bootstrap-$runId.tmp"

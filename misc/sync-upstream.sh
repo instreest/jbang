@@ -35,7 +35,7 @@ if [ -n "$old" ] && [ "$old" != "$new" ]; then
   echo "Changes to the mirrored files between $old and $new:"
   git --no-pager log --oneline "$old..$new" -- $files || true
   echo
-  echo "Changes upstream made to the files JKite only shims:"
+  echo "Changes upstream made to the files jkite only shims:"
   shims=$(grep -vE '^\s*(#|$)' "$SHIMS")
   # shellcheck disable=SC2086
   git --no-pager log --oneline "$old..$new" -- $shims || true

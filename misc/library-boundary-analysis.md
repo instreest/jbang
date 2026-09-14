@@ -210,7 +210,7 @@ gson を入れる理由が生まれるのは「JSON を他の用途でも使い�
 
 | | 判断 | 結果 |
 | --- | --- | --- |
-| ⑤ transport | 「無期限保留」から **(c) 純正 HTTP transport に復帰** へ | `JdkHttpTransporterFactory`(259行) と `JKiteRuntime`(52行) と その テスト(203行) を削除。MIMA の `StandaloneStaticRuntime` をそのまま使う |
+| ⑤ transport | 「無期限保留」から **(c) 純正 HTTP transport に復帰** へ | `JdkHttpTransporterFactory`(259行) と `jkiteRuntime`(52行) と その テスト(203行) を削除。MIMA の `StandaloneStaticRuntime` をそのまま使う |
 | Unpacker | **(A) commons-compress** | 手書き tar/zip リーダを置き換え。pax・GNU 拡張・リンク・権限は Commons Compress が扱う |
 | ④ Json | **gson に転換** | `util/Json.java`(206行) を削除。gson は transport が連れてくるので追加コストは無い |
 
@@ -228,7 +228,7 @@ gson を入れる理由が生まれるのは「JSON を他の用途でも使い�
   未テスト経路で `NoClassDefFoundError` になるリスクがあるので入れたままにした
 - jar は **2.26 MB → 6.46 MB**。内訳（圧縮後）は commons 系 2.3 MB、
   HttpClient/Core 0.85 MB、resolver/maven 0.55 MB、gson 0.24 MB、
-  JKite 自身 0.14 MB
+  jkite 自身 0.14 MB
 
 ## セキュリティ上の効果
 

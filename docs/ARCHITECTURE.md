@@ -1,4 +1,4 @@
-# How JKite works
+# How jkite works
 
 Two programs, one boundary. A shell script finds a JDK and a jar; the jar
 builds and runs the tool. Everything below is what happens between
@@ -103,7 +103,7 @@ flowchart TD
 ```
 
 `DirectiveParser` is the only seam JBang sits behind. Everything above it works
-on JKite's own `SourceDirectives`, so the mirrored copy of JBang's parser is
+on jkite's own `SourceDirectives`, so the mirrored copy of JBang's parser is
 an implementation detail rather than this project's API.
 
 The built jar is cached under a directory named after a hash of every source

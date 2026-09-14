@@ -2,7 +2,7 @@
 #
 # They are never edited locally: run misc/sync-upstream.sh to bring in
 # upstream's changes. Everything the directive handling of JBang does is in
-# here, so a fix upstream reaches JKite by re-syncing these files.
+# here, so a fix upstream reaches jkite by re-syncing these files.
 #
 # JBang also publishes these classes as dev.jbang:jbang.bin on Maven Central,
 # and depending on that instead of mirroring would work. It is not done because

@@ -1,12 +1,12 @@
 # Third-party notices
 
-JKite is a reduced fork of [JBang](https://github.com/jbangdev/jbang),
+jkite is a reduced fork of [JBang](https://github.com/jbangdev/jbang),
 Copyright (c) 2020 Max Rydahl Andersen, distributed under the MIT License
 (see [LICENSE](LICENSE)). The original copyright and permission notice is kept
-unchanged; the modifications made for JKite are contributed under the same
+unchanged; the modifications made for jkite are contributed under the same
 MIT License.
 
-JKite is not affiliated with, endorsed by, or supported by the JBang
+jkite is not affiliated with, endorsed by, or supported by the JBang
 project. Its name is its own; where the code comes from is said here.
 
 ## Code derived from other projects
@@ -19,7 +19,7 @@ project. Its name is its own; where the code comes from is said here.
 | `OsDetector.java` (OS and architecture normalisation tables) | [os-maven-plugin](https://github.com/trustin/os-maven-plugin) by Trustin Lee, as also used by the Nisse os-detector in JBang | Apache License 2.0 |
 
 `Placeholders.java` expands the same `${...}` syntax as the
-`PropertiesValueResolver` JBang carries, but is JKite's own code: that file
+`PropertiesValueResolver` JBang carries, but is jkite's own code: that file
 reached JBang from the JBoss projects with a licence history we could not
 establish, so it was reimplemented rather than mirrored.
 

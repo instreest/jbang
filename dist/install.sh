@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
-# Installs JKite into a project: the launcher scripts, this installer and
+# Installs jkite into a project: the launcher scripts, this installer and
 # jkite.properties go into jkite/, which is committed, so the project
-# can be built and run without JKite (or a JDK) being installed on the
+# can be built and run without jkite (or a JDK) being installed on the
 # machine.
 #
 #   curl -fsSL https://github.com/instreest/jkite/releases/latest/download/install.sh | bash
@@ -83,7 +83,7 @@ fi
 staging=$(mktemp -d "${TMPDIR:-/tmp}/jkite.XXXXXX")
 trap 'rm -rf "$staging"' EXIT
 
-echo "Installing JKite from $base into $dir" 1>&2
+echo "Installing jkite from $base into $dir" 1>&2
 for f in $files; do
   fetch "$f" "$staging/$f"
 done

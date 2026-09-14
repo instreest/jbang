@@ -72,7 +72,7 @@ class TestNetworkConsent extends AbstractScriptTest {
 
 		assertTrue(result.stderr.contains("jkite.jar 9.9.9"),
 				"it should say what it is about to download: " + result.stderr);
-		assertTrue(result.stderr.contains("Error downloading JKite"),
+		assertTrue(result.stderr.contains("Error downloading jkite"),
 				"auto carries on when there is nobody to ask: " + result.stderr);
 	}
 
@@ -84,7 +84,7 @@ class TestNetworkConsent extends AbstractScriptTest {
 		assertTrue(result.stderr.contains("jkite.jar 9.9.9"), result.stderr);
 		assertTrue(result.stderr.contains("JKITE_CONFIRM_DOWNLOADS=always"),
 				"it should name the setting that stopped it: " + result.stderr);
-		assertTrue(!result.stderr.contains("Error downloading JKite"),
+		assertTrue(!result.stderr.contains("Error downloading jkite"),
 				"nothing should have been fetched: " + result.stderr);
 	}
 
@@ -92,8 +92,8 @@ class TestNetworkConsent extends AbstractScriptTest {
 	void neverGoesStraightToTheDownload() throws Exception {
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("never"));
 
-		assertTrue(result.stderr.contains("Error downloading JKite"), result.stderr);
-		assertTrue(!result.stderr.contains("JKite has to download"),
+		assertTrue(result.stderr.contains("Error downloading jkite"), result.stderr);
+		assertTrue(!result.stderr.contains("jkite has to download"),
 				"never says nothing: " + result.stderr);
 	}
 
@@ -103,7 +103,7 @@ class TestNetworkConsent extends AbstractScriptTest {
 		env.put("JKITE_ASSUME_YES", "1");
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env);
 
-		assertTrue(result.stderr.contains("Error downloading JKite"),
+		assertTrue(result.stderr.contains("Error downloading jkite"),
 				"always plus assume-yes downloads: " + result.stderr);
 	}
 
@@ -111,7 +111,7 @@ class TestNetworkConsent extends AbstractScriptTest {
 	void theYesOptionAnswersInAdvanceToo() throws Exception {
 		RunResult result = runProcess(bashCmd(launcher, "--yes", script.toString()), env("always"));
 
-		assertTrue(result.stderr.contains("Error downloading JKite"),
+		assertTrue(result.stderr.contains("Error downloading jkite"),
 				"--yes reaches the launcher, not only the jar: " + result.stderr);
 	}
 
@@ -120,7 +120,7 @@ class TestNetworkConsent extends AbstractScriptTest {
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("maybe"));
 
 		assertTrue(result.stderr.contains("Ignoring invalid JKITE_CONFIRM_DOWNLOADS"), result.stderr);
-		assertTrue(result.stderr.contains("Error downloading JKite"),
+		assertTrue(result.stderr.contains("Error downloading jkite"),
 				"an unknown mode falls back to auto: " + result.stderr);
 	}
 

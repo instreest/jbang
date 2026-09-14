@@ -174,7 +174,7 @@ public final class DependencyResolver {
 		}
 	}
 
-	/** A Maven Resolver session, configured the way JKite needs it. */
+	/** A Maven Resolver session, configured the way jkite needs it. */
 	private static final class Session implements Closeable {
 	private final Context context;
 
@@ -185,7 +185,7 @@ public final class DependencyResolver {
 	private Session(boolean offline, boolean updateCache, List<MavenRepo> repositories, boolean silent) {
 		Map<String, String> userProperties = new HashMap<>();
 		// avoid being blocked by servers that reject the default "Java" user agent
-		userProperties.put("aether.connector.userAgent", "JKite/" + Util.getVersion());
+		userProperties.put("aether.connector.userAgent", "jkite/" + Util.getVersion());
 
 		ContextOverrides.Builder overrides = ContextOverrides.create()
 			.userProperties(userProperties)

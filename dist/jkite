@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# JKite launcher for POSIX shells (Linux, macOS, WSL, Git Bash, Cygwin).
+# jkite launcher for POSIX shells (Linux, macOS, WSL, Git Bash, Cygwin).
 #
 # It runs jkite.jar, so a checkout needs nothing installed, not even a
 # JDK. What it does, in order:
@@ -88,7 +88,7 @@ print_version() {
 
 # --- Asking before going to the network ------------------------------------
 #
-# JKite downloads three kinds of thing: its own jar, a JDK to run that jar
+# jkite downloads three kinds of thing: its own jar, a JDK to run that jar
 # with, and the dependencies a script declares. This script can see the first
 # two and asks about them; the jar asks about the third, which only it knows
 # about. Both use the same contract, JKITE_CONFIRM_DOWNLOADS:
@@ -102,9 +102,9 @@ print_version() {
 #
 # A run that needs nothing asks nothing, so this is a first-run question.
 
-# Says what JKite was about to download, on stderr.
+# Says what jkite was about to download, on stderr.
 say_items() {
-  echo "JKite has to download:" 1>&2
+  echo "jkite has to download:" 1>&2
   printf '%s' "$1" 1>&2
 }
 
@@ -127,7 +127,7 @@ confirm_downloads() {
   fi
   {
     echo
-    echo "JKite has to download:"
+    echo "jkite has to download:"
     printf '%s' "$items"
     echo
     printf 'Continue? [Y/n]: '
@@ -163,7 +163,7 @@ no_terminal() {
 }
 
 # Replaces this installation with the one from $1 (a branch, tag or commit of
-# the JKite repository; the default is whatever install.sh defaults to) by
+# the jkite repository; the default is whatever install.sh defaults to) by
 # running the install.sh that sits next to this script. Needs no Java and no
 # jar, so it works even when the pinned jar can no longer be downloaded.
 run_update() {
@@ -172,7 +172,7 @@ run_update() {
     echo "$installer not found, so this installation cannot update itself." 1>&2
     exit 1
   fi
-  confirm_downloads "  - a new JKite installation into $abs_jbang_dir
+  confirm_downloads "  - a new jkite installation into $abs_jbang_dir
 " || exit 1
   if [ -n "$1" ]; then export JKITE_REF=$1; fi
   bash "$installer" "$abs_jbang_dir" || exit $?

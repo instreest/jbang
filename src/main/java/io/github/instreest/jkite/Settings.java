@@ -37,7 +37,7 @@ public final class Settings {
 	public static final String DEPENDENCY_CACHE_FILE = "dependency_cache.txt";
 
 	public static final int DEFAULT_JAVA_VERSION = 17;
-	/** The one JDK distribution JKite installs: Eclipse Temurin. */
+	/** The one JDK distribution jkite installs: Eclipse Temurin. */
 	public static final String JDK_DISTRO = "temurin";
 	/**
 	 * The host {@link #JDK_DISTRO} publishes its archives on. The JVM index says

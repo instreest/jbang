@@ -5,7 +5,7 @@ import java.util.function.Function;
 /**
  * Reads the <code>//</code>-directives of a source file.
  *
- * The one thing JKite takes from JBang is how these are written down, so
+ * The one thing jkite takes from JBang is how these are written down, so
  * this is the interface across which JBang sits. The implementation in use is
  * {@code MirroredDirectiveParser}, on the copy of JBang's parser in
  * {@code dev.jbang.source.parser}.

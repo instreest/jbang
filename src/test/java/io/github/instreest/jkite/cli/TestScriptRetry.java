@@ -103,7 +103,7 @@ class TestScriptRetry extends AbstractScriptTest {
 
 		assertNotEquals(0, result.exitCode, "the script should have failed");
 		assertTrue(result.stderr.contains("Download 2/3 failed"), result.stderr);
-		assertTrue(result.stderr.contains("Error downloading JKite"), result.stderr);
+		assertTrue(result.stderr.contains("Error downloading jkite"), result.stderr);
 		wm.verify(3, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 

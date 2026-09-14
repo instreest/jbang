@@ -191,7 +191,7 @@ abstract class AbstractScriptTest {
 
 	/**
 	 * Writes a jar whose main class is {@link FakeJBang}, stamped with the given
-	 * JKite-Version when one is given, as a real jkite.jar is. That is the
+	 * Jkite-Version when one is given, as a real jkite.jar is. That is the
 	 * attribute the launchers read out of the manifest for --version.
 	 */
 	protected static void createFakeJar(Path jar, String jkiteVersion) throws IOException {
@@ -199,7 +199,7 @@ abstract class AbstractScriptTest {
 		manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
 		manifest.getMainAttributes().put(Attributes.Name.MAIN_CLASS, FakeJBang.class.getName());
 		if (jkiteVersion != null) {
-			manifest.getMainAttributes().putValue("JKite-Version", jkiteVersion);
+			manifest.getMainAttributes().putValue("Jkite-Version", jkiteVersion);
 		}
 		String classResource = FakeJBang.class.getName().replace('.', '/') + ".class";
 		try (InputStream input = FakeJBang.class.getClassLoader().getResourceAsStream(classResource);
@@ -215,7 +215,7 @@ abstract class AbstractScriptTest {
 
 	/**
 	 * Stand-in for jkite.jar: writes to stdout and stderr and exits with the
-	 * given code ("exit N"), and answers --version with the JKite-Version in its
+	 * given code ("exit N"), and answers --version with the Jkite-Version in its
 	 * own manifest, as the real jar does. A launcher has nothing else to do with
 	 * the jar than to run it, so this is all a launcher test needs.
 	 */
@@ -223,7 +223,7 @@ abstract class AbstractScriptTest {
 		public static void main(String[] args) throws IOException {
 			if (args.length > 0 && args[0].equals("--version")) {
 				try (InputStream in = FakeJBang.class.getResourceAsStream("/META-INF/MANIFEST.MF")) {
-					System.out.println(new Manifest(in).getMainAttributes().getValue("JKite-Version"));
+					System.out.println(new Manifest(in).getMainAttributes().getValue("Jkite-Version"));
 				}
 				return;
 			}

@@ -76,7 +76,7 @@ class TestWindowsWrapperInstall extends AbstractScriptTest {
 		assertEquals(3, result.exitCode, result.stderr);
 		assertTrue(result.stdout.contains("some output"), result.stdout);
 		assertTrue(result.stderr.contains("some error output"), result.stderr);
-		assertTrue(result.stderr.contains("Downloading JKite 9.9.9"), result.stderr);
+		assertTrue(result.stderr.contains("Downloading jkite 9.9.9"), result.stderr);
 		wm.verify(1, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
@@ -88,7 +88,7 @@ class TestWindowsWrapperInstall extends AbstractScriptTest {
 		RunResult second = runLauncher("exit", "0");
 
 		assertEquals(0, second.exitCode, second.stderr);
-		assertFalse(second.stderr.contains("Downloading JKite"), second.stderr);
+		assertFalse(second.stderr.contains("Downloading jkite"), second.stderr);
 		wm.verify(1, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
@@ -100,7 +100,7 @@ class TestWindowsWrapperInstall extends AbstractScriptTest {
 		RunResult result = runLauncher("exit", "4");
 
 		assertEquals(4, result.exitCode, result.stderr);
-		assertFalse(result.stderr.contains("Downloading JKite"), result.stderr);
+		assertFalse(result.stderr.contains("Downloading jkite"), result.stderr);
 		wm.verify(0, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}
 
@@ -174,7 +174,7 @@ class TestWindowsWrapperInstall extends AbstractScriptTest {
 	@Test
 	void updateReinstallsTheDirectoryInPlace() throws Exception {
 		assertEquals(0, install(project).exitCode);
-		// a newer JKite was released ...
+		// a newer jkite was released ...
 		wm.resetAll();
 		serveDist(jar, sha256(jar), "9.9.10");
 

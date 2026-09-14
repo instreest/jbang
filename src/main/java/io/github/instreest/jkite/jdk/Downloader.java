@@ -77,7 +77,7 @@ final class Downloader {
 	}
 
 	/**
-	 * Everything JKite downloads here is a JDK archive or its checksum, and
+	 * Everything jkite downloads here is a JDK archive or its checksum, and
 	 * both are published over https; anything else is refused rather than
 	 * fetched over a connection that can be read or rewritten in transit.
 	 */
@@ -97,7 +97,7 @@ final class Downloader {
 			conn.setInstanceFollowRedirects(false);
 			conn.setConnectTimeout(CONNECT_TIMEOUT);
 			conn.setReadTimeout(READ_TIMEOUT);
-			conn.setRequestProperty("User-Agent", "JKite/" + Util.getVersion());
+			conn.setRequestProperty("User-Agent", "jkite/" + Util.getVersion());
 			int status = conn.getResponseCode();
 			if (status >= 300 && status < 400) {
 				String location = conn.getHeaderField("Location");

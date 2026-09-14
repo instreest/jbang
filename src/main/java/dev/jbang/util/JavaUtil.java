@@ -5,7 +5,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * JKite shim: the version helpers of upstream's
+ * jkite shim: the version helpers of upstream's
  * <code>dev.jbang.util.JavaUtil</code>, with the same signatures and
  * behaviour. The JDK management part of upstream's class lives in
  * <code>dev.jbang.jdk</code> here. Keep this in sync with upstream when it
@@ -83,7 +83,7 @@ public class JavaUtil {
 
 	/**
 	 * NB: copied from upstream unchanged, including the comparison of v1 with
-	 * itself on the line marked below. Changing it here would make JKite
+	 * itself on the line marked below. Changing it here would make jkite
 	 * pick a different //JAVA line than JBang does when a project declares
 	 * several of them.
 	 */

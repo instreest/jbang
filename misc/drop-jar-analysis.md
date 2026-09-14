@@ -2,7 +2,7 @@
 
 ## 提案の要約
 
-JKite の役割を次の 3 つだけに絞る。
+jkite の役割を次の 3 つだけに絞る。
 
 1. JDK の取得（自動ダウンロード前に確認メッセージを出す）
 2. JBang 本体（上流の配布物）の取得
@@ -23,7 +23,7 @@ JKite の役割を次の 3 つだけに絞る。
 
 - `src/main/java` の 31 ファイルと `src/test` の 7 ファイル、Gradle ビルド、
   shadowJar、MIMA/maven-resolver 依存、`JdkHttpTransporterFactory` と
-  `JKiteRuntime`（Apache HttpClient を JDK HttpClient に差し替えるための自前実装）。
+  `jkiteRuntime`（Apache HttpClient を JDK HttpClient に差し替えるための自前実装）。
 - ミラー/シム 3 分割と `misc/sync-upstream.sh`、`misc/upstream-ref.txt` の運用。
   上流が `Directives.java` を直せば、そのまま JBang のリリースとして降ってくる。
 - リリース手順そのもの（`misc/update-dist.sh <version>` → `gh release create` →
@@ -105,7 +105,7 @@ CI で黙って止まるのが最悪なので、
 
 ## 移行コスト
 
-- `jkite.properties` の意味が変わる（JKite の jar → JBang の配布物）。
+- `jkite.properties` の意味が変わる（jkite の jar → JBang の配布物）。
   install 済みプロジェクトは再 install が要る。
 - `jkite` に渡していたオプション（`-C`, `-R`, `--cds` など）は
   上流 JBang の `jbang run` のオプションに読み替えて転送する層が要る。

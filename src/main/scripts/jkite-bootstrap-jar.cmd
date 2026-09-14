@@ -1,6 +1,6 @@
 @echo off
 rem ===========================================================================
-rem Installs jkite.jar, the JKite a project asked for: the version, URL
+rem Installs jkite.jar, the jkite a project asked for: the version, URL
 rem and SHA-256 in the jkite.properties next to this script, downloaded
 rem into %JKITE_CACHE_DIR%\jkite\<version>
 rem (%userprofile%\.jkite\cache\jkite\<version>). It prints the jar's path
@@ -17,13 +17,13 @@ rem
 rem   jkite-bootstrap-jar.cmd        install if needed, print the jar path
 rem
 rem Environment:
-rem   JKITE_DIR, JKITE_CACHE_DIR       where JKite keeps things (~\.jkite)
+rem   JKITE_DIR, JKITE_CACHE_DIR       where jkite keeps things (~\.jkite)
 rem   JKITE_DIST_URL               where to fetch the jar from, overriding
 rem                                    distributionUrl (a corporate mirror)
 rem   JKITE_DOWNLOAD_RETRY, JKITE_DOWNLOAD_RETRY_DELAY
 rem   JKITE_LOCK_TIMEOUT           seconds to wait for another run's download
 rem
-rem Several JKite runs can be started at the same time (a build matrix, a
+rem Several jkite runs can be started at the same time (a build matrix, a
 rem multi-module build). They share ~\.jkite, so the download takes a directory
 rem lock (mkdir is atomic: :acquire_lock / :release_lock) and the jar is
 rem written to a file of this run's own that is renamed into place.
@@ -58,7 +58,7 @@ if not "%JKITE_DOWNLOAD_RETRY%"=="" set "download_retry=%JKITE_DOWNLOAD_RETRY%"
 set "download_retry_delay=0"
 if not "%JKITE_DOWNLOAD_RETRY_DELAY%"=="" set "download_retry_delay=%JKITE_DOWNLOAD_RETRY_DELAY%"
 
-rem The directories JKite keeps its JDKs, jars and caches in.
+rem The directories jkite keeps its JDKs, jars and caches in.
 set "jkite_dir=%userprofile%\.jkite"
 if not "%JKITE_DIR%"=="" set "jkite_dir=%JKITE_DIR%"
 set "cache_dir=%jkite_dir%\cache"
@@ -67,7 +67,7 @@ if not "%JKITE_CACHE_DIR%"=="" set "cache_dir=%JKITE_CACHE_DIR%"
 rem %~dp0 in a subroutine is the label, not this file, so remember where we are
 set "script_dir=%~dp0"
 
-rem Tells this run's temporary files apart from those of a JKite running at
+rem Tells this run's temporary files apart from those of a jkite running at
 rem the same time
 set "run_id=%RANDOM%%RANDOM%"
 
@@ -145,13 +145,13 @@ rem this run's own file, so the jar only appears under its real name once it
 rem is complete
 set "jar_tmp=%jar_dir%\jkite-%run_id%.tmp"
 
-echo Downloading JKite %distribution_version%... 1>&2
+echo Downloading jkite %distribution_version%... 1>&2
 set "dl_url=%distribution_url%"
 set "dl_out=%jar_tmp%"
 call :download
 if errorlevel 1 (
   del /f /q "%jar_tmp%" 2>nul
-  echo Error downloading JKite from %distribution_url% 1>&2
+  echo Error downloading jkite from %distribution_url% 1>&2
   exit /b 1
 )
 
@@ -191,11 +191,11 @@ set /a lock_waited=0
 mkdir "%lock_dir%" 2>nul && exit /b 0
 if exist "%lock_done%" exit /b 2
 if %lock_waited% GEQ %lock_timeout% (
-  echo Gave up after %lock_timeout% seconds waiting for another JKite to finish. 1>&2
-  echo If no other JKite is running, remove %lock_dir% and try again. 1>&2
+  echo Gave up after %lock_timeout% seconds waiting for another jkite to finish. 1>&2
+  echo If no other jkite is running, remove %lock_dir% and try again. 1>&2
   exit /b 1
 )
-if %lock_waited% EQU 0 echo Waiting for another JKite to finish downloading... 1>&2
+if %lock_waited% EQU 0 echo Waiting for another jkite to finish downloading... 1>&2
 call :sleep 1
 set /a lock_waited+=1
 goto :acquire_lock_try

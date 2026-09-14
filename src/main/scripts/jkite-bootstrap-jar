@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Installs jkite.jar, the JKite a project asked for: the version, URL
+# Installs jkite.jar, the jkite a project asked for: the version, URL
 # and SHA-256 in the jkite.properties next to this script, downloaded into
 # $JKITE_CACHE_DIR/jkite/<version> (~/.jkite/cache/jkite/<version>).
 # It prints the jar's path on stdout and says nothing else there; progress and
@@ -14,7 +14,7 @@
 #   jkite-bootstrap-jar            install if needed, print the jar path
 #
 # Environment:
-#   JKITE_DIR, JKITE_CACHE_DIR       where JKite keeps things (~/.jkite)
+#   JKITE_DIR, JKITE_CACHE_DIR       where jkite keeps things (~/.jkite)
 #   JKITE_DIST_URL               where to fetch the jar from, overriding
 #                                    distributionUrl (a corporate mirror)
 #   JKITE_DOWNLOAD_RETRY, JKITE_DOWNLOAD_RETRY_DELAY
@@ -22,14 +22,14 @@
 #
 # Needs curl or wget, and sha256sum or shasum.
 #
-# Several JKite runs can be started at the same time (a build matrix, a
+# Several jkite runs can be started at the same time (a build matrix, a
 # multi-module build). They share ~/.jkite, so the download takes a directory
 # lock (mkdir is atomic) and the jar is written to a file of this run's own
 # that is renamed into place.
 
 # --- Settings ----------------------------------------------------------------
 
-# Tells this run's temporary files apart from those of a JKite running at
+# Tells this run's temporary files apart from those of a jkite running at
 # the same time
 runId=$$
 
@@ -135,7 +135,7 @@ sha256_of() {
 
 # --- Locking -----------------------------------------------------------------
 
-# Several JKite runs can share $JKITE_DIR, so the download takes a
+# Several jkite runs can share $JKITE_DIR, so the download takes a
 # directory lock. mkdir is atomic, so exactly one run gets it; the others wait,
 # and stop waiting as soon as $2 shows the work they waited for is done.
 #   0 - the lock is ours, do the work and release_lock afterwards
@@ -148,12 +148,12 @@ acquire_lock() {  # $1 = lock directory, $2 = path that exists once the work is 
   while ! mkdir "$1" 2> /dev/null; do
     if [ -e "$2" ]; then return 2; fi
     if [ "$waited" -ge "$lockTimeout" ]; then
-      echo "Gave up after $lockTimeout seconds waiting for another JKite to finish." 1>&2
-      echo "If no other JKite is running, remove $1 and try again." 1>&2
+      echo "Gave up after $lockTimeout seconds waiting for another jkite to finish." 1>&2
+      echo "If no other jkite is running, remove $1 and try again." 1>&2
       return 1
     fi
     if [ "$waited" -eq 0 ]; then
-      echo "Waiting for another JKite to finish downloading..." 1>&2
+      echo "Waiting for another jkite to finish downloading..." 1>&2
     fi
     sleep 1
     waited=$((waited + 1))
@@ -186,15 +186,15 @@ install_jar_locked() {
   # another run may have installed it while we waited for the lock
   if [ -f "$jarPath" ]; then return 0; fi
   mkdir -p "$jarDir"
-  # this run's own file, so nothing is shared with a JKite running at the
+  # this run's own file, so nothing is shared with a jkite running at the
   # same time, and the jar only appears under its real name once it is complete
   tmp="$jarDir/jkite-$runId.tmp"
 
-  echo "Downloading JKite $distributionVersion..." 1>&2
+  echo "Downloading jkite $distributionVersion..." 1>&2
   download "$distributionUrl" "$tmp"
   if [ $retval -ne 0 ]; then
     rm -f "$tmp"
-    echo "Error downloading JKite from $distributionUrl" 1>&2
+    echo "Error downloading jkite from $distributionUrl" 1>&2
     return 1
   fi
 

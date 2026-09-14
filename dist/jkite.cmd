@@ -1,6 +1,6 @@
 @echo off
 rem ===========================================================================
-rem JKite launcher for Windows.
+rem jkite launcher for Windows.
 rem
 rem It runs jkite.jar, so a checkout needs nothing installed, not even a
 rem JDK. What it does, in order:
@@ -135,7 +135,13 @@ rem failure here produces.
 :jar_version
 setlocal
 set "found="
-call :find_existing_java 2>nul || goto :jar_version_nojava
+rem The search's own complaints are not this command's business, so they go to a
+rem file. What it decided is read from java_exec rather than from its exit code:
+rem a "call :label" that carries a redirection does not hand that code back.
+set "search_err=%TEMP%\jkite-%run_id%-javasearch.txt"
+call :find_existing_java 2> "%search_err%"
+if not defined java_exec goto :jar_version_nojava
+del /f /q "%search_err%" 2>nul
 set "probe=%TEMP%\jkite-%run_id%-jarversion.txt"
 set "probe_err=%TEMP%\jkite-%run_id%-jarversion-err.txt"
 "%java_exec%" -jar "%~1" --version > "%probe%" 2> "%probe_err%"
@@ -146,6 +152,8 @@ goto :jar_version_done
 
 :jar_version_nojava
 echo   (no Java on this machine to ask the jar its version) 1>&2
+for /f "usebackq delims=" %%E in ("%search_err%") do echo   %%E 1>&2
+del /f /q "%search_err%" 2>nul
 goto :jar_version_done
 
 :jar_version_done
@@ -160,7 +168,7 @@ for /f "usebackq delims=" %%E in ("%~1") do echo   %%E 1>&2
 exit /b 0
 
 rem Replaces this installation with the one from %2 (a branch, tag or commit of
-rem the JKite repository; the default is whatever install.cmd defaults to)
+rem the jkite repository; the default is whatever install.cmd defaults to)
 rem by running the install.cmd that sits next to this script. Needs no Java and
 rem no jar, so it works even when the pinned jar can no longer be downloaded.
 :run_update
@@ -168,7 +176,7 @@ if not exist "%script_dir%install.cmd" (
   echo %script_dir%install.cmd not found, so this installation cannot update itself. 1>&2
   exit /b 1
 )
-set "net_items=  - a new JKite installation into %script_dir%"
+set "net_items=  - a new jkite installation into %script_dir%"
 call :confirm_downloads || exit /b 1
 if not "%~2"=="" set "JKITE_REF=%~2"
 call "%script_dir%install.cmd" "%script_dir%." || exit /b 1
@@ -207,7 +215,7 @@ rem The oldest Java that can run jkite.jar; anything newer is fine, and the
 rem JDK a script asks for with //JAVA is chosen by jkite.jar itself
 set "min_java_version=11"
 
-rem The directories JKite keeps its JDKs, jars and caches in.
+rem The directories jkite keeps its JDKs, jars and caches in.
 set "jkite_dir=%userprofile%\.jkite"
 if not "%JKITE_DIR%"=="" set "jkite_dir=%JKITE_DIR%"
 set "cache_dir=%jkite_dir%\cache"
@@ -217,7 +225,7 @@ rem %~dp0 in a subroutine is the label, not this file, so remember where we are
 set "script_dir=%~dp0"
 set "properties_file=%~dp0jkite.properties"
 
-rem Tells this run's temporary files apart from those of a JKite running at
+rem Tells this run's temporary files apart from those of a jkite running at
 rem the same time
 set "run_id=%RANDOM%%RANDOM%"
 exit /b 0
@@ -321,7 +329,7 @@ exit /b 0
 
 rem --- Asking before going to the network ------------------------------------
 rem
-rem JKite downloads three kinds of thing: its own jar, a JDK to run that jar
+rem jkite downloads three kinds of thing: its own jar, a JDK to run that jar
 rem with, and the dependencies a script declares. This script can see the first
 rem two and asks about them; the jar asks about the third, which only it knows
 rem about. Both use the same contract, JKITE_CONFIRM_DOWNLOADS:
@@ -379,7 +387,7 @@ rem timeout fails when stdin is redirected, which is how this tells a terminal
 rem from a pipe. Without one there is nobody to ask.
 2>nul >nul timeout /t 0 || goto :net_no_terminal
 echo.
-echo JKite has to download:
+echo jkite has to download:
 call :print_net_items
 echo.
 set "net_answer=y"
@@ -391,7 +399,7 @@ echo Stopped. Nothing was downloaded. 1>&2
 exit /b 1
 
 :net_no_terminal
-echo JKite has to download: 1>&2
+echo jkite has to download: 1>&2
 call :print_net_items 1>&2
 if /i not "%net_mode%"=="always" exit /b 0
 echo There is no terminal to ask on and JKITE_CONFIRM_DOWNLOADS=always. 1>&2

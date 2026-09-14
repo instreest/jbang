@@ -8,7 +8,7 @@ import io.github.instreest.jkite.spi.DownloadGate;
 import dev.jbang.util.Util;
 
 /**
- * The {@link DownloadGate} JKite uses: it says what is about to be
+ * The {@link DownloadGate} jkite uses: it says what is about to be
  * downloaded and, when there is a terminal to ask on, waits for an answer.
  *
  * JKITE_CONFIRM_DOWNLOADS decides:
@@ -28,7 +28,7 @@ import dev.jbang.util.Util;
  * {@link Util#askOnTerminal(String)} does directly. {@link System#console()} is
  * not used for this: since Java 22 it is non-null even when stdin is a pipe, so
  * it would report a terminal where there is none and then read the answer out of
- * the script's own input. JKite installs a JDK far newer than 22, so that is
+ * the script's own input. jkite installs a JDK far newer than 22, so that is
  * the usual case rather than an edge one.
  *
  * The question and everything around it go to the terminal and to stderr, never

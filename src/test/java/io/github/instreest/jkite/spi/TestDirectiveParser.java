@@ -22,7 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
  * What a {@link DirectiveParser} has to deliver, expressed on the interface
  * alone.
  *
- * This is the contract JKite depends on, so a second implementation - one
+ * This is the contract jkite depends on, so a second implementation - one
  * on {@code dev.jbang:jbang.bin}, say - is held to this same test by extending
  * it and returning its own parser from {@link #parser()}. What the directives
  * themselves mean is tested against JBang's own test, which is mirrored in
