@@ -3,6 +3,7 @@ package io.github.instreest.jkite;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.net.URLConnection;
 import java.util.Enumeration;
 import java.util.jar.Manifest;
 
@@ -45,7 +46,13 @@ public final class Version {
 		try {
 			Enumeration<URL> manifests = loader.getResources("META-INF/MANIFEST.MF");
 			while (manifests.hasMoreElements()) {
-				try (InputStream in = manifests.nextElement().openStream()) {
+				// not openStream(): for a jar: URL that goes through a cache of
+				// open jars that outlives the class loader, and this reads one
+				// short file once. Leaving a jar open for the life of the JVM
+				// pins it, which on Windows means it cannot be deleted either.
+				URLConnection connection = manifests.nextElement().openConnection();
+				connection.setUseCaches(false);
+				try (InputStream in = connection.getInputStream()) {
 					String v = new Manifest(in).getMainAttributes().getValue(ATTRIBUTE);
 					if (v != null) {
 						return v;
