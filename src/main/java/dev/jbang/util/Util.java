@@ -31,7 +31,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import dev.jbang.ExitException;
-import io.github.instreest.jkite.Settings;
 
 /**
  * Small collection of helpers: messages, OS detection, file globbing, hashing
@@ -464,18 +463,11 @@ public final class Util {
 		}
 	}
 
-	/** True if the path is a link (symbolic link or Windows junction). */
-	public static boolean isLink(Path path) {
-		try {
-			if (Files.isSymbolicLink(path)) {
-				return true;
-			}
-			return isJunction(path);
-		} catch (RuntimeException e) {
-			return false;
-		}
-	}
-
+	/**
+	 * True for a Windows junction, which {@link #deletePath} has to delete
+	 * rather than walk into: it looks like an ordinary directory otherwise, and
+	 * emptying the cache would empty whatever it points at.
+	 */
 	private static boolean isJunction(Path path) {
 		if (!isWindows() || !Files.isDirectory(path)) {
 			return false;
@@ -489,28 +481,6 @@ public final class Util {
 			return !abs.toRealPath().equals(abs.toRealPath(LinkOption.NOFOLLOW_LINKS));
 		} catch (IOException e) {
 			return false;
-		}
-	}
-
-	/** Creates a link, using a junction on Windows and a symbolic link elsewhere. */
-	public static void createLink(Path link, Path target) {
-		try {
-			Files.createDirectories(link.toAbsolutePath().getParent());
-			if (Files.exists(link, LinkOption.NOFOLLOW_LINKS)) {
-				deletePath(link, false);
-			}
-			Path absTarget = target.toAbsolutePath();
-			if (isWindows() && Files.isDirectory(absTarget)) {
-				String out = runCommand("cmd.exe", "/c", "mklink", "/j", link.toString(), absTarget.toString());
-				if (out == null) {
-					throw new IOException("mklink failed");
-				}
-			} else {
-				Files.createSymbolicLink(link, absTarget);
-			}
-		} catch (IOException e) {
-			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
-					"Failed to create link " + link + " -> " + target, e);
 		}
 	}
 
