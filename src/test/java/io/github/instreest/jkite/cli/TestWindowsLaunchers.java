@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -88,6 +89,32 @@ class TestWindowsLaunchers extends AbstractScriptTest {
 		assertFalse(result.stderr.contains("JAVA_HOME"), result.stderr);
 	}
 
+
+	/**
+	 * What is on the PATH as javac is usually not the JDK's own. The Oracle
+	 * javapath stub, the App Execution alias and the wrapper scripts some
+	 * installers lay down all sit in a directory that is not a JDK, so the home
+	 * cannot be read off the path javac was found at - javac is asked instead,
+	 * and this is the case that answer exists for.
+	 *
+	 * The bash half is TestLaunchers.theJavacOnThePathIsAskedWhereItsHomeIs.
+	 */
+	@Test
+	void cmdAsksTheJavacOnThePathWhereItsHomeIs() throws Exception {
+		Path shims = Files.createDirectories(tempDir.resolve("shims"));
+		Files.write(shims.resolve("javac.cmd"),
+				("@echo off\r\n\"" + System.getProperty("java.home") + "\\bin\\javac.exe\" %*\r\n")
+					.getBytes(StandardCharsets.UTF_8));
+
+		// JAVA_HOME is turned down, so the search goes on to the PATH, where the
+		// only javac is the shim and its directory holds nothing else
+		RunResult result = runLauncher(cmdLauncher(),
+				"JAVA_HOME", createFakeJdk("1.8.0_292"),
+				"PATH", shims + File.pathSeparator + System.getenv("SystemRoot") + "\\System32",
+				"exit", "3");
+
+		assertEquals(3, result.exitCode, result.stderr);
+	}
 
 	@Test
 	void cmdIgnoresJavaHomeOfUnknownVersion() throws Exception {
