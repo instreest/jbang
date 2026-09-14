@@ -31,9 +31,25 @@ property() {
 # The jar is the authority on its own version, and asking it needs no tool for
 # reading a zip; it only needs a JDK that is already here, so nothing is
 # downloaded to answer --version.
+#
+# When it cannot be asked, why is said on stderr: "of an unknown version" on its
+# own leaves a reader with nowhere to go, and it is the only thing a failure
+# here produces. It goes to stderr rather than into a variable because this runs
+# in a command substitution, where a variable would not reach the caller.
 jar_version() {
-  find_existing_java 2>/dev/null || return 0
-  "$JAVA_EXEC" -jar "$1" --version 2>/dev/null | head -1 | tr -d '\r'
+  local err out
+  if ! find_existing_java 2>/dev/null; then
+    echo "  (no Java on this machine to ask the jar its version)" 1>&2
+    return 0
+  fi
+  err=$(mktemp "${TMPDIR:-/tmp}/jkite.XXXXXX")
+  out=$("$JAVA_EXEC" -jar "$1" --version 2> "$err" | head -1 | tr -d '\r')
+  if [ -z "$out" ]; then
+    echo "  (could not ask the jar its version)" 1>&2
+    head -1 "$err" | sed 's/^/  /' 1>&2
+  fi
+  rm -f "$err"
+  printf '%s\n' "$out"
 }
 
 # Prints the version that will actually run, and under it where that was

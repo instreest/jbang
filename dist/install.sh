@@ -10,7 +10,7 @@
 # Everything comes from a GitHub release, over https. jkite.jar and a JDK
 # are not installed here: jkite.properties pins the version, URL and
 # SHA-256 of each, and the launcher downloads and verifies them once per
-# machine, into ~/.jkite. So a project's history carries about 50 kB of
+# machine, into ~/.jkite. So a project's history carries about 80 kB of
 # scripts rather than binaries. A project that would rather vendor the jar can
 # drop a jkite.jar into jkite/ next to the launcher, and then only a
 # JDK is ever fetched.

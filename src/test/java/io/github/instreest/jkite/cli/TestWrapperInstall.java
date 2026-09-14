@@ -195,10 +195,12 @@ class TestWrapperInstall extends AbstractScriptTest {
 		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "--version"), env());
 
 		assertEquals(0, result.exitCode, result.stderr);
-		// the vendored jar is the one that runs, so it names the version
-		assertTrue(result.stdout.contains("jkite 8.8.8"), result.stdout);
-		assertTrue(result.stdout.contains("pinned 9.9.9 by"), result.stdout);
-		assertTrue(result.stdout.contains("jar 8.8.8 at"), result.stdout);
+		// the vendored jar is the one that runs, so it names the version. When it
+		// could not be asked, the launcher says why on stderr, so show both.
+		String said = result.stdout + result.stderr;
+		assertTrue(result.stdout.contains("jkite 8.8.8"), said);
+		assertTrue(result.stdout.contains("pinned 9.9.9 by"), said);
+		assertTrue(result.stdout.contains("jar 8.8.8 at"), said);
 		assertTrue(result.stdout.contains("vendored, so this jar runs and not the pinned version"), result.stdout);
 		wm.verify(0, WireMock.getRequestedFor(WireMock.urlEqualTo(JAR_PATH)));
 	}

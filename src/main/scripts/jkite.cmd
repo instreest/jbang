@@ -128,16 +128,35 @@ rem Sets jar_version_value to the version the jar %1 reports for itself, empty
 rem when it cannot be asked. The jar is the authority on its own version, and
 rem asking it needs no tool for reading a zip; it only needs a JDK that is
 rem already here, so nothing is downloaded to answer --version.
+rem
+rem When it cannot be asked, why is said on stderr: "of an unknown version" on
+rem its own leaves a reader with nowhere to go, and it is the only thing a
+rem failure here produces.
 :jar_version
 setlocal
 set "found="
-call :find_existing_java 2>nul || goto :jar_version_done
+call :find_existing_java 2>nul || goto :jar_version_nojava
 set "probe=%TEMP%\jkite-%run_id%-jarversion.txt"
-"%java_exec%" -jar "%~1" --version > "%probe%" 2>nul
+set "probe_err=%TEMP%\jkite-%run_id%-jarversion-err.txt"
+"%java_exec%" -jar "%~1" --version > "%probe%" 2> "%probe_err%"
 for /f "usebackq delims=" %%V in ("%probe%") do if not defined found set "found=%%V"
-del /f /q "%probe%" 2>nul
+if not defined found call :say_jar_not_asked "%probe_err%"
+del /f /q "%probe%" "%probe_err%" 2>nul
+goto :jar_version_done
+
+:jar_version_nojava
+echo   (no Java on this machine to ask the jar its version) 1>&2
+goto :jar_version_done
+
 :jar_version_done
 endlocal & set "jar_version_value=%found%"
+exit /b 0
+
+rem Passes on what the JVM said when the jar could not be asked (%1 is the file
+rem its stderr went to).
+:say_jar_not_asked
+echo   (could not ask the jar its version) 1>&2
+for /f "usebackq delims=" %%E in ("%~1") do echo   %%E 1>&2
 exit /b 0
 
 rem Replaces this installation with the one from %2 (a branch, tag or commit of

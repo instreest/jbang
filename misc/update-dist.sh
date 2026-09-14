@@ -10,7 +10,7 @@
 # Neither download is decided at run time. The jar is a release asset and the
 # JDK is Eclipse Temurin, and the version, URL and SHA-256 of each is resolved
 # here, once, and committed with the project. So a project's history carries
-# about 50 kB of scripts instead of a binary, the launcher scripts have nothing
+# about 80 kB of scripts instead of a binary, the launcher scripts have nothing
 # to parse but a properties file, and what a checkout installs is the same
 # thing every time.
 #

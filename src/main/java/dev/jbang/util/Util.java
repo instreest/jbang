@@ -250,7 +250,7 @@ public final class Util {
 	}
 
 	/**
-	 * Upstream reads JKITE_RUNTIME_SHELL here; JKite never launches through
+	 * Upstream reads JBANG_RUNTIME_SHELL here; JKite never launches through
 	 * a shell, so only the OS matters (CommandBuffer quotes for it).
 	 */
 	public static Shell getShell() {
