@@ -284,8 +284,11 @@ set "path_java="
 for /f "delims=" %%J in ('where javac 2^>nul') do if not defined path_java set "path_java=%%J"
 if not defined path_java exit /b 1
 rem (through a file: a quoted path in front of a pipe is mangled by cmd /c)
+rem CALL, because what is on the PATH may be a .cmd or .bat shim, and running
+rem one of those from a batch file without CALL hands over for good: this script
+rem would end there instead of carrying on with what javac said.
 set "path_java_probe=%TEMP%\jkite-%run_id%-java.txt"
-"%path_java%" -J-XshowSettings:properties -version > "%path_java_probe%" 2>&1
+call "%path_java%" -J-XshowSettings:properties -version > "%path_java_probe%" 2>&1
 set "path_java_home="
 for /f "usebackq tokens=1,* delims== " %%A in (`findstr /r /c:"^ *java.home =" "%path_java_probe%"`) do set "path_java_home=%%B"
 del /f /q "%path_java_probe%" 2>nul

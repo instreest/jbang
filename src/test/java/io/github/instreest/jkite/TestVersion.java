@@ -38,7 +38,8 @@ class TestVersion {
 		return jar;
 	}
 
-	private ClassLoader classPath(Path... jars) throws IOException {
+	/** Closeable: an open loader holds its jars open, and Windows notices. */
+	private URLClassLoader classPath(Path... jars) throws IOException {
 		URL[] urls = new URL[jars.length];
 		for (int i = 0; i < jars.length; i++) {
 			urls[i] = jars[i].toUri().toURL();
@@ -49,31 +50,33 @@ class TestVersion {
 
 	@Test
 	void theVersionIsReadFromOurOwnManifest() throws IOException {
-		ClassLoader cp = classPath(
+		try (URLClassLoader cp = classPath(
 				jar("other.jar", "Implementation-Title", "something else"),
-				jar("jkite.jar", Version.ATTRIBUTE, "1.2.3"));
-
-		assertEquals("1.2.3", Version.fromManifests(cp));
+				jar("jkite.jar", Version.ATTRIBUTE, "1.2.3"))) {
+			assertEquals("1.2.3", Version.fromManifests(cp));
+		}
 	}
 
 	@Test
 	void aManifestOfOurOwnIsFoundWhereverItSits() throws IOException {
-		ClassLoader cp = classPath(
+		try (URLClassLoader cp = classPath(
 				jar("jkite.jar", Version.ATTRIBUTE, "1.2.3"),
-				jar("other.jar", "Implementation-Title", "something else"));
-
-		assertEquals("1.2.3", Version.fromManifests(cp));
+				jar("other.jar", "Implementation-Title", "something else"))) {
+			assertEquals("1.2.3", Version.fromManifests(cp));
+		}
 	}
 
 	@Test
 	void aClassPathWithoutOneSaysSo() throws IOException {
-		ClassLoader cp = classPath(jar("other.jar", "Implementation-Title", "something else"));
-
-		assertEquals("unknown", Version.fromManifests(cp));
+		try (URLClassLoader cp = classPath(jar("other.jar", "Implementation-Title", "something else"))) {
+			assertEquals("unknown", Version.fromManifests(cp));
+		}
 	}
 
 	@Test
 	void anEmptyClassPathSaysSo() throws IOException {
-		assertEquals("unknown", Version.fromManifests(classPath()));
+		try (URLClassLoader cp = classPath()) {
+			assertEquals("unknown", Version.fromManifests(cp));
+		}
 	}
 }

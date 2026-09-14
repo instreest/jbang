@@ -51,9 +51,10 @@ public final class CacheLock implements AutoCloseable {
 
 	/** Takes the lock in the file itself, for a lock outside the lock directory. */
 	public static CacheLock acquireAt(Path file, String waitMessage) {
+		RandomAccessFile raf = null;
 		try {
 			Files.createDirectories(file.toAbsolutePath().getParent());
-			RandomAccessFile raf = new RandomAccessFile(file.toFile(), "rw");
+			raf = new RandomAccessFile(file.toFile(), "rw");
 			FileChannel channel = raf.getChannel();
 			FileLock lock = channel.tryLock();
 			if (lock == null) {
@@ -65,7 +66,21 @@ public final class CacheLock implements AutoCloseable {
 			return new CacheLock(file, raf, lock);
 		} catch (IOException | RuntimeException e) {
 			Util.verboseMsg("Could not lock " + file + ", continuing without a lock: " + e);
+			// the file was opened before the lock was asked for, and going on
+			// without the lock is no reason to go on holding it open: on Windows
+			// that keeps the file itself locked for as long as the run lasts
+			closeQuietly(raf);
 			return new CacheLock(file, null, null);
+		}
+	}
+
+	private static void closeQuietly(RandomAccessFile raf) {
+		if (raf != null) {
+			try {
+				raf.close();
+			} catch (IOException e) {
+				// nothing left to do about it
+			}
 		}
 	}
 
