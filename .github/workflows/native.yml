@@ -4,14 +4,17 @@
 # that builds it. So this is not one job with a flag, it is one runner per
 # platform, and the matrix below is the list of platforms jkite can ship.
 #
-# All six are GitHub-hosted. arm64 Linux and Windows runners became generally
-# available for public repositories in August 2025, which is what makes the
-# matrix complete without self-hosted machines or QEMU.
+# Five of jkite.properties' six platforms are built here, all on GitHub-hosted
+# runners. arm64 Linux and Windows runners became generally available for
+# public repositories in August 2025, which is what makes that much complete
+# without self-hosted machines or QEMU.
 #
-# One deadline is worth knowing: macos-15-intel is the last x86_64 macOS image
-# GitHub will offer, and it goes away in August 2027. darwin-amd64 has to come
-# from somewhere else after that, or stop being shipped as a native binary and
-# fall back to the jar.
+# darwin-amd64 is the one that is missing, and it is missing because there is
+# no compiler for it: GraalVM removed macOS x64 after 25.0.1, so every release
+# from 25.0.2 on ships no macos-x64 build at all. Pinning an Intel Mac job to
+# 25.0.1 would freeze it on a release that no longer gets fixes, which is worse
+# than not shipping a binary. Intel Macs run the jar, which is what the jar is
+# for. (GitHub is retiring macos-15-intel in August 2027 in any case.)
 #
 # Native builds are minutes each, so this does not run on every push the way
 # CI does: it runs on demand, on release tags, and on pull requests that touch
@@ -49,9 +52,8 @@ jobs:
           - { os: ubuntu-24.04-arm, platform: linux-arm64   }
           - { os: windows-latest,   platform: windows-amd64 }
           - { os: windows-11-arm,   platform: windows-arm64 }
-          # the last x86_64 macOS image; retires August 2027
-          - { os: macos-15-intel,   platform: darwin-amd64  }
           - { os: macos-latest,     platform: darwin-arm64  }
+          # no darwin-amd64: GraalVM ships no macOS x64 build after 25.0.1
 
     steps:
       - uses: actions/checkout@v4

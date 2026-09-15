@@ -88,11 +88,45 @@ building it, so shipping six platforms means building on six machines. That is
 what `.github/workflows/native.yml` is: one runner per row of
 `jkite.properties`, all of them GitHub-hosted.
 
-Two dates matter. arm64 Linux and Windows runners became generally available
-for public repositories in August 2025, which is what makes the matrix complete
-today. And `macos-15-intel` is the last x86_64 macOS image GitHub will offer;
-it retires in August 2027, after which `darwin-amd64` needs another source or
-stops being a native target.
+arm64 Linux and Windows runners became generally available for public
+repositories in August 2025, which is what makes four of the five rows possible
+without self-hosted machines or QEMU.
+
+The fifth platform, `darwin-amd64`, is not built. GraalVM removed macOS x64
+after 25.0.1: releases from 25.0.2 on ship no `macos-x64` build, so there is no
+compiler to run. Pinning an Intel Mac job to 25.0.1 would freeze it on a
+release that no longer receives fixes, which is worse than shipping nothing, so
+Intel Macs get the jar instead. GitHub is retiring `macos-15-intel` in August
+2027 regardless.
+
+This is the shape of the risk generally: a native target exists only while
+someone builds a compiler for it. Losing one is not a build failure to debug,
+it is a platform moving back to the jar.
+
+## Which GraalVM
+
+`native-image` comes from a GraalVM distribution, and there are several. They
+are the same technology; what differs is who builds and supports it.
+
+| | |
+| --- | --- |
+| **GraalVM Community Edition** | Open source, GPLv2+CE. What CI uses and what this was developed against. |
+| Oracle GraalVM | Oracle's build, under the GraalVM Free Terms and Conditions. |
+| Mandrel | Red Hat's rebuild of Community Edition, native-image only, maintained for Quarkus. |
+| Liberica NIK | BellSoft's build. |
+
+Worth knowing while choosing: in September 2025 Oracle detached GraalVM from
+the Java SE release train. GraalVM for JDK 24 was the last release covered by
+Oracle Java SE support, the Graal JIT left the Oracle JDK, and Oracle's team
+moved its focus to the non-Java Graal languages, with Java startup and
+footprint work continuing in OpenJDK's Project Leyden instead. OpenJDK's
+Project Galahad, which was to bring this technology into the JDK, was dissolved
+in March 2026.
+
+Native Image itself was not deprecated: Community Edition releases monthly, and
+Red Hat continues Mandrel for Quarkus. But the technology is now carried by the
+community rather than by Oracle's Java strategy, which is a reason to keep the
+jar working rather than to treat the executable as the only way jkite runs.
 
 ## Measured
 
