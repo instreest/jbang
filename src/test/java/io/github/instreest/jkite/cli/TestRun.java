@@ -2,6 +2,7 @@ package io.github.instreest.jkite.cli;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
@@ -146,6 +147,48 @@ class TestRun extends AbstractScriptTest {
 		assertEquals(0, second.exitCode, second.stderr);
 		assertTrue(second.stdout.contains("hello from the jar"), second.stdout);
 		assertTrue(second.stderr.contains("is not the jar that was built there"), second.stderr);
+	}
+
+	/**
+	 * What a script declares is what is built. javac is given a source path of
+	 * its own so that it cannot fall back on the directory the run started in:
+	 * a class found that way went into the jar without being part of the build
+	 * id, so editing it changed nothing and two projects whose scripts happened
+	 * to match shared one jar.
+	 */
+	@Test
+	void aClassInAnUndeclaredFileIsNotBuiltIn() throws Exception {
+		Path dir = Files.createDirectories(tempDir.resolve("tool"));
+		Files.write(dir.resolve("Helper.java"),
+				"public class Helper { static final String WHO = \"the undeclared one\"; }\n"
+					.getBytes(StandardCharsets.UTF_8));
+		Files.write(dir.resolve("Report.java"),
+				("public class Report { public static void main(String... a) {"
+						+ " System.out.println(Helper.WHO); } }\n").getBytes(StandardCharsets.UTF_8));
+
+		// started where both files are, which is where javac used to look
+		RunResult result = runProcess(jkite("Report.java"), env(), null, dir);
+
+		assertNotEquals(0, result.exitCode, result.stdout);
+		assertTrue(result.stderr.contains("cannot find symbol"), result.stderr);
+		assertTrue(result.stderr.contains("//SOURCES"), "the error says what to do about it: " + result.stderr);
+	}
+
+	/** And declaring it is all it takes. */
+	@Test
+	void aClassInADeclaredFileIsBuiltIn() throws Exception {
+		Path dir = Files.createDirectories(tempDir.resolve("declared"));
+		Files.write(dir.resolve("Helper.java"),
+				"public class Helper { static final String WHO = \"the declared one\"; }\n"
+					.getBytes(StandardCharsets.UTF_8));
+		Files.write(dir.resolve("Report.java"),
+				("//SOURCES Helper.java\npublic class Report { public static void main(String... a) {"
+						+ " System.out.println(Helper.WHO); } }\n").getBytes(StandardCharsets.UTF_8));
+
+		RunResult result = runProcess(jkite("Report.java"), env(), null, dir);
+
+		assertEquals(0, result.exitCode, result.stderr);
+		assertTrue(result.stdout.contains("the declared one"), result.stdout);
 	}
 
 	/** The one jar under the cache directory this test's runs share. */

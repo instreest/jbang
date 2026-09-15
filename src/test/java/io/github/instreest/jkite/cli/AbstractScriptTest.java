@@ -98,9 +98,23 @@ abstract class AbstractScriptTest {
 
 	/** Runs the command with the given file as its stdin (none when null). */
 	protected static RunResult runProcess(List<String> cmd, Map<String, String> env, Path stdin) throws Exception {
+		return runProcess(cmd, env, stdin, null);
+	}
+
+	/**
+	 * Runs the command with the given file as its stdin (none when null) in the
+	 * given directory (this process's own when null). The directory matters
+	 * where the program looks at where it was started from, as javac does when
+	 * it is left to find sources by itself.
+	 */
+	protected static RunResult runProcess(List<String> cmd, Map<String, String> env, Path stdin, Path directory)
+			throws Exception {
 		ProcessBuilder pb = new ProcessBuilder(cmd);
 		if (stdin != null) {
 			pb.redirectInput(stdin.toFile());
+		}
+		if (directory != null) {
+			pb.directory(directory.toFile());
 		}
 		// the map is the whole environment: what the caller removed stays removed
 		pb.environment().clear();

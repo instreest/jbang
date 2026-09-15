@@ -119,7 +119,7 @@ What a script needs is declared in the script. These are applied:
 | --- | --- |
 | `//JAVA <version>[+]` | the JDK to build and run with, installed when the machine has none |
 | `//DEPS <gav>` | resolved from Maven Central; `@pom` entries act as BOMs |
-| `//SOURCES <file-or-glob>` | compiled together with the script, recursively |
+| `//SOURCES <file-or-glob>` | compiled together with the script, recursively; every other source it needs is named here |
 | `//FILES [<target>=]<file-or-glob>` | copied into the jar, optionally under another name |
 | `//REPOS [<id>=]<url-or-alias>` | extra Maven repositories |
 | `//MAIN <class>` | the class to run, when there is more than one `main` |

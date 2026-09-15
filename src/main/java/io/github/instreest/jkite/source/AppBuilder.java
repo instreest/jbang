@@ -204,6 +204,20 @@ public class AppBuilder {
 			cmd.addAll(Arrays.asList("-classpath", cp));
 		}
 		cmd.addAll(Arrays.asList("-d", compileDir.toAbsolutePath().toString()));
+		// The sources this project declares are the whole of it. Without a
+		// source path javac falls back on the class path, and without a class
+		// path on the directory the run started in, and compiles whatever .java
+		// it finds there for a class it cannot otherwise resolve - into the jar,
+		// but not into the build id, which only covers what the script declares.
+		// A jar would then be reused after such a file changed, and two projects
+		// whose scripts happen to match would share one.
+		//
+		// The compile directory is the source path because it is a directory
+		// that exists and holds no sources: it is made empty just before this
+		// runs, and //FILES are copied in afterwards. An empty argument would
+		// say the same thing, but it is dropped on the way to javac when the
+		// command line is long enough to go through an @-file.
+		cmd.addAll(Arrays.asList("-sourcepath", compileDir.toAbsolutePath().toString()));
 		cmd.addAll(project.getSources().stream().map(Path::toString).collect(Collectors.toList()));
 
 		Util.infoMsg("Building jar for " + project.getMainSource().getFileName() + "...");
@@ -217,8 +231,20 @@ public class AppBuilder {
 			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, e);
 		}
 		if (process.exitValue() != 0) {
-			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Error during compile");
+			throw new ExitException(ExitException.EXIT_GENERIC_ERROR, "Error during compile" + sourcesHint());
 		}
+	}
+
+	/**
+	 * Added to a failed compile when the script names no other source. javac has
+	 * just been told not to go looking for one, so a class that lives in a file
+	 * beside the script is a "cannot find symbol" rather than something quietly
+	 * compiled in, and the line that fixes it is not in javac's output.
+	 */
+	private String sourcesHint() {
+		return project.getSources().size() > 1
+				? ""
+				: ". If a class it uses lives in another file, name that file with //SOURCES";
 	}
 
 	/** Copies the //FILES entries next to the classes so they end up in the jar. */

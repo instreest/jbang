@@ -126,8 +126,9 @@ The jar that comes out is written down too: its size and digest go into
 instead of being run. Every entry in it carries a fixed timestamp, so the same
 inputs produce the same bytes and that check means something.
 
-What the hash does not see is a `.java` file the script never declares. When a
-script has no `//DEPS`, javac is given no class path, and its default one - the
-directory the run started in - is where it also looks for sources; a file it
-finds that way is compiled into the jar without being part of the hash. Declare
-every source with `//SOURCES` and that cannot happen.
+The sources a script declares are the whole of the build. javac is given a
+source path of its own so that it cannot fall back on the directory the run
+started in and compile a `.java` it finds there: such a file would go into the
+jar without being part of the hash, and the jar would then be reused after it
+changed. A class that is not in the script has to be named with `//SOURCES`,
+and the compile says so when one is missing.
