@@ -1,0 +1,100 @@
+# Builds the native executable on every platform jkite.properties names.
+#
+# native-image does not cross-compile: an executable is built for the machine
+# that builds it. So this is not one job with a flag, it is one runner per
+# platform, and the matrix below is the list of platforms jkite can ship.
+#
+# All six are GitHub-hosted. arm64 Linux and Windows runners became generally
+# available for public repositories in August 2025, which is what makes the
+# matrix complete without self-hosted machines or QEMU.
+#
+# One deadline is worth knowing: macos-15-intel is the last x86_64 macOS image
+# GitHub will offer, and it goes away in August 2027. darwin-amd64 has to come
+# from somewhere else after that, or stop being shipped as a native binary and
+# fall back to the jar.
+#
+# Native builds are minutes each, so this does not run on every push the way
+# CI does: it runs on demand, on release tags, and on pull requests that touch
+# the build or the metadata, which are the changes that can break it.
+name: Native
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - 'build.gradle'
+      - 'gradle.lockfile'
+      - 'src/native-image/**'
+      - '.github/workflows/native.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # one platform failing must not hide the result of the others
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    platform: linux-amd64   }
+          - { os: ubuntu-24.04-arm, platform: linux-arm64   }
+          - { os: windows-latest,   platform: windows-amd64 }
+          - { os: windows-11-arm,   platform: windows-arm64 }
+          # the last x86_64 macOS image; retires August 2027
+          - { os: macos-15-intel,   platform: darwin-amd64  }
+          - { os: macos-latest,     platform: darwin-arm64  }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # GraalVM is both the JDK the build runs on and the source of the
+      # native-image command, so no second setup-java step is needed. The
+      # action exports GRAALVM_HOME, which is what the nativeImage task looks
+      # for.
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          distribution: graalvm-community
+          java-version: '25'
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the native executable
+        shell: bash
+        run: ./gradlew nativeImage --stacktrace
+
+      # An executable that builds but cannot run is not a result. This is the
+      # same check a person would do first: does it start, does it answer, and
+      # does it actually build and run a program.
+      - name: Smoke test
+        shell: bash
+        env:
+          JKITE_CONFIRM_DOWNLOADS: never
+        run: |
+          set -euo pipefail
+          exe=$(ls build/native-image/jkite-${{ matrix.platform }}*)
+          [ -x "$exe" ] || chmod +x "$exe"
+          "$exe" --version
+          cat > hello.java <<'EOF'
+          public class hello {
+            public static void main(String[] a) { System.out.println("ok"); }
+          }
+          EOF
+          test "$("$exe" hello.java)" = "ok"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jkite-${{ matrix.platform }}
+          path: |
+            build/native-image/jkite-${{ matrix.platform }}*
+          if-no-files-found: error
+          retention-days: 7
