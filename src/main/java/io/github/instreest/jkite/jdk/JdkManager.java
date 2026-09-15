@@ -76,7 +76,15 @@ public final class JdkManager {
 	public List<Jdk> listInstalled() {
 		if (installed == null) {
 			List<Jdk> jdks = new ArrayList<>();
-			add(jdks, Jdk.of(jre2jdk(Paths.get(System.getProperty("java.home"))), Jdk.Origin.CURRENT));
+			// The JDK this process itself runs on, and the one origin here
+			// whose value was handed to Paths.get unguarded. java.home is set
+			// on a JVM, but where it is not, the NPE ends the whole search
+			// before JAVA_HOME, the PATH or the cache are looked at - a large
+			// failure for an origin that simply has nothing to offer.
+			String current = System.getProperty("java.home");
+			if (current != null && !current.isEmpty()) {
+				add(jdks, Jdk.of(jre2jdk(Paths.get(current)), Jdk.Origin.CURRENT));
+			}
 			String javaHome = System.getenv("JAVA_HOME");
 			if (javaHome != null && !javaHome.isEmpty()) {
 				add(jdks, Jdk.of(jre2jdk(Paths.get(javaHome)), Jdk.Origin.JAVA_HOME));
