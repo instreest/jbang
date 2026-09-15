@@ -185,10 +185,17 @@ does the jar download one, and it needs no JDK discovery service to do it:
    Central as `io.get-coursier.jvm.indices:index-<platform>`. It is fetched with
    the same Maven Resolver used for `//DEPS`, so mirrors, proxies and
    credentials from `~/.m2/settings.xml` apply and it is cached in the local
-   repository.
-2. The archive is downloaded over https from the distributor and its SHA-256
-   verified against the checksum published next to it. Redirects off https are
-   refused.
+   repository. The version asked for is the open range `[0,)`: the newest index
+   there is, so that a JDK released after this version of jkite still installs.
+   The index is therefore the one input here that jkite does not pin, and step 2
+   is written on the assumption that it could be wrong.
+2. The URL has to be on the distribution's own account (`github.com/adoptium/`)
+   or the install stops. This is the check that matters: the archive's SHA-256
+   is published beside the archive, so an index that chose the one would choose
+   the other, and a checksum cannot tell whose archive it is. What the checksum
+   does catch is an archive damaged or altered in transit, and a checksum that
+   cannot be read stops the install rather than passing it through. The download
+   is over https and redirects off https are refused.
 3. The result is unpacked into a temporary directory, validated, and moved into
    place under a lock, so parallel runs wait rather than download twice.
 

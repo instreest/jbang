@@ -56,6 +56,13 @@ public final class Settings {
 	 * points at this host; one that does not is a reason to stop, not to follow.
 	 */
 	public static final String JDK_DOWNLOAD_HOST = "github.com";
+	/**
+	 * The account on {@link #JDK_DOWNLOAD_HOST} that publishes them. The host
+	 * alone is not enough: anyone can put a release on github.com, so a URL is
+	 * only followed when it also comes from this account. Every Temurin entry in
+	 * the index is under it.
+	 */
+	public static final String JDK_DOWNLOAD_PATH_PREFIX = "/adoptium/";
 	public static final int DEFAULT_DOWNLOAD_RETRY = 5;
 
 	public enum CacheClass {

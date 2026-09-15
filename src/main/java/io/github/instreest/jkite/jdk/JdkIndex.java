@@ -35,6 +35,16 @@ import dev.jbang.util.Util;
  * The index maps a distribution and version to the distributor's own download
  * URL, for example
  * <code>temurin -&gt; 25.0.3 -&gt; tgz+https://github.com/adoptium/...tar.gz</code>.
+ *
+ * The version asked for is a range with no upper bound, so every run that has
+ * to download a JDK takes the newest index published. That is the point: a JDK
+ * released after this version of jkite is then installable without jkite
+ * having to be updated, which is what lets a user ignore JDKs entirely. The
+ * cost is that the list is not something this project pins, and it comes from
+ * a project jkite does not control - so nothing here takes the index's word
+ * for where a download comes from. That is
+ * {@link io.github.instreest.jkite.jdk.JdkManager}'s check against the
+ * distribution's own account, and it is what makes the open range affordable.
  */
 public final class JdkIndex {
 	static final String INDEX_GROUP_ID = "io.get-coursier.jvm.indices";

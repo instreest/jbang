@@ -211,7 +211,7 @@ public final class JdkManager {
 				+ "). Be patient, this can take several minutes...");
 		Util.verboseMsg("Downloading " + entry.url);
 		try {
-			requireExpectedHost(entry);
+			requireExpectedSource(entry);
 			Downloader.download(entry.url, pkg);
 			String verified = verifyChecksum(entry, pkg);
 			Util.infoMsg("Installing JDK " + entry.version + "...");
@@ -247,17 +247,35 @@ public final class JdkManager {
 	}
 
 	/**
-	 * Refuses a download from anywhere but {@link Settings#JDK_DOWNLOAD_HOST}.
-	 * The URL comes from the JVM index, which is the one input here that nothing
-	 * in the project pins, so a bad index would otherwise choose both the
-	 * archive and the checksum that is compared against it.
+	 * Refuses a download from anywhere but the distribution's own account, and
+	 * so is the only thing standing between a bad JVM index and an arbitrary
+	 * download. The URL comes from that index, which is the one input here that
+	 * nothing in the project pins, and a bad index would otherwise choose the
+	 * archive and, with it, the checksum that is compared against the archive.
+	 *
+	 * The account is checked and not only the host: anyone can publish a release
+	 * on github.com, so the host by itself would let any of those through.
+	 *
+	 * The host comes from parsing the URL rather than from matching its text,
+	 * since "https://github.com@evil.example/adoptium/" has the text but not the
+	 * host; the path is taken raw, since a percent-escape in it must not be able
+	 * to spell the prefix that is being looked for.
 	 */
-	void requireExpectedHost(JdkIndex.Entry entry) throws IOException {
-		String host = URI.create(entry.url).getHost();
-		if (host == null || !host.equalsIgnoreCase(Settings.JDK_DOWNLOAD_HOST)) {
-			throw new IOException("The JVM index points at " + host + " for " + entry.distro
-					+ " " + entry.version + ", but JDKs are only downloaded from "
-					+ Settings.JDK_DOWNLOAD_HOST + ": " + entry.url);
+	void requireExpectedSource(JdkIndex.Entry entry) throws IOException {
+		String host = null;
+		String path = null;
+		try {
+			URI url = URI.create(entry.url);
+			host = url.getHost();
+			path = url.getRawPath();
+		} catch (IllegalArgumentException e) {
+			// not a URL at all; refused below like any other unexpected source
+		}
+		if (host == null || !host.equalsIgnoreCase(Settings.JDK_DOWNLOAD_HOST)
+				|| path == null || !path.startsWith(Settings.JDK_DOWNLOAD_PATH_PREFIX)) {
+			throw new IOException("The JVM index points at " + entry.url + " for " + entry.distro
+					+ " " + entry.version + ", but JDKs are only downloaded from https://"
+					+ Settings.JDK_DOWNLOAD_HOST + Settings.JDK_DOWNLOAD_PATH_PREFIX);
 		}
 	}
 
@@ -267,6 +285,11 @@ public final class JdkManager {
 	 * mismatch and a checksum that cannot be read abort the installation: a
 	 * checksum that is merely unreachable would otherwise be a way to have the
 	 * archive accepted unverified.
+	 *
+	 * What this catches is an archive that arrived damaged or altered on the
+	 * way. It is not what keeps a bad index out: the checksum is read from
+	 * beside the archive, so whoever chooses the one chooses the other.
+	 * {@link #requireExpectedSource} is what decides whose archive this is.
 	 *
 	 * @return the digest that was verified, for {@link InstallRecord}
 	 */

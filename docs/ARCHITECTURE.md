@@ -81,7 +81,7 @@ Four places, and no others.
 | --- | --- | --- |
 | `jkite.jar` | the pinned URL | SHA-256 in `jkite.properties` |
 | the bootstrap JDK | the pinned URL | SHA-256 in `jkite.properties` |
-| the `//JAVA` JDK | the Coursier JVM index, then the distributor | the checksum the distributor publishes |
+| the `//JAVA` JDK | the Coursier JVM index, then the distributor | the checksum the distributor publishes, and the URL against the distribution's own account |
 | `//DEPS` | Maven Central, or `//REPOS` | Maven Resolver's own checksums |
 
 The first two happen in the shell, before any JVM exists; the last two happen
