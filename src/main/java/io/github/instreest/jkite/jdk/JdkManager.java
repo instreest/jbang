@@ -76,7 +76,13 @@ public final class JdkManager {
 	public List<Jdk> listInstalled() {
 		if (installed == null) {
 			List<Jdk> jdks = new ArrayList<>();
-			add(jdks, Jdk.of(jre2jdk(Paths.get(System.getProperty("java.home"))), Jdk.Origin.CURRENT));
+			// The JDK this process itself runs on. A native build has none:
+			// there is no JVM under the executable and java.home is unset,
+			// so this origin simply contributes nothing there.
+			String current = System.getProperty("java.home");
+			if (current != null && !current.isEmpty()) {
+				add(jdks, Jdk.of(jre2jdk(Paths.get(current)), Jdk.Origin.CURRENT));
+			}
 			String javaHome = System.getenv("JAVA_HOME");
 			if (javaHome != null && !javaHome.isEmpty()) {
 				add(jdks, Jdk.of(jre2jdk(Paths.get(javaHome)), Jdk.Origin.JAVA_HOME));
