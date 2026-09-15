@@ -169,3 +169,100 @@ shadowJar {
 }
 
 assemble.dependsOn shadowJar
+
+// --- native image -------------------------------------------------------
+//
+// A second way to ship the same code: one executable that needs no JVM to
+// start. It matters here because the launcher scripts install a whole JDK
+// for the single purpose of running jkite.jar (see jkite.properties); an
+// executable that starts on its own removes that reason, and with it the
+// jkite-bootstrap-jdk pair.
+//
+// native-image does not cross-compile: an executable is always built for the
+// machine building it. So the platform is read from the build JVM rather
+// than chosen, and CI gets one runner per platform it ships.
+
+// The name this platform has in jkite.properties, e.g. linux-amd64. The same
+// six the bootstrap scripts resolve, named the same way, so a built artifact
+// drops straight into that table.
+def nativePlatform() {
+	def os = System.getProperty("os.name").toLowerCase()
+	def arch = System.getProperty("os.arch").toLowerCase()
+	def osName = os.contains("windows") ? "windows"
+			: (os.contains("mac") || os.contains("darwin")) ? "darwin"
+			: "linux"
+	def archName = (arch == "aarch64" || arch == "arm64") ? "arm64" : "amd64"
+	return "$osName-$archName"
+}
+
+tasks.register('nativeImage', Exec) {
+	dependsOn shadowJar
+	description = "Build a native executable for the platform this build runs on"
+	group = "build"
+
+	def windows = System.getProperty("os.name").toLowerCase().contains("windows")
+	def platform = nativePlatform()
+	def outputDir = layout.buildDirectory.dir("native-image").get().asFile
+	// native-image appends .exe on Windows, so the name it is given must not
+	// already carry one or the file ends up called jkite-...exe.exe
+	def execBase = "jkite-$platform"
+	def execFile = new File(outputDir, windows ? "${execBase}.exe" : execBase)
+
+	// GRAALVM_HOME is how CI points at the GraalVM it set up; without it the
+	// command has to be on PATH, which is what a local install usually gives.
+	def tool = windows ? "native-image.cmd" : "native-image"
+	def cmd = System.getenv("GRAALVM_HOME")
+			? "${System.getenv('GRAALVM_HOME')}${File.separator}bin${File.separator}$tool"
+			: tool
+
+	// jkite needs no reachability metadata today: it reads JSON through gson's
+	// tree API rather than binding it to classes, and opens archives by
+	// constructing the streams rather than looking them up by service. The
+	// directory is passed only if it exists, so the day something does need an
+	// entry, creating the file is the whole change.
+	def configDir = file("src/native-image/config")
+	// Gradle cannot see either of these from the task's own declaration: the
+	// jar comes through dependsOn, which orders the tasks but does not make
+	// its content an input, and the metadata is read by native-image rather
+	// than by Gradle. Without both, editing metadata leaves the task up to
+	// date and the executable keeps whatever was baked into it before.
+	inputs.file(shadowJar.archiveFile)
+	inputs.files(fileTree(configDir)).withPropertyName("nativeImageConfig")
+		.withPathSensitivity(PathSensitivity.RELATIVE)
+
+	doFirst {
+		outputDir.mkdirs()
+		def args = [cmd, "-jar", shadowJar.archiveFile.get().asFile.path,
+					"${outputDir}${File.separator}$execBase",
+					// fail the build rather than emit an image that needs a JVM
+					"--no-fallback",
+					"--enable-https",
+					// the jar: URLs the class path scan walks
+					"--enable-url-protocols=jar",
+					// report a missing registration at build time, not as a
+					// surprise at run time
+					"--exact-reachability-metadata",
+					"-H:+ReportExceptionStackTraces",
+					// leave -Dkey=value for jkite instead of consuming it
+					"-H:-ParseRuntimeOptions"]
+		if (configDir.isDirectory()) {
+			args += "-H:ConfigurationFileDirectories=$configDir"
+		}
+		commandLine args
+		println "native-image: building $execFile"
+	}
+
+	// A released binary is pinned by SHA-256 in jkite.properties the way the
+	// jar and the bootstrap JDKs are, so the build prints the digest it just
+	// produced rather than leaving it to be computed by hand afterwards.
+	doLast {
+		def digest = java.security.MessageDigest.getInstance("SHA-256")
+		execFile.eachByte(64 * 1024) { buf, n -> digest.update(buf, 0, n) }
+		def hex = digest.digest().encodeHex().toString()
+		new File(outputDir, "${execFile.name}.sha256").text = "$hex  ${execFile.name}\n"
+		println "native-image: ${execFile.name} (${execFile.length().intdiv(1024 * 1024)} MB)"
+		println "native-image: sha256 $hex"
+	}
+
+	outputs.file(execFile)
+}
