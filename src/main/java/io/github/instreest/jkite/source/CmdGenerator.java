@@ -42,18 +42,32 @@ public class CmdGenerator {
 	/** The <code>java</code> command line, one argument per element. */
 	public List<String> generate() throws IOException {
 		Jdk jdk = project.getJdk();
+		return generate(jdk.javaCmd(), jdk.majorVersion());
+	}
+
+	/**
+	 * The command line for a given java, told apart from finding that java
+	 * because which options are allowed depends on how old it is - and a JDK
+	 * that old is not something a test can be handed.
+	 *
+	 * @param javaCmd    the java to run
+	 * @param javaMajor  its major version: modules arrived in 9 and
+	 *                   --enable-native-access in 22, and an option the JVM does
+	 *                   not know is not ignored, it refuses to start
+	 */
+	List<String> generate(String javaCmd, int javaMajor) {
 		List<String> fullArgs = new ArrayList<>();
-		fullArgs.add(jdk.javaCmd());
+		fullArgs.add(javaCmd);
 		fullArgs.addAll(project.getRuntimeOptions());
 		fullArgs.addAll(runtimeOptions);
 
 		List<String> optionalArgs = new ArrayList<>();
-		if (jdk.majorVersion() >= 9) {
+		if (javaMajor >= 9) {
 			addAllUnnamed(optionalArgs, project.getManifestAttributes().get(Project.ATTR_ADD_OPENS), "--add-opens=");
 			addAllUnnamed(optionalArgs, project.getManifestAttributes().get(Project.ATTR_ADD_EXPORTS),
 					"--add-exports=");
 		}
-		if (jdk.majorVersion() >= 22) {
+		if (javaMajor >= 22) {
 			addAll(optionalArgs, project.getManifestAttributes().get(Project.ATTR_ENABLE_NATIVE_ACCESS),
 					"--enable-native-access=");
 		}
