@@ -6,36 +6,33 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Finds classes declaring a given method by reading the class files directly
- * (constant pool plus method table), so no bytecode library is needed. This
- * covers what JBang uses jandex for: locating the main class and the
- * <code>premain</code> or <code>agentmain</code> of a Java agent.
+ * Finds the class to run in what a script compiled to, for a script that does
+ * not name one with <code>//MAIN</code>.
+ *
+ * The class files are read here - the constant pool and the method table, no
+ * further - rather than with a bytecode library, which is what JBang uses
+ * jandex for. That keeps a megabyte out of jkite.jar, and puts the reading of
+ * the class file format in this project's care: a JDK that writes a constant
+ * this does not know is a thing to notice, so it stops there rather than read
+ * on into rubbish.
  */
 public final class MainClassFinder {
-	private static final int ACC_STATIC = 0x0008;
-
 	public static final String DESC_MAIN = "([Ljava/lang/String;)V";
 	public static final String DESC_NO_ARGS = "()V";
 
-	/** A method as found in a class file. */
+	/** A method as found in a class file, by the two things that name it. */
 	public static final class Method {
 		public final String name;
 		public final String descriptor;
-		public final boolean isStatic;
 
-		Method(String name, String descriptor, boolean isStatic) {
+		Method(String name, String descriptor) {
 			this.name = name;
 			this.descriptor = descriptor;
-			this.isStatic = isStatic;
 		}
 	}
 
@@ -51,11 +48,6 @@ public final class MainClassFinder {
 		return scan(dir, m -> ("main".equals(m.name)
 				&& (DESC_MAIN.equals(m.descriptor) || DESC_NO_ARGS.equals(m.descriptor))));
 	}
-
-	/**
-	 * Fully qualified names of the classes under dir declaring the given agent
-	 * method, with or without the Instrumentation parameter.
-	 */
 
 	private static List<String> scan(Path dir, java.util.function.Predicate<Method> wanted) throws IOException {
 		try (Stream<Path> paths = Files.walk(dir)) {
@@ -145,11 +137,11 @@ public final class MainClassFinder {
 		int methodCount = in.readUnsignedShort();
 		boolean matches = false;
 		for (int i = 0; i < methodCount; i++) {
-			int access = in.readUnsignedShort();
+			in.readUnsignedShort(); // access flags
 			String name = utf8[in.readUnsignedShort()];
 			String desc = utf8[in.readUnsignedShort()];
 			skipAttributes(in);
-			if (!matches && wanted.test(new Method(name, desc, (access & ACC_STATIC) != 0))) {
+			if (!matches && wanted.test(new Method(name, desc))) {
 				matches = true;
 			}
 		}
@@ -170,9 +162,5 @@ public final class MainClassFinder {
 			int len = in.readInt();
 			in.skipBytes(len);
 		}
-	}
-
-	/** Unused, kept so the predicate type stays readable. */
-	interface MethodMatcher extends BiPredicate<String, Method> {
 	}
 }
