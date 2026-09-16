@@ -121,7 +121,7 @@ What a script needs is declared in the script. These are applied:
 | `//DEPS <gav>` | resolved from Maven Central; `@pom` entries act as BOMs |
 | `//SOURCES <file-or-glob>` | compiled together with the script, recursively; every other source it needs is named here |
 | `//FILES [<target>=]<file-or-glob>` | copied into the jar, optionally under another name |
-| `//REPOS [<id>=]<url-or-alias>` | extra Maven repositories |
+| `//REPOS [<id>=]<url-or-alias>` | the Maven repositories to resolve from, over https or from a `file:` path. Naming any **replaces** Maven Central rather than adding to it |
 | `//MAIN <class>` | the class to run, when there is more than one `main` |
 | `//COMPILE_OPTIONS`, `//JAVAC_OPTIONS` | passed to `javac` |
 | `//RUNTIME_OPTIONS`, `//JAVA_OPTIONS` | passed to `java` |

@@ -187,6 +187,36 @@ public final class DependencyResolver {
 		}
 	}
 
+	/**
+	 * Refuses a repository that would be read over a plaintext connection.
+	 * Everything else jkite fetches is https-only, and a dependency is the one
+	 * download that becomes code running on the machine, so it cannot be the
+	 * exception: over http, whoever carries the traffic chooses the jar, and the
+	 * checksum that would catch them travels the same wire.
+	 *
+	 * A file: repository is allowed, since it touches no network, and so is
+	 * plain http on the loopback address, which is how a test serves a
+	 * repository to itself.
+	 */
+	static void requireSafeRepository(MavenRepo repo) {
+		String url = repo.getUrl() == null ? "" : repo.getUrl().trim();
+		String lower = url.toLowerCase(Locale.ROOT);
+		if (lower.startsWith("https://") || lower.startsWith("file:")) {
+			return;
+		}
+		if (lower.startsWith("http://")) {
+			String host = url.substring("http://".length()).split("[/:?#]", 2)[0];
+			if (host.equals("127.0.0.1") || host.equals("localhost") || host.equals("[::1]")) {
+				return;
+			}
+		}
+		throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+				"Refusing to resolve dependencies from " + url + " (//REPOS " + repo.getId() + "):"
+						+ " a repository is read over https, or from a file: path."
+						+ " Over http the dependency, and the checksum that would catch it,"
+						+ " are both chosen by whoever carries the traffic.");
+	}
+
 	/** A Maven Resolver session, configured the way jkite needs it. */
 	private static final class Session implements Closeable {
 	private final Context context;
@@ -207,6 +237,12 @@ public final class DependencyResolver {
 			.withLocalRepositoryOverride(Settings.getLocalMavenRepoOverride())
 			.repositories(toRemoteRepositories(repositories))
 			.addRepositoriesOp(ContextOverrides.AddRepositoriesOp.REPLACE)
+			// Maven's own default is to warn and carry on when a checksum does
+			// not match or is missing, which makes the checksum a report rather
+			// than a check. Everything else jkite fetches has to match what was
+			// published, including where that means stopping, and a dependency
+			// becomes code that runs, so it is held to the same rule.
+			.checksumPolicy(ContextOverrides.ChecksumPolicy.FAIL)
 			.snapshotUpdatePolicy(updateCache ? ContextOverrides.SnapshotUpdatePolicy.ALWAYS : null);
 		if (!silent && !Util.isQuiet()) {
 			overrides.repositoryListener(new ProgressListener());
@@ -220,7 +256,8 @@ public final class DependencyResolver {
 	}
 
 	/**
-	 * Maven Central plus whatever //REPOS (or --repos) asked for. Mirrors,
+	 * Maven Central, or whatever //REPOS (or --repos) named instead of it -
+	 * naming any repository replaces Central rather than adding to it. Mirrors,
 	 * proxies and credentials still come from ~/.m2/settings.xml.
 	 */
 	private static List<RemoteRepository> toRemoteRepositories(List<MavenRepo> repositories) {
@@ -228,7 +265,10 @@ public final class DependencyResolver {
 			return Collections.singletonList(ContextOverrides.CENTRAL);
 		}
 		return repositories.stream()
-			.map(r -> new RemoteRepository.Builder(r.getId(), "default", r.getUrl()).build())
+			.map(r -> {
+				requireSafeRepository(r);
+				return new RemoteRepository.Builder(r.getId(), "default", r.getUrl()).build();
+			})
 			.collect(Collectors.toList());
 	}
 

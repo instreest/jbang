@@ -82,7 +82,7 @@ Four places, and no others.
 | `jkite.jar` | the pinned URL | SHA-256 in `jkite.properties` |
 | the bootstrap JDK | the pinned URL | SHA-256 in `jkite.properties` |
 | the `//JAVA` JDK | the Coursier JVM index, then the distributor | the checksum the distributor publishes, and the URL against the distribution's own account |
-| `//DEPS` | Maven Central, or `//REPOS` | Maven Resolver's own checksums |
+| `//DEPS` | Maven Central, or `//REPOS` | the checksums the repository publishes, which have to match: a mismatch or a missing one stops the run rather than warning |
 
 The first two happen in the shell, before any JVM exists; the last two happen
 in the jar. Each side asks before it fetches, which is why a cold first run
