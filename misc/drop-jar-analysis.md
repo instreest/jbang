@@ -1,128 +1,143 @@
-# jkite.jar を廃し、ブートストラップに徹する案の影響整理
+# Dropping jkite.jar and being nothing but a bootstrap
 
-## 提案の要約
+> A decision record of a proposal that was **not** taken. It is kept because
+> the proposal was a reasonable one and someone will think of it again. It
+> describes the tree as it stood when the question was asked, so some names in
+> it have since changed.
 
-jkite の役割を次の 3 つだけに絞る。
+## The proposal
 
-1. JDK の取得（自動ダウンロード前に確認メッセージを出す）
-2. JBang 本体（上流の配布物）の取得
-3. JBang による依存性解決の自動ダウンロード前の確認メッセージ
+Reduce jkite to three jobs:
 
-スクリプトの実行そのものは上流の JBang に任せる。結果として
-`jkite.jar`（= JBang の縮小フォーク）は不要になる。
+1. Get a JDK (asking before it downloads one)
+2. Get JBang itself (upstream's own distribution)
+3. Ask before JBang's dependency resolution downloads anything
 
-## 現状との対比
+Running the script would be upstream JBang's job. `jkite.jar` — the reduced
+fork — would then not be needed at all.
 
-| | 現状 | 提案 |
+## Against what exists
+
+| | Today | Proposed |
 | --- | --- | --- |
-| 実体 | 縮小フォーク jar（`src/main/java` 31 ファイル）+ ランチャ/ブートストラップ 6 スクリプト | シェル/cmd スクリプトのみ |
-| 配布 | `jkite.jar` を GitHub Release に置き、`jkite.properties` で version/URL/SHA-256 を固定 | 上流 JBang の配布物を pin するだけ |
-| 上流追従 | `misc/sync-upstream.sh` でミラー 9 ファイル + シム 3 ファイルを手当て | 不要（上流のリリースを指すだけ） |
+| What it is | a reduced fork as a jar (31 files under `src/main/java`) plus 6 launcher and bootstrap scripts | shell and cmd scripts only |
+| Distribution | `jkite.jar` on a GitHub release, with version, URL and SHA-256 pinned in `jkite.properties` | pin upstream JBang's distribution and nothing else |
+| Following upstream | `misc/sync-upstream.sh`, 9 mirrored files plus 3 shims to maintain | not needed; point at an upstream release |
 
-## 消えるもの（メンテナンス上の利益）
+## What would go away (the gain)
 
-- `src/main/java` の 31 ファイルと `src/test` の 7 ファイル、Gradle ビルド、
-  shadowJar、MIMA/maven-resolver 依存、`JdkHttpTransporterFactory` と
-  `jkiteRuntime`（Apache HttpClient を JDK HttpClient に差し替えるための自前実装）。
-- ミラー/シム 3 分割と `misc/sync-upstream.sh`、`misc/upstream-ref.txt` の運用。
-  上流が `Directives.java` を直せば、そのまま JBang のリリースとして降ってくる。
-- リリース手順そのもの（`misc/update-dist.sh <version>` → `gh release create` →
-  `dist/` コミット）。jar を publish する必要がなくなり、
-  `jkite-bootstrap-jar` は「JBang の zip を取ってくる」スクリプトに置き換わる。
-- 「JBang の挙動と違う」というクラスのバグ全般。ディレクティブの解釈は
-  上流そのものになる。
+- 31 files under `src/main/java` and 7 under `src/test`, the Gradle build,
+  shadowJar, the MIMA and maven-resolver dependencies,
+  `JdkHttpTransporterFactory` and `jkiteRuntime` (written here to put the JDK's
+  HttpClient in place of Apache's).
+- The three-way mirror/shim split, `misc/sync-upstream.sh` and
+  `misc/upstream-ref.txt`. When upstream fixes `Directives.java`, the fix
+  arrives as a JBang release.
+- Releasing at all (`misc/update-dist.sh <version>` → `gh release create` →
+  commit `dist/`). Nothing would need publishing, and
+  `jkite-bootstrap-jar` would become a script that fetches JBang's zip.
+- The whole class of bug that is "this behaves differently from JBang".
+  Directive handling would *be* upstream.
 
-## 失われる機能・変わる挙動
+## What would be lost or change
 
-現状の `dist/README.md` / `README.md` が明記している性質のうち、jar を捨てると
-維持できないもの。
+Of the properties that today's `README.md` and `dist/README.md` state, these
+cannot be kept without the jar.
 
-1. **子プロセス実行と exit status の透過**
-   現状の jar は `java` を子プロセスとして起動し、stdin/stdout/stderr を共有して
-   スクリプトの終了コードをそのまま返す。上流 JBang は逆で、`java` のコマンドラインを
-   stdout に印字して 255 で終了し、ランチャがそれを `eval` する。
-   上流に戻ると `jkite Hello.java | sort` のストリーミング、パイプ入力、`$?` の
-   意味づけは上流の `bin/jbang` の実装に従うことになる（実用上は動くが、
-   「プロトコルなし」という現在の設計上の売りは失われる）。
-   逆に利点もある: 現状は jkite の JVM がスクリプト実行中ずっと常駐するが、
-   `eval` 方式ならそれがなくなる。
-2. **機能の縮小そのもの**
-   サブコマンド（`edit`, `init`, `alias`, `catalog`, `trust`, `app`, `export` …）、
-   リモートスクリプト・gist・カタログ、`.jsh`/`.kt`/`.groovy`/`.md`、
-   native image、ビルド時インテグレーション（Quarkus 等）が全部戻ってくる。
-   「単一ファイル Java を走らせるだけ」という攻撃面の小ささは失われる。
-   ラッパー側で許可する引数を絞れば部分的には再現できるが、
-   それは結局スクリプトでの再実装になる。
-3. **`~/.jbang/currentjdk` を書かないという保証**
-   現状は `//JAVA` の JDK をキャッシュに入れるだけで、ある実行が次の実行の
-   JDK 選択を変えない。上流 JBang は `jdk default` / `currentjdk` を持つので、
-   この不変条件は自前で守れなくなる。
-4. **JDK ダウンロード経路の統一**
-   現状はブートストラップ JDK も `//JAVA` の JDK も同じ Coursier JVM index
-   (`io.get-coursier.jvm.indices`) を使い、`JBANG_JVM_INDEX_BASEURL` 一つで
-   ミラーに向けられる。上流 JBang の JDK 取得は別経路（Disco/Foojay 系）なので、
-   企業ミラー要件があるならここは再確認が要る。
-5. **依存の少なさ**
-   現状の jar は Maven Resolver + MIMA + slf4j-nop のみで HTTP は JDK 標準。
-   上流 JBang の jar はもっと大きく、含まれるものも自分では選べない。
+1. **Running as a child process, and passing the exit status through.**
+   Today the jar starts `java` as a child process sharing stdin, stdout and
+   stderr, and returns the script's exit code unchanged. Upstream JBang does
+   the opposite: it prints the `java` command line to stdout, exits 255, and
+   the launcher `eval`s it. Going back to upstream would put the streaming in
+   `jkite Hello.java | sort`, piped input, and the meaning of `$?` at the mercy
+   of upstream's `bin/jbang`. (It works in practice, but "no protocol" is
+   currently a selling point of the design, and it would be gone.)
+   There is an upside as well: today jkite's own JVM stays resident for as long
+   as the script runs, and with `eval` it would not.
+2. **The reduction itself.** The subcommands (`edit`, `init`, `alias`,
+   `catalog`, `trust`, `app`, `export`, …), remote scripts, gists, catalogs,
+   `.jsh`/`.kt`/`.groovy`/`.md`, native image, and the build-time integrations
+   (Quarkus and so on) would all come back. The small attack surface of "runs
+   a single Java file, and that is all" would be lost. Restricting which
+   arguments the wrapper passes could recover part of it, but that is
+   reimplementation in a script again.
+3. **The guarantee that `~/.jbang/currentjdk` is never written.** Today a
+   `//JAVA` JDK only goes into the cache, so one run never changes which JDK
+   the next run picks. Upstream JBang has `jdk default` and `currentjdk`, so
+   that invariant would no longer be ours to keep.
+4. **One route for getting JDKs.** Today the bootstrap JDK and the `//JAVA` JDK
+   both come from the Coursier JVM index (`io.get-coursier.jvm.indices`), and a
+   single variable points both at a mirror. Upstream JBang gets JDKs another
+   way (the Disco/Foojay family), so anyone with a corporate mirror
+   requirement would have to look at this again.
+5. **Having few dependencies.** Today's jar carries Maven Resolver, MIMA and
+   slf4j-nop, and HTTP is the JDK's own. Upstream JBang's jar is larger, and
+   what is in it is not ours to choose.
 
-## 一番の論点: 「依存性解決の自動ダウンロード前の確認」をどう実装するか
+## The real problem: how to ask before dependencies are downloaded
 
-これが提案の技術的な核心で、jar を捨てるとここだけ足場がなくなる。
-上流 JBang には「ダウンロード前に聞く」フックがない（`trust` はリモート
-スクリプトに対するもので、`//DEPS` には効かない）。ラッパースクリプトから
-実現する手は次の 3 通りで、いずれも一長一短。
+This is the technical heart of the proposal, and the one place where dropping
+the jar leaves nothing to stand on. Upstream JBang has no hook for asking
+before a download (`trust` is about remote scripts and does not apply to
+`//DEPS`). Three ways to do it from a wrapper script, each with a real cost:
 
-- **A. 先に `--offline` で走らせ、失敗したら聞いてから再実行**
-  実装は最小。欠点は (1) 何を落とすのかを提示できない（「依存が足りません」
-  としか言えない）、(2) 失敗理由がオフラインかどうかの判別が出力頼みで脆い、
-  (3) 成功パスでもコンパイルを二度走らせうる。
-- **B. `//DEPS` / `--deps` をスクリプト側でパースして、キャッシュ
-  （`~/.m2` と `~/.jbang/cache`）にないものを列挙して聞く**
-  提示内容は親切になるが、`@pom` の BOM、JitPack の URL 変換、
-  `${property}` 展開、`//SOURCES` 経由の推移的な `//DEPS` まで含めると
-  「ディレクティブパーサをシェルで再実装する」ことになり、
-  jar を捨てた意味が薄れる。上流と挙動がずれる古典的な罠。
-- **C. 初回だけ包括的に聞く**
-  「この実行はネットワークから JDK と依存を取得します。続けますか?」を
-  実行ごと・プロジェクトごとに一度だけ出し、以後は記録して黙る。
-  正確な一覧は出ないが、実装は数十行で、非対話（CI）でも
-  環境変数で無効化しやすい。
+- **A. Run with `--offline` first; if it fails, ask, then run again.**
+  The least code. The drawbacks: (1) it cannot say what is about to be
+  downloaded, only that something is missing; (2) telling an offline failure
+  from any other failure means reading the output, which is fragile; (3) even
+  the successful path may compile twice.
+- **B. Parse `//DEPS` / `--deps` in the script and list what is not already in
+  the caches (`~/.m2`, `~/.jbang/cache`).**
+  The question it asks would be a helpful one, but covering `@pom` BOMs,
+  JitPack URL rewriting, `${property}` expansion and `//DEPS` reached
+  transitively through `//SOURCES` amounts to **reimplementing the directive
+  parser in shell** — which rather defeats dropping the jar. This is the
+  classic way to drift from upstream.
+- **C. Ask once, broadly.**
+  "This run will fetch a JDK and dependencies from the network. Continue?",
+  asked once per project, remembered afterwards. It cannot list exactly what,
+  but it is a few dozen lines and is easy to disable from the environment for
+  CI.
 
-現実的には **C を既定にし、必要なら A を併用**するのが、
-「jar を捨てる」という目的と整合する。B に踏み込むなら jar を残したほうが安い。
+Realistically, **C as the default, with A alongside if needed**, is what fits
+the goal of dropping the jar. If B is wanted, keeping the jar is cheaper.
 
-## 非対話環境の扱い（どの案でも必要）
+## Non-interactive use (needed whichever way)
 
-確認メッセージを入れる以上、stdin が tty でない場合の既定動作を決める必要がある。
-CI で黙って止まるのが最悪なので、
+Any confirmation needs a defined behaviour when stdin is not a terminal.
+Stopping silently in CI is the worst outcome, so it is a choice between:
 
-- tty でなければ確認せず続行（既定）、または
-- `JKITE_ASSUME_YES=1` / `--yes` で明示的に飛ばし、tty でなければ拒否
+- no confirmation and carry on when there is no terminal (the default), or
+- skip it explicitly with `JKITE_ASSUME_YES=1` / `--yes`, and refuse when there
+  is no terminal
 
-のどちらかを選ぶ。現行のブートストラップスクリプトは無言でダウンロードするので、
-どちらにしても既存利用者には挙動変更になる。
+Today's bootstrap scripts download without saying anything, so either way this
+is a behaviour change for anyone already using it.
 
-## 移行コスト
+## Cost of migrating
 
-- `jkite.properties` の意味が変わる（jkite の jar → JBang の配布物）。
-  install 済みプロジェクトは再 install が要る。
-- `jkite` に渡していたオプション（`-C`, `-R`, `--cds` など）は
-  上流 JBang の `jbang run` のオプションに読み替えて転送する層が要る。
-  ここは薄いが、完全一致はしない。
-- 動機だった java-call-hierarchy-exporter 側で、
-  ディレクティブの解釈差と実行方式の差（1.）を実地で確認する必要がある。
+- `jkite.properties` changes meaning (jkite's jar → JBang's distribution).
+  Projects that have installed jkite would have to install again.
+- The options passed to `jkite` (`-C`, `-R`, `--cds` and so on) would need a
+  layer translating them to `jbang run`'s options. Thin, but not an exact
+  match.
+- The java-call-hierarchy-exporter, which prompted all of this, would have to
+  be tried against both the differences in directive handling and the
+  difference in how a script is run (point 1).
 
-## 結論
+## Conclusion
 
-保守コストは大きく下がり、「上流との差分」という最大の負債が消える。
-一方で失われるのは、縮小フォークであること自体の価値
-（小さい攻撃面、子プロセス実行の透明性、`currentjdk` 不変条件、JDK 取得経路の統一）。
+Maintenance cost drops a great deal, and the largest debt — the difference
+from upstream — disappears. What is lost is the value of being a reduced fork
+at all: a small attack surface, the transparency of running as a child
+process, the `currentjdk` invariant, and one route for getting JDKs.
 
-判断の分かれ目は 2 点。
+It turns on two questions.
 
-1. 「単一ファイル Java だけを走らせる」という縮小自体が要件か、
-   単に JBang を再現性よく持ってくることが要件か。後者なら jar は不要。
-2. 依存ダウンロードの確認を、どこまで正確に見せる必要があるか。
-   包括的な一度きりの確認（C）で足りるなら jar は不要。
-   「何を落とすか」を正確に列挙したいなら、結局パーサが要り、jar が要る。
+1. Is the reduction itself — "runs single-file Java, and nothing else" — a
+   requirement, or is the requirement only to fetch JBang reproducibly? If the
+   latter, the jar is unnecessary.
+2. How precisely does the download confirmation have to describe what it is
+   about to fetch? If one broad confirmation (C) is enough, the jar is
+   unnecessary. If it has to list exactly what, a parser is needed, and so is
+   the jar.
