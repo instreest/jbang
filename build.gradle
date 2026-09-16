@@ -104,7 +104,11 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.withType(AbstractArchiveTask) {
-	preserveFileTimestamps = false
+	// File timestamps are left alone. Zeroing them makes an archive reproducible
+	// byte for byte, but it also means a person unpacking a release sees 1970,
+	// and what this project reproduces is the run of a Java program, not its own
+	// binary. Integrity is what the SHA-256 in jkite.properties is for; identical
+	// bytes from two builds are not needed for that.
 	reproducibleFileOrder = true
 }
 
