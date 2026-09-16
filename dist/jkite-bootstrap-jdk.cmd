@@ -168,10 +168,25 @@ set "jdk_root="
 for /d %%D in ("%jdk_unpack_dir%\*") do if exist "%%D\bin\java.exe" set "jdk_root=%%D"
 if not defined jdk_root goto :bootstrap_jdk_broken
 if exist "%jdk_dir%" rmdir /s /q "%jdk_dir%"
+rem The move is the install, so whether it worked decides whether there is a
+rem JDK. It fails here more often than anywhere else: a virus scanner still has
+rem the freshly unpacked executables open, or the cache is on another volume,
+rem which turns the move into a copy that can run out of room. Reporting that
+rem as a successful install left the launcher to fail later, looking for a
+rem java.exe that had never arrived.
 move "%jdk_root%" "%jdk_dir%" >nul
+if errorlevel 1 goto :bootstrap_jdk_move_failed
+if not exist "%jdk_dir%\bin\java.exe" goto :bootstrap_jdk_move_failed
 if exist "%jdk_unpack_dir%" rmdir /s /q "%jdk_unpack_dir%"
 del /f /q "%jdk_archive%" 2>nul
 exit /b 0
+
+:bootstrap_jdk_move_failed
+if exist "%jdk_unpack_dir%" rmdir /s /q "%jdk_unpack_dir%"
+del /f /q "%jdk_archive%" 2>nul
+echo Error installing the JDK: could not move it into %jdk_dir% 1>&2
+echo Another program may be holding the unpacked files open, or the drive may be full. 1>&2
+exit /b 1
 
 :jdk_sha_mismatch
 del /f /q "%jdk_archive%" 2>nul

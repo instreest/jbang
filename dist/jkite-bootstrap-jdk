@@ -185,6 +185,21 @@ release_lock() {
   rm -rf "$1"
 }
 
+# Releases the lock and removes this run's leftovers. Without it, a Ctrl-C
+# during the download this script itself asks the user to be patient about
+# leaves the lock directory behind, and then every jkite run on this machine -
+# in any project - waits out $lockTimeout before failing, with nothing to clear
+# it but a hand. The partial archive goes too: it is named after this run, so
+# no later run could have used it.
+clean_up_after_interrupt() {
+  if [ -n "${heldLock:-}" ]; then
+    release_lock "$heldLock"
+    heldLock=
+  fi
+  rm -rf "$CACHEDIR/jdks/bootstrap-$runId.tmp"
+  rm -f "$CACHEDIR/bootstrap-jdk-$runId.tar.gz"
+}
+
 # --- Installing --------------------------------------------------------------
 
 install_jdk() {
@@ -193,9 +208,14 @@ install_jdk() {
     2) return 0 ;;
     1) exit 1 ;;
   esac
+  heldLock=$jdkDir.lock
+  trap 'clean_up_after_interrupt; exit 130' INT TERM HUP
+  trap 'clean_up_after_interrupt' EXIT
   install_jdk_locked
   retval=$?
   release_lock "$jdkDir.lock"
+  heldLock=
+  trap - INT TERM HUP EXIT
   if [ $retval -ne 0 ]; then exit $retval; fi
 }
 
