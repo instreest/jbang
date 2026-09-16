@@ -233,12 +233,17 @@ Alpine (musl) is the exception: install a JDK there yourself.
 What happens between `git clone` and the tool's first line of output, in three
 diagrams: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). How jkite is built,
 released and kept in step with JBang: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+What is welcome and what is not, and under which license a contribution
+arrives: [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Found a security problem? Report it privately, not in an issue:
+[SECURITY.md](SECURITY.md).
 
 ## License
 
 MIT License, Copyright (c) 2020 Max Rydahl Andersen (the original JBang notice
 is kept unchanged in [LICENSE](LICENSE)); the jkite modifications are
-provided under the same license. `jkite.jar` bundles MIMA (EPL-2.0), Apache
+provided under the same license, and so is every contribution made to it. `jkite.jar` bundles MIMA (EPL-2.0), Apache
 Maven Resolver, Apache HttpClient, Apache Commons Compress and Gson
 (Apache-2.0) and SLF4J (MIT); see [THIRD-PARTY.md](THIRD-PARTY.md) for details
 and for the origin of code adapted from other projects.
