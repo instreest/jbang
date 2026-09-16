@@ -79,12 +79,12 @@ build or run something the project did not ask for.
 ### Where the code comes from
 
 jkite is a reduced fork of [JBang](https://github.com/jbangdev/jbang), and some
-files are copied from it unchanged (`misc/upstream-mirror.txt` lists them). A
-vulnerability in one of those is very likely a vulnerability in JBang too.
-Report it to
-[JBang](https://github.com/jbangdev/jbang/security/advisories/new) as well as
-here, and say that you did, so neither of us waits on the other.
+files are copied from it unchanged (`misc/upstream-mirror.txt` lists them).
+Report anything you find in jkite here, whichever file it is in. Working out
+whether the same problem exists upstream, telling them if it does, and deciding
+what jkite does in the meantime, is this project's job and not the reporter's:
+what ships to jkite's users is jkite's to answer for, wherever the line was
+written.
 
-jkite is not affiliated with, endorsed by, or supported by the JBang project.
-Do not report a jkite vulnerability only to them, and do not report a JBang
-vulnerability only to us.
+jkite is not affiliated with, endorsed by, or supported by the JBang project,
+so a report sent only to them is not a report to us.
