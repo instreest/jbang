@@ -129,13 +129,29 @@ expansion), and functional tests that run the launcher scripts and the installer
 against a local server.
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs the same command
-on `ubuntu-latest` and `windows-latest` for every push. The launcher and the two
-bootstrap scripts exist twice, once for `bash` and once for `cmd.exe`, and
-`TestWindowsLaunchers` and `TestWindowsWrapperInstall` are
+on `ubuntu-latest`, `macos-latest` and `windows-latest` for every push. The
+launcher and the two bootstrap scripts exist twice, once for `bash` and once
+for `cmd.exe`, and `TestWindowsLaunchers` and `TestWindowsWrapperInstall` are
 `@EnabledOnOs(WINDOWS)`: without the Windows job they are skipped in silence.
 Those tests install from a local server exactly as `install.cmd` installs from a
 release, and git stores the scripts with LF endings, so they also answer whether
 `cmd.exe` runs the scripts as a project actually receives them.
+
+macOS runs no test of its own; it runs the same POSIX scripts down a different
+path. `Contents/Home` rather than the archive's root folder, `shasum` where
+Linux has `sha256sum`, and a BSD userland where a GNU-only flag would simply
+fail. Two of the JDKs `jkite.properties` pins are Darwin ones, so a Mac is a
+machine this project says it works on, and until this job existed nobody had
+ever run the scripts on one.
+
+A fourth job runs the jar itself, on Java 11 and on Java 25. Every test above
+loads these classes from the build's own class path, which says nothing about
+whether `build/libs/jkite.jar` starts: the shadowed jar, its manifest, its
+merged service files and its `--release 11` bytecode are only exercised by
+running it. The script it runs declares `//JAVA 11+`, so the JDK already
+running the jar satisfies it, and `JKITE_CONFIRM_DOWNLOADS=always` with no
+terminal makes any download refuse - so a run that unexpectedly needs one fails
+rather than quietly fetching it.
 
 ## How a run works
 

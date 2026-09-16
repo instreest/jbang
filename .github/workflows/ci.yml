@@ -1,10 +1,17 @@
-# Builds and tests jkite on Linux and Windows.
+# Builds and tests jkite on Linux, macOS and Windows, and runs the jar it
+# ships.
 #
 # Windows is the reason this workflow exists. The launcher and the two
 # bootstrap scripts are written twice, once for bash and once for
 # cmd.exe, and the cmd half cannot be run anywhere else: TestWindowsLaunchers
 # and TestWindowsWrapperInstall are annotated @EnabledOnOs(WINDOWS) and are
 # silently skipped on every other machine. This is where they actually run.
+#
+# macOS is here because the POSIX half of those scripts takes a different path
+# there and nothing else exercises it: the JDK layout it looks for is
+# Contents/Home, the digest comes from shasum rather than sha256sum, and the
+# userland is BSD's. jkite.properties pins a JDK for two Darwin platforms, so
+# they are platforms this project claims to support.
 #
 # `./gradlew build` runs the whole suite, so no test is named here and a new
 # one is picked up by being written.
@@ -32,7 +39,7 @@ jobs:
       # one platform failing must not hide the result of the other
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -60,3 +67,81 @@ jobs:
             build/reports/tests/test
             build/test-results/test
           retention-days: 7
+
+  # The jar is what a project actually receives, and nothing above runs it: the
+  # tests load these classes from the build's own class path, which says
+  # nothing about whether the shipped artifact starts. It is built with
+  # --release 11 and the launcher will hand it to any JDK 11 or newer, so that
+  # is what is checked - the oldest Java it promises to work on, and the
+  # version its own launchers install.
+  shipped-jar:
+    name: the shipped jar on Java ${{ matrix.java }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['11', '25']
+    steps:
+      - uses: actions/checkout@v4
+
+      # The JDK the jar is run with. Its path is recorded before the build JDK
+      # replaces JAVA_HOME, rather than guessed from the JAVA_HOME_<n>_<arch>
+      # name, which depends on the runner's architecture.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Remember where that JDK is
+        shell: bash
+        run: echo "RUN_JAVA=$JAVA_HOME/bin/java" >> "$GITHUB_ENV"
+
+      # and a JDK for Gradle, which does not run on every version jkite does
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the jar
+        shell: bash
+        run: ./gradlew shadowJar --stacktrace
+
+      - name: Run it
+        shell: bash
+        env:
+          # There is no terminal here, so "always" makes a download refuse
+          # rather than go ahead. Nothing in this smoke test should need one -
+          # the JDK running the jar satisfies the script's //JAVA - so anything
+          # that does is a failure rather than a slow step.
+          JKITE_CONFIRM_DOWNLOADS: always
+        run: |
+          set -euo pipefail
+          jar="$PWD/build/libs/jkite.jar"
+          work=$(mktemp -d)
+          export JKITE_DIR="$work/jkite" JKITE_CACHE_DIR="$work/cache"
+          cat > "$work/Hello.java" <<'JAVA'
+          //JAVA 11+
+          public class Hello {
+            public static void main(String[] args) {
+              System.out.println("ran on " + System.getProperty("java.specification.version")
+                  + " with " + String.join(",", args));
+              if (args.length > 0 && args[0].equals("fail")) {
+                System.exit(3);
+              }
+            }
+          }
+          JAVA
+
+          echo "== the version it reports, which needs no JDK at all"
+          "$RUN_JAVA" -jar "$jar" --version
+
+          echo "== a real build and run: arguments through, and stdout carrying nothing else"
+          out=$("$RUN_JAVA" -jar "$jar" "$work/Hello.java" a b 2> /dev/null)
+          echo "$out"
+          test "$out" = "ran on ${{ matrix.java }} with a,b"
+
+          echo "== the script's exit code, not the launcher's"
+          code=0
+          "$RUN_JAVA" -jar "$jar" "$work/Hello.java" fail > /dev/null 2>&1 || code=$?
+          test "$code" = 3

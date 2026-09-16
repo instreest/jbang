@@ -100,9 +100,12 @@ that way, and it survives.
 ./gradlew build
 ```
 
-This runs the tests as well. CI runs the same command on Linux and Windows.
-The Windows job is not a formality: the launcher exists twice, once for `bash`
-and once for `cmd.exe`, and the `cmd.exe` half cannot run anywhere else.
+This runs the tests as well. CI runs the same command on Linux, macOS and
+Windows, and then runs the shipped jar on Java 11 and 25. The Windows job is
+not a formality: the launcher exists twice, once for `bash` and once for
+`cmd.exe`, and the `cmd.exe` half cannot run anywhere else. The macOS job is
+not either: the POSIX scripts take a different path there, and its userland is
+BSD's.
 If you touch `src/main/scripts/`, expect the Windows job to be the one that has
 an opinion, and remember that `dist/` carries a copy of those scripts that has
 to stay in step.
