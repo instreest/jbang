@@ -1,5 +1,12 @@
 # Building a native executable
 
+> **This was not adopted. The branch it lives on is an archive.**
+>
+> Everything below works and was measured on a real build. It is kept because
+> the measurements are expensive to redo and the dead ends are worth knowing,
+> not because it is the direction jkite is going. See
+> [Why this was dropped](#why-this-was-dropped) before building on it.
+
 jkite is a jar, and a jar needs a JVM. That single fact is why the launchers
 are as large as they are: before they can run jkite they have to find a Java,
 and when the machine has none they install one. `jkite-bootstrap-jdk` and its
@@ -248,3 +255,99 @@ a certificate error rather than with an explanation.
 **The jar is still needed.** Not every machine is one of the six, and the jar
 remains the answer for the rest. A native executable is the default path, not
 the only one.
+
+## Why this was dropped
+
+The executable was built, it ran, and the whole path from build to launch was
+working. It was dropped anyway, on Windows grounds.
+
+### The deciding reason: nothing vouches for the executable
+
+An executable jkite downloads and runs is an unsigned binary that Windows has
+no reason to trust, and the way it is launched removes every chance the user
+would have had to judge it.
+
+Smart App Control, the execution guard Windows 11 turns on by default on a
+clean install, allows a binary only if Microsoft's app intelligence service
+recognises it or it is signed by a CA in the Trusted Root Program. A jkite
+executable is neither. It is not blocked on every machine - Microsoft turns
+Smart App Control off for people it detects as developers, and it needs a
+clean install and a supported region - but "usually allowed" is not a property
+to build a launcher on.
+
+SmartScreen, the part that would otherwise show the user a warning, never
+fires here at all. It runs on `ShellExecute`, which is what Explorer uses;
+`jkite.cmd` starts the executable with `CreateProcess`, which does not consult
+it. `curl` does not write the Zone.Identifier stream either, so the file is
+never even marked as downloaded. The result is the uncomfortable shape: the
+executable may be refused, and if it is not, nobody is asked.
+
+Signing is the only thing that fixes this, and it is not obviously available.
+Azure Artifact Signing is the affordable route at $9.99 a month, and as of its
+April 2026 GA it is offered to businesses and self-employed individuals in the
+US, Canada, the EU and the UK. Other regions have no equivalent low-cost path.
+
+### The supporting reasons
+
+**Platforms disappear from under you.** GraalVM removed macOS x64 after
+25.0.1: from 25.0.2 on there is no `macos-x64` build, so `darwin-amd64` was
+dropped from the matrix while this branch was being written. That is the shape
+of the risk - not a build that fails, but a target that quietly stops
+existing.
+
+**The technology moved out of Oracle's Java strategy.** In September 2025
+Oracle detached GraalVM from the Java SE release train; GraalVM for JDK 24 was
+the last release covered by Java SE support, the Graal JIT left the Oracle JDK,
+and the team's focus moved to the non-Java Graal languages, with Java startup
+and footprint work continuing in OpenJDK's Project Leyden instead. Project
+Galahad, which was to bring this into the JDK, was dissolved in March 2026.
+Native Image is not deprecated - Community Edition releases monthly and Red Hat
+maintains Mandrel - but it is carried by the community now, which is a reason
+to keep the jar working rather than to lean on the executable.
+
+**winget is not an escape.** An executable would have made jkite packageable
+for winget, which a `.cmd` launcher is not - winget's portable installer type
+builds an `.exe` shim and rejects a `.cmd`, which is where Apache Maven's
+packaging also stops. But winget does not sign anything and confers no trust
+that Smart App Control recognises, and installing once per machine is the
+opposite of what jkite is for, which is a version a project commits and pins.
+
+### What this cost and what it bought
+
+Worth knowing before anyone decides to redo the measurements:
+
+| | jar on a JVM | native |
+| --- | --- | --- |
+| startup (`--version`, median of 9) | 49 ms | 4 ms |
+| what a machine downloads | jar + a 200 MB JDK | one 12 MB archive |
+| executable | - | 41.5 MB, or 33.7 MB with `-Os` |
+
+`-Os` was free: measured start did not change. UPX took it to 11 MB and cost
+115 ms on every run, which is slower than the jar on a JVM, so it was rejected.
+The reachability metadata came to 12 resources and 66 types, most of them the
+JDK's own cipher classes for TLS rather than anything of jkite's - the
+dependencies here are unusually well behaved for this, because gson is used
+through its tree API and archive streams are constructed rather than looked up
+by service.
+
+Exactly one code change was needed, a guard in `JdkManager.listInstalled` for a
+`java.home` that is not set. That one is not native-specific and was kept on
+the working branch; everything else is here.
+
+### What would change the decision
+
+One of two things:
+
+- **A workable signing path.** If Azure Artifact Signing becomes available
+  where jkite is published, or another route to an Authenticode signature
+  appears, the deciding reason goes away and the rest of this becomes
+  attractive again.
+- **A different distribution model.** The objection is to a tool downloading
+  and running an executable on the user's behalf. A model where the user
+  installs it themselves, explicitly, does not have that shape - though it
+  also does not have jkite's per-project pinning, which is the point of the
+  project.
+
+Until then the jar is the answer on Windows, and it is not a bad one: the only
+executable code a machine fetches is a Temurin JDK, which Eclipse Adoptium
+signs.
