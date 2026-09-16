@@ -139,6 +139,48 @@ class TestNetworkConsent extends AbstractScriptTest {
 	 * contract; fixing only the bash one would let Windows through. It cannot be
 	 * run here, so this reads it.
 	 */
+	/**
+	 * --offline is documented as "never access the network", and the launcher
+	 * fetches the jar and a JDK before the jar - which is where the option was
+	 * read - ever runs. So the launcher has to honour it itself, or the promise
+	 * is broken on exactly the run where it matters: the first one.
+	 */
+	@Test
+	void offlineStopsTheLauncherBeforeItFetchesAnything() throws Exception {
+		RunResult result = runProcess(bashCmd(launcher, "--offline", script.toString()), env(null));
+
+		assertNotEquals(0, result.exitCode, "an offline run that needs a download must fail");
+		assertTrue(result.stderr.contains("--offline was given"), result.stderr);
+		assertTrue(!result.stderr.contains("Error downloading jkite"),
+				"nothing may be fetched: " + result.stderr);
+	}
+
+	@Test
+	void theShortSpellingOfOfflineWorksToo() throws Exception {
+		RunResult result = runProcess(bashCmd(launcher, "-o", script.toString()), env(null));
+
+		assertNotEquals(0, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("--offline was given"), result.stderr);
+	}
+
+	/**
+	 * Only what comes before the script is jkite's. A tool with an "-o output"
+	 * of its own is common enough that reading one as jkite's would put runs
+	 * offline that never asked to be.
+	 */
+	@Test
+	void anOptionAfterTheScriptBelongsToTheScript() throws Exception {
+		Map<String, String> env = env(null);
+		// this one really goes on to fetch, and the point is made on the first try
+		env.put("JKITE_DOWNLOAD_RETRY", "0");
+		RunResult result = runProcess(bashCmd(launcher, script.toString(), "-o", "out.txt"), env);
+
+		assertTrue(!result.stderr.contains("--offline was given"),
+				"the script's own -o was read as jkite's: " + result.stderr);
+		assertTrue(result.stderr.contains("Error downloading jkite"),
+				"the run should have gone on to fetch: " + result.stderr);
+	}
+
 	@Test
 	void theWindowsLauncherUsesTheSameContract() throws Exception {
 		String cmd = new String(Files.readAllBytes(CMD_SCRIPT), StandardCharsets.UTF_8);
@@ -149,5 +191,9 @@ class TestNetworkConsent extends AbstractScriptTest {
 		assertTrue(cmd.contains("Continue? [Y/n]"), "jkite.cmd does not ask before downloading");
 		assertTrue(cmd.contains("There is no terminal to ask on"),
 				"jkite.cmd does not handle having nobody to ask");
+		assertTrue(cmd.contains("--offline was given"), "jkite.cmd does not honour --offline");
+		// the question belongs on the console, not in the tool's stdout
+		assertTrue(cmd.contains(">CON echo jkite has to download:"),
+				"jkite.cmd asks on stdout, which a pipe or a redirect would swallow");
 	}
 }

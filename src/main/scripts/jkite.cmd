@@ -34,10 +34,15 @@ if /i "%~1"=="--version" goto :print_version
 if /i "%~1"=="-V" goto :print_version
 if /i "%~1"=="--update" goto :run_update
 
-rem --yes is the jar's option, but the launcher downloads before the jar runs, so
-rem it has to see it too.
+rem --yes and --offline are the jar's options, but the launcher fetches the jar
+rem and a JDK before the jar ever runs, so it has to read them itself. Only what
+rem comes before the script is jkite's: the scan stops at "--" and at the first
+rem argument that is not an option, which is the script. A tool of its own with
+rem an "-o output" of its own must not put this launcher offline.
 set "assume_yes="
-for %%A in (%*) do call :note_assume_yes "%%~A"
+set "offline="
+set "past_options="
+for %%A in (%*) do call :note_arg "%%~A"
 
 rem --- 2. Which jar to run --------------------------------------------------
 rem A project may vendor the jar by dropping it next to this script, and then
@@ -342,9 +347,15 @@ rem           being fetched and go ahead
 rem   always  ask, and fetch nothing when there is no terminal to ask on
 rem   never   never ask. JKITE_ASSUME_YES=1 and --yes do the same
 
-:note_assume_yes
-if "%~1"=="-y" set "assume_yes=1"
-if "%~1"=="--yes" set "assume_yes=1"
+:note_arg
+if defined past_options exit /b 0
+if "%~1"=="--" (set "past_options=1" & exit /b 0)
+if "%~1"=="-y" (set "assume_yes=1" & exit /b 0)
+if "%~1"=="--yes" (set "assume_yes=1" & exit /b 0)
+if "%~1"=="-o" (set "offline=1" & exit /b 0)
+if "%~1"=="--offline" (set "offline=1" & exit /b 0)
+set "arg=%~1"
+if not "%arg:~0,1%"=="-" set "past_options=1"
 exit /b 0
 
 :add_net_item_jar
@@ -375,6 +386,15 @@ exit /b 0
 rem Asks whether the things in net_items may be downloaded. 0 to go ahead, 1 to stop.
 :confirm_downloads
 rem net_items is set. exit /b 0 to go ahead, exit /b 1 to stop.
+rem --offline is a refusal, not a question, and it is the launcher's to honour:
+rem the jar reads it too, but the jar is one of the things fetched to get there.
+if defined offline (
+  echo jkite has to download: 1>&2
+  call :print_net_items 1>&2
+  echo --offline was given, so nothing was downloaded. 1>&2
+  echo Run once without it, or vendor jkite.jar next to the launcher. 1>&2
+  exit /b 1
+)
 set "net_mode=%JKITE_CONFIRM_DOWNLOADS%"
 if not defined net_mode set "net_mode=auto"
 if defined JKITE_ASSUME_YES exit /b 0
@@ -389,12 +409,18 @@ set "net_mode=auto"
 rem timeout fails when stdin is redirected, which is how this tells a terminal
 rem from a pipe. Without one there is nobody to ask.
 2>nul >nul timeout /t 0 || goto :net_no_terminal
-echo.
-echo jkite has to download:
-call :print_net_items
-echo.
+rem To the console device and not to stdout: stdout belongs to the tool that is
+rem about to run, so a question written there lands in the pipe that a
+rem "jkite Tool.java | find" was meant to carry, and in the file that a
+rem "> out.txt" was meant to fill - where it reads as a hang, because the
+rem cursor waiting for an answer is the only thing not redirected. CON is what
+rem /dev/tty is on the other side.
+>CON echo.
+>CON echo jkite has to download:
+call :print_net_items >CON
+>CON echo.
 set "net_answer=y"
-set /p "net_answer=Continue? [Y/n]: "
+<CON >CON set /p "net_answer=Continue? [Y/n]: "
 if /i "%net_answer%"=="y" exit /b 0
 if /i "%net_answer%"=="yes" exit /b 0
 if "%net_answer%"=="" exit /b 0

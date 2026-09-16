@@ -111,6 +111,14 @@ say_items() {
 # Asks whether the things listed in $1 may be downloaded. 0 to go ahead, 1 to stop.
 confirm_downloads() {
   local items=$1 mode answer
+  # --offline is a refusal, not a question, and it is the launcher's to honour:
+  # the jar reads it too, but the jar is one of the things fetched to get there.
+  if [ "${offline:-0}" = 1 ]; then
+    say_items "$items"
+    echo "--offline was given, so nothing was downloaded." 1>&2
+    echo "Run once without it, or vendor jkite.jar next to the launcher." 1>&2
+    return 1
+  fi
   mode=$(printf '%s' "${JKITE_CONFIRM_DOWNLOADS:-auto}" | tr 'A-Z' 'a-z')
   if [ -n "${JKITE_ASSUME_YES:-}" ] || [ "${assumeYes:-0}" = 1 ] || [ "$mode" = never ]; then
     return 0
@@ -289,13 +297,20 @@ execute_jkite() {
   exec "${JAVA_EXEC}" ${JKITE_JAVA_OPTIONS} -jar "${jarPath}" "$@"
 }
 
-# --yes is the jar's option, but the launcher downloads before the jar runs, so
-# it has to see it too.
+# --yes and --offline are the jar's options, but the launcher fetches the jar
+# and a JDK before the jar ever runs, so it has to read them itself. Only what
+# comes before the script is jkite's: the scan stops at "--" and at the first
+# argument that is not an option, which is the script. A tool of its own with
+# an "-o output" of its own must not put this launcher offline.
 assumeYes=0
+offline=0
 for arg in "$@"; do
   case "$arg" in
     --) break ;;
     -y|--yes) assumeYes=1 ;;
+    -o|--offline) offline=1 ;;
+    -*) ;;
+    *) break ;;
   esac
 done
 
