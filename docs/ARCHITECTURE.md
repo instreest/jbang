@@ -12,7 +12,7 @@ every project that pins the same version.
 ```mermaid
 flowchart LR
   subgraph repo["the tool's repository (git)"]
-    L["jkite/<br/>11 scripts + jkite.properties<br/>79 kB"]
+    L["jkite/<br/>8 scripts + jkite.properties<br/>+ LICENSE and README<br/>89 kB"]
     T["tools/Report.java<br/>//JAVA //DEPS //SOURCES"]
   end
   subgraph machine["~/.jkite (per machine, shared)"]

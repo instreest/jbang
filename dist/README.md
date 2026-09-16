@@ -40,7 +40,7 @@ safe: one run downloads while the others wait.
 | `LICENSE`, `README.md` | |
 
 `jkite.jar` is not here on purpose: it is a download, so this project's
-history carries about 80 kB of scripts rather than a binary per update. To pin
+history carries about 90 kB of scripts rather than a binary per update. To pin
 it into the project anyway, put a `jkite.jar` in this directory; the
 launcher prefers it.
 

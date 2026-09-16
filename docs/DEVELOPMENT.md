@@ -130,7 +130,7 @@ against a local server.
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs the same command
 on `ubuntu-latest` and `windows-latest` for every push. The launcher and the two
-bootstrap scripts exist twice, once for POSIX shells and once for `cmd.exe`, and
+bootstrap scripts exist twice, once for `bash` and once for `cmd.exe`, and
 `TestWindowsLaunchers` and `TestWindowsWrapperInstall` are
 `@EnabledOnOs(WINDOWS)`: without the Windows job they are skipped in silence.
 Those tests install from a local server exactly as `install.cmd` installs from a

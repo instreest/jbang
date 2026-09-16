@@ -345,7 +345,7 @@ rem
 rem   auto    the default: ask when there is a terminal, otherwise say what is
 rem           being fetched and go ahead
 rem   always  ask, and fetch nothing when there is no terminal to ask on
-rem   never   never ask. JKITE_ASSUME_YES=1 and --yes do the same
+rem   never   never ask. JKITE_ASSUME_YES=1|true|yes and --yes do the same
 
 :note_arg
 if defined past_options exit /b 0
@@ -397,7 +397,11 @@ if defined offline (
 )
 set "net_mode=%JKITE_CONFIRM_DOWNLOADS%"
 if not defined net_mode set "net_mode=auto"
-if defined JKITE_ASSUME_YES exit /b 0
+rem the same three values the jar accepts, and not "any value": a
+rem JKITE_ASSUME_YES=0 that reads as yes is only noticed after a download
+if /i "%JKITE_ASSUME_YES%"=="1" exit /b 0
+if /i "%JKITE_ASSUME_YES%"=="true" exit /b 0
+if /i "%JKITE_ASSUME_YES%"=="yes" exit /b 0
 if "%assume_yes%"=="1" exit /b 0
 if /i "%net_mode%"=="never" exit /b 0
 if /i "%net_mode%"=="always" goto :net_ask

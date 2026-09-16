@@ -101,8 +101,8 @@ that way, and it survives.
 ```
 
 This runs the tests as well. CI runs the same command on Linux and Windows.
-The Windows job is not a formality: the launcher exists twice, once for POSIX
-shells and once for `cmd.exe`, and the `cmd.exe` half cannot run anywhere else.
+The Windows job is not a formality: the launcher exists twice, once for `bash`
+and once for `cmd.exe`, and the `cmd.exe` half cannot run anywhere else.
 If you touch `src/main/scripts/`, expect the Windows job to be the one that has
 an opinion, and remember that `dist/` carries a copy of those scripts that has
 to stay in step.

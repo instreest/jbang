@@ -115,6 +115,22 @@ class TestNetworkConsent extends AbstractScriptTest {
 				"--yes reaches the launcher, not only the jar: " + result.stderr);
 	}
 
+	/**
+	 * The launcher and the jar have to read this variable the same way, or the
+	 * answer depends on which half of a run is asking. "Any value" would make
+	 * JKITE_ASSUME_YES=0 mean yes, which is only noticed after a download.
+	 */
+	@Test
+	void assumeYesIsNotJustAnyValue() throws Exception {
+		Map<String, String> env = env("always");
+		env.put("JKITE_ASSUME_YES", "0");
+		RunResult result = runProcess(bashCmd(launcher, script.toString()), env);
+
+		assertNotEquals(0, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("There is no terminal to ask on"),
+				"JKITE_ASSUME_YES=0 answered yes: " + result.stderr);
+	}
+
 	@Test
 	void anUnknownModeIsIgnoredWithAWarning() throws Exception {
 		RunResult result = runProcess(bashCmd(launcher, script.toString()), env("maybe"));
@@ -187,7 +203,8 @@ class TestNetworkConsent extends AbstractScriptTest {
 
 		assertTrue(cmd.contains("JKITE_CONFIRM_DOWNLOADS"),
 				"jkite.cmd does not look at JKITE_CONFIRM_DOWNLOADS");
-		assertTrue(cmd.contains("JKITE_ASSUME_YES"), "jkite.cmd ignores JKITE_ASSUME_YES");
+		assertTrue(cmd.contains("\"%JKITE_ASSUME_YES%\"==\"1\""),
+				"jkite.cmd reads JKITE_ASSUME_YES differently from the jar");
 		assertTrue(cmd.contains("Continue? [Y/n]"), "jkite.cmd does not ask before downloading");
 		assertTrue(cmd.contains("There is no terminal to ask on"),
 				"jkite.cmd does not handle having nobody to ask");

@@ -22,10 +22,12 @@ That works because the tool declares what it needs, in the tool:
 ```
 
 jkite reads those directives, installs a JDK if the machine has none,
-resolves the dependencies from Maven Central, compiles, and runs. Every
-download is pinned to a version and checked against a SHA-256 committed with
-your project, and is fetched once per machine, so the second tool and the
-second checkout cost nothing.
+resolves the dependencies from Maven Central, compiles, and runs. jkite
+itself, and the JDK that starts it, are pinned by a SHA-256 committed with
+your project; the `//JAVA` JDK and the dependencies are verified against the
+checksums their publishers serve. Everything is fetched once per machine, so
+the second tool and the second checkout cost nothing.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) says which is which.
 
 The directives are JBang's, parsed by JBang's own parser. jkite is a
 reduced fork of [JBang](https://github.com/jbangdev/jbang) that does this one
@@ -53,7 +55,7 @@ jkite\jkite.cmd tools\Report.java  # Windows
 ````
 
 `install.cmd` installs from a Windows command prompt. The installer writes
-eleven files, about 80 kB, into `jkite/`; commit all of them, the way a
+eleven files, about 90 kB, into `jkite/`; commit all of them, the way a
 Gradle or Maven wrapper is committed.
 
 ## What gets committed, and what gets downloaded
@@ -129,10 +131,15 @@ What a script needs is declared in the script. These are applied:
 | `//PREVIEW` | compiles and runs with `--enable-preview` |
 | `${property}` in any directive | system properties, `-Dkey=value` and `os.detected.*` |
 
-Every other directive JBang defines is parsed and ignored, so a script written
-for JBang still runs: `//MODULE`, `//CDS`, `//JAVAAGENT`, `//GAV`,
-`//DESCRIPTION`, `//DOCS`, `//NOINTEGRATIONS`, `//NATIVE_OPTIONS`, `//GROOVY`,
-`//KOTLIN`, and `//DEPS` naming a `.java` file.
+Every other directive JBang defines is parsed and ignored, so a script that
+uses one still runs: `//MODULE`, `//CDS`, `//JAVAAGENT`, `//GAV`,
+`//DESCRIPTION`, `//DOCS`, `//NOINTEGRATIONS`, `//NATIVE_OPTIONS`, `//GROOVY`
+and `//KOTLIN`.
+
+One thing JBang accepts is not ignored quietly: a `//DEPS` that names a
+`.java` file rather than a Maven coordinate. jkite does not fetch and build
+that file, so the class it was to provide is missing and the compile fails
+naming it. Say what the script is made of with `//SOURCES` instead.
 
 ## Options
 
@@ -158,16 +165,24 @@ jkite [<options>] <script.java> [<args>...]
 | `-y`, `--yes` | download what is missing without asking |
 
 Options may appear anywhere before the script, `--` ends them, and everything
-after the script is the script's. There is deliberately no option that
-overrides what a script's directives say: the tool's author decides what the
-tool needs, not whoever runs it.
+after the script is the script's. `-V`, `--version` and `--update` are the
+exception: the launcher answers those itself, without downloading anything, and
+only when they are the first argument. `jkite --verbose --version` is a normal
+run of a script called `--version`.
+
+There is deliberately no option that overrides what a script's directives say:
+the tool's author decides what the tool needs, not whoever runs it. The
+environment can still add to them, though, through the `JBANG_APP_*` variables
+the JBang parser reads - `JBANG_APP_RUNTIME_OPTIONS`,
+`JBANG_APP_COMPILE_OPTIONS` and the like append to the matching directive. They
+keep JBang's names because the parser is JBang's, unchanged.
 
 ## Environment
 
 | Variable | |
 | --- | --- |
 | `JKITE_CONFIRM_DOWNLOADS` | whether a download is confirmed first: `auto` (default), `always`, `never` |
-| `JKITE_ASSUME_YES` | set to anything to answer yes in advance, like `--yes` |
+| `JKITE_ASSUME_YES` | set to `1`, `true` or `yes` to answer yes in advance, like `--yes` |
 | `JKITE_DIR` | base directory (default `~/.jkite`) |
 | `JKITE_CACHE_DIR` | cache directory (default `$JKITE_DIR/cache`) |
 | `JKITE_MAVEN_REPO` | local Maven repository to use instead of `~/.m2/repository` |
@@ -223,10 +238,15 @@ so a pipeline built on a tool's output is unaffected.
 
 ## Requirements
 
-A machine needs a POSIX shell with `curl` or `wget`, `sha256sum` or `shasum`,
-and `tar` with `gzip`; or, on Windows, nothing that Windows does not already
-ship. A JDK 11 or newer is used if there is one, and installed if there is not.
-Alpine (musl) is the exception: install a JDK there yourself.
+A machine needs `bash` with `curl` or `wget`, `sha256sum` or `shasum`, and
+`tar` with `gzip`; or, on Windows, nothing that Windows does not already ship.
+A JDK 11 or newer is used if there is one, and installed if there is not.
+
+`bash` rather than any POSIX shell: the launchers use `[[`, `local` and
+`BASH_SOURCE`, so `sh`, `dash` and `ash` will not run them. macOS and every
+usual Linux ship it; a minimal container may not. Alpine needs two things of
+its own - `bash`, and a JDK installed by hand, since the JDKs jkite downloads
+are built against glibc.
 
 ## How it works, and contributing
 

@@ -1,7 +1,7 @@
 # Builds and tests jkite on Linux and Windows.
 #
 # Windows is the reason this workflow exists. The launcher and the two
-# bootstrap scripts are written twice, once for POSIX shells and once for
+# bootstrap scripts are written twice, once for bash and once for
 # cmd.exe, and the cmd half cannot be run anywhere else: TestWindowsLaunchers
 # and TestWindowsWrapperInstall are annotated @EnabledOnOs(WINDOWS) and are
 # silently skipped on every other machine. This is where they actually run.
