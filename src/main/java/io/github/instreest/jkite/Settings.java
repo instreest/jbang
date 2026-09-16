@@ -63,6 +63,14 @@ public final class Settings {
 	 * the index is under it.
 	 */
 	public static final String JDK_DOWNLOAD_PATH_PREFIX = "/adoptium/";
+	/**
+	 * Where a download from {@link #JDK_DOWNLOAD_HOST} is allowed to redirect.
+	 * GitHub answers a release asset with a redirect to a content host whose
+	 * name it has changed before and will change again, so the suffix is
+	 * allowed rather than one name that would turn a GitHub change into a jkite
+	 * outage.
+	 */
+	public static final String JDK_REDIRECT_HOST_SUFFIX = ".githubusercontent.com";
 	public static final int DEFAULT_DOWNLOAD_RETRY = 5;
 
 	public enum CacheClass {

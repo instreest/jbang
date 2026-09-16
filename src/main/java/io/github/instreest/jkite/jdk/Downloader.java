@@ -13,10 +13,11 @@ import dev.jbang.util.Util;
 import io.github.instreest.jkite.Version;
 
 /**
- * Minimal HTTPS downloader. Only https is accepted, both for the URL asked for
- * and for every redirect it follows, so that a redirect cannot quietly move a
- * download onto a plaintext connection. Failed transfers are retried with the
- * same backoff the launcher scripts use, controlled by
+ * Minimal HTTPS downloader for the JDK path, and for nothing else. Every URL
+ * it is given and every redirect it follows goes through {@link JdkSource}, so
+ * a caller cannot reach a host the JDK policy would refuse and a redirect
+ * cannot move a download off https or off GitHub. Failed transfers are retried
+ * with the same backoff the launcher scripts use, controlled by
  * JKITE_DOWNLOAD_RETRY and JKITE_DOWNLOAD_RETRY_DELAY.
  */
 final class Downloader {
@@ -77,22 +78,11 @@ final class Downloader {
 		}
 	}
 
-	/**
-	 * Everything jkite downloads here is a JDK archive or its checksum, and
-	 * both are published over https; anything else is refused rather than
-	 * fetched over a connection that can be read or rewritten in transit.
-	 */
-	private static URL requireHttps(String url, String what) throws IOException {
-		URL parsed = new URL(url);
-		if (!"https".equalsIgnoreCase(parsed.getProtocol())) {
-			throw new IOException("Refusing to " + what + " over " + parsed.getProtocol() + ": " + url);
-		}
-		return parsed;
-	}
-
 	private static void transfer(String url, Path target) throws IOException {
 		String current = url;
-		requireHttps(current, "download");
+		// again here, and not only where the entry is chosen: this is the door
+		// itself, so no caller can reach a host the JDK policy would refuse
+		JdkSource.requireIndexUrl(current, "to download");
 		for (int i = 0; i < MAX_REDIRECTS; i++) {
 			HttpURLConnection conn = (HttpURLConnection) new URL(current).openConnection();
 			conn.setInstanceFollowRedirects(false);
@@ -107,7 +97,7 @@ final class Downloader {
 				}
 				current = new URL(new URL(current), location).toString();
 				conn.disconnect();
-				requireHttps(current, "follow a redirect");
+				JdkSource.requireRedirect(current, "to follow a redirect to");
 				continue;
 			}
 			if (status < 200 || status >= 300) {

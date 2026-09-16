@@ -1,7 +1,6 @@
 package io.github.instreest.jkite.jdk;
 
 import java.io.IOException;
-import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -247,36 +246,13 @@ public final class JdkManager {
 	}
 
 	/**
-	 * Refuses a download from anywhere but the distribution's own account, and
-	 * so is the only thing standing between a bad JVM index and an arbitrary
-	 * download. The URL comes from that index, which is the one input here that
-	 * nothing in the project pins, and a bad index would otherwise choose the
-	 * archive and, with it, the checksum that is compared against the archive.
-	 *
-	 * The account is checked and not only the host: anyone can publish a release
-	 * on github.com, so the host by itself would let any of those through.
-	 *
-	 * The host comes from parsing the URL rather than from matching its text,
-	 * since "https://github.com@evil.example/adoptium/" has the text but not the
-	 * host; the path is taken raw, since a percent-escape in it must not be able
-	 * to spell the prefix that is being looked for.
+	 * Refuses an index entry that does not name an archive published by the
+	 * distribution itself. {@link JdkSource} says what that means and why the
+	 * checksum cannot be asked the same question.
 	 */
 	void requireExpectedSource(JdkIndex.Entry entry) throws IOException {
-		String host = null;
-		String path = null;
-		try {
-			URI url = URI.create(entry.url);
-			host = url.getHost();
-			path = url.getRawPath();
-		} catch (IllegalArgumentException e) {
-			// not a URL at all; refused below like any other unexpected source
-		}
-		if (host == null || !host.equalsIgnoreCase(Settings.JDK_DOWNLOAD_HOST)
-				|| path == null || !path.startsWith(Settings.JDK_DOWNLOAD_PATH_PREFIX)) {
-			throw new IOException("The JVM index points at " + entry.url + " for " + entry.distro
-					+ " " + entry.version + ", but JDKs are only downloaded from https://"
-					+ Settings.JDK_DOWNLOAD_HOST + Settings.JDK_DOWNLOAD_PATH_PREFIX);
-		}
+		JdkSource.requireIndexUrl(entry.url,
+				"the JDK the JVM index names for " + entry.distro + " " + entry.version + ",");
 	}
 
 	/**
