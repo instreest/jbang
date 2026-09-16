@@ -1,0 +1,339 @@
+#!/usr/bin/env bash
+#
+# Installs the jkite executable for this platform: the URL and SHA-256 in the
+# jkite.properties next to this script, downloaded and unpacked into
+# $JKITE_CACHE_DIR/native/<version> (~/.jkite/cache/native/<version>).
+# It prints the executable's path on stdout and says nothing else there;
+# progress and errors go to stderr.
+#
+# The executable is a jkite that needs no JVM, so a machine using it downloads
+# no JDK to start jkite with - that is the whole reason it exists. jkite builds
+# one for each platform it can; a platform with no entry in jkite.properties
+# exits 2, which is the launcher's signal to fall back to the jar.
+#
+#   jkite-bootstrap-bin           install if needed, print the executable path
+#   jkite-bootstrap-bin --check   say what would happen, download nothing
+#
+# --check exists because the launcher asks before it goes to the network, and
+# to ask it has to know whether there is anything to fetch. It prints
+# 'installed <version> <platform>' or 'download <version> <platform>', and
+# answers with its status too. Both, because a POSIX shell reads the status
+# naturally and cmd reads the line naturally, and neither should have to reach
+# for the other.
+#
+# Exit status:
+#   0  the path was printed (--check: it is already installed)
+#   1  something went wrong and was reported
+#   2  jkite publishes no executable for this platform; use the jar
+#   3  --check only: it would be downloaded
+#
+# Environment:
+#   JKITE_DIR, JKITE_CACHE_DIR       where jkite keeps things (~/.jkite)
+#   JKITE_NATIVE_URL             where to fetch the archive from, overriding
+#                                    nativeUrl (a corporate mirror)
+#   JKITE_DOWNLOAD_RETRY, JKITE_DOWNLOAD_RETRY_DELAY
+#   JKITE_LOCK_TIMEOUT           seconds to wait for another run's download
+#
+# Needs curl or wget, sha256sum or shasum, and tar with gzip.
+#
+# Several jkite runs can be started at the same time (a build matrix, a
+# multi-module build). They share ~/.jkite, so the download takes a directory
+# lock (mkdir is atomic) and the executable is unpacked under a name of this
+# run's own that is renamed into place.
+#
+# What is pinned is the archive, and it is verified before it is unpacked, the
+# way jkite-bootstrap-jdk verifies a JDK. Hashing the unpacked executable on
+# every later run was the other option and is not worth it here: it is 33 MB,
+# and reading it would cost more than the executable's whole start. What the
+# check buys is that nothing unverified is ever unpacked, and the file it
+# produces lives under a version of its own in this machine's cache.
+
+# --- Settings ----------------------------------------------------------------
+
+# Tells this run's temporary files apart from those of a jkite running at
+# the same time
+runId=$$
+
+# How long to wait (in seconds) for another run that is downloading the same
+# executable
+lockTimeout=${JKITE_LOCK_TIMEOUT:-600}
+
+# How often a failed download is retried, and how long to wait in between
+# (0 means an exponential backoff of 1, 2, 4, ... seconds)
+downloadRetry=${JKITE_DOWNLOAD_RETRY:-5}
+downloadRetryDelay=${JKITE_DOWNLOAD_RETRY_DELAY:-0}
+
+if [[ -z "$JKITE_DIR" ]]; then LITEDIR="$HOME/.jkite"; else LITEDIR="$JKITE_DIR"; fi
+if [[ -z "$JKITE_CACHE_DIR" ]]; then CACHEDIR="$LITEDIR/cache"; else CACHEDIR="$JKITE_CACHE_DIR"; fi
+
+script_dir() {
+  local script dir
+  script=${BASH_SOURCE[0]}
+  while [ -L "$script" ]; do
+    dir=$( cd -P "$( dirname "$script" )" >/dev/null 2>&1 && pwd )
+    script=$(readlink "$script")
+    [[ $script != /* ]] && script=$dir/$script
+  done
+  ( cd -P "$( dirname "$script" )" >/dev/null 2>&1 && pwd )
+}
+
+# --- This platform -----------------------------------------------------------
+
+# The name this platform has in jkite.properties, e.g. linux-amd64. The same
+# names jkite-bootstrap-jdk resolves, so one machine reads one row in both
+# tables. An unknown system or architecture is not an error here: jkite simply
+# publishes no executable for it, which is what exit 2 says.
+platform_name() {
+  local osName archName
+  case "$(uname -s)" in
+    Linux*)  osName=linux ;;
+    Darwin*) osName=darwin ;;
+    *) return 1 ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64)  archName=amd64 ;;
+    aarch64|arm64) archName=arm64 ;;
+    *) return 1 ;;
+  esac
+  echo "$osName-$archName"
+}
+
+# --- The properties ----------------------------------------------------------
+
+# The value of key $1 in $propertiesFile, empty when it is not there. The file
+# is ours, so this reads what we write: 'key=value' lines, '#' comments.
+property() {
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$propertiesFile" | head -1 | tr -d '\r'
+}
+
+read_properties() {
+  if [ ! -f "$propertiesFile" ]; then
+    echo "$propertiesFile not found. Re-run $abs_jbang_dir/install.sh to restore it." 1>&2
+    return 1
+  fi
+  nativeVersion=$(property nativeVersion)
+  nativeUrl=${JKITE_NATIVE_URL:-$(property "nativeUrl\.$platform")}
+  nativeSha256Sum=$(property "nativeSha256Sum\.$platform")
+  # No row for this platform is not a failure: the launcher runs the jar
+  # instead, which works everywhere a JVM does.
+  if [ -z "$nativeUrl" ] || [ -z "$nativeVersion" ]; then
+    return 2
+  fi
+  if [ -z "$nativeSha256Sum" ]; then
+    echo "$propertiesFile pins no nativeSha256Sum.$platform; refusing to run an unverified executable" 1>&2
+    return 1
+  fi
+  # Only https, so that neither a tampered properties file nor
+  # JKITE_NATIVE_URL can point the download at a plaintext host. A loopback
+  # address is allowed so that the tests can serve the archive locally.
+  case "$nativeUrl" in
+    https://*) ;;
+    http://127.0.0.1[:/]*|http://localhost[:/]*) ;;
+    *) echo "Refusing to download the executable over anything but https: $nativeUrl" 1>&2; return 1;;
+  esac
+}
+
+# --- Downloading -------------------------------------------------------------
+
+download() {
+  local attempt=0
+  local maxAttempts=$((downloadRetry + 1))
+  while true; do
+    attempt=$((attempt + 1))
+    if [ -x "$(command -v curl)" ]; then
+      curl -sLf --proto '=https,http' --proto-redir '=https' -o "$2" "$1"
+      retval=$?
+    elif [ -x "$(command -v wget)" ]; then
+      # --https-only also refuses to follow a redirect off https, which is what
+      # curl's --proto-redir does above. It cannot be used for the loopback the
+      # tests serve on, which the check above has already allowed through.
+      case "$1" in
+        https://*) wget -q --https-only -O "$2" "$1" ;;
+        *) wget -q -O "$2" "$1" ;;
+      esac
+      retval=$?
+    else
+      echo "Error: curl or wget not found, please make sure one of them is installed" 1>&2
+      exit 1
+    fi
+    if [ $retval -eq 0 ] || [ $attempt -ge $maxAttempts ]; then
+      break
+    fi
+    if [ "$downloadRetryDelay" -gt 0 ] 2>/dev/null; then
+      sleepSeconds=$downloadRetryDelay
+    else
+      # Exponential backoff: 1, 2, 4, 8, ...
+      sleepSeconds=$((1 << (attempt - 1)))
+    fi
+    echo "Download $attempt/$maxAttempts failed. Retry in $sleepSeconds second(s)..." 1>&2
+    if [ $attempt -eq 1 ]; then
+      echo "(Set JKITE_DOWNLOAD_RETRY=0 to disable retries)" 1>&2
+    fi
+    sleep $sleepSeconds
+  done
+}
+
+sha256_of() {
+  if [ -x "$(command -v sha256sum)" ]; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif [ -x "$(command -v shasum)" ]; then
+    shasum -a 256 "$1" | cut -d' ' -f1
+  fi
+}
+
+# --- Locking -----------------------------------------------------------------
+
+# Several jkite runs can share $JKITE_DIR, so the download takes a
+# directory lock. mkdir is atomic, so exactly one run gets it; the others wait,
+# and stop waiting as soon as $2 shows the work they waited for is done.
+#   0 - the lock is ours, do the work and release_lock afterwards
+#   1 - gave up (another run is stuck, or its lock directory is stale)
+#   2 - no need to do anything, another run already did the work
+acquire_lock() {  # $1 = lock directory, $2 = path that exists once the work is done
+  local waited=0
+  # the lock sits next to what it protects, which may not exist yet
+  mkdir -p "$(dirname "$1")"
+  while ! mkdir "$1" 2> /dev/null; do
+    if [ -e "$2" ]; then return 2; fi
+    if [ "$waited" -ge "$lockTimeout" ]; then
+      echo "Gave up after $lockTimeout seconds waiting for another jkite to finish." 1>&2
+      echo "If no other jkite is running, remove $1 and try again." 1>&2
+      return 1
+    fi
+    if [ "$waited" -eq 0 ]; then
+      echo "Waiting for another jkite to finish downloading..." 1>&2
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  return 0
+}
+
+release_lock() {
+  rm -rf "$1"
+}
+
+# --- Installing --------------------------------------------------------------
+
+# True when the executable is installed. The directory is named for the
+# version, and nothing is put in it that did not come out of an archive whose
+# SHA-256 matched, so being there is what says it is ours.
+exec_is_installed() {
+  [ -x "$execPath" ]
+}
+
+# Downloads and unpacks the executable, one run at a time; the others wait and
+# then use what it installed.
+install_exec() {
+  acquire_lock "$execDir.lock" "$execPath"
+  case $? in
+    2) return 0 ;;
+    1) exit 1 ;;
+  esac
+  install_exec_locked
+  retval=$?
+  release_lock "$execDir.lock"
+  if [ $retval -ne 0 ]; then exit $retval; fi
+}
+
+install_exec_locked() {
+  local archive unpackdir unpacked actual
+  # another run may have installed it while we waited for the lock
+  if exec_is_installed; then return 0; fi
+  mkdir -p "$execDir"
+  # this run's own names, so nothing is shared with a jkite running at the
+  # same time and the executable only appears under its real name once it is
+  # complete and its hash has matched
+  archive="$CACHEDIR/native-$runId.tgz"
+  unpackdir="$execDir/unpack-$runId.tmp"
+
+  echo "Downloading jkite $nativeVersion for $platform..." 1>&2
+  download "$nativeUrl" "$archive"
+  if [ $retval -ne 0 ]; then
+    rm -f "$archive"
+    echo "Error downloading the jkite executable from $nativeUrl" 1>&2
+    return 1
+  fi
+
+  # Verified before it is unpacked: nothing out of an archive this machine
+  # cannot vouch for is ever written where it might be run.
+  actual=$(sha256_of "$archive")
+  if [ -z "$actual" ]; then
+    rm -f "$archive"
+    echo "Neither sha256sum nor shasum is available, cannot verify the download" 1>&2
+    return 1
+  fi
+  if [ "$nativeSha256Sum" != "$actual" ]; then
+    rm -f "$archive"
+    echo "SHA-256 mismatch for $nativeUrl: expected $nativeSha256Sum but got $actual" 1>&2
+    echo "If you changed the version, update nativeSha256Sum.$platform in $propertiesFile." 1>&2
+    return 1
+  fi
+
+  rm -rf "$unpackdir"
+  mkdir -p "$unpackdir"
+  # a .tgz holding one file, named the way the launcher expects it. The same
+  # archive is what jkite-bootstrap-bin.cmd unpacks with the tar Windows ships.
+  if ! gzip -cd "$archive" | tar xf - -C "$unpackdir"; then
+    rm -rf "$unpackdir"; rm -f "$archive"
+    echo "Error unpacking the jkite executable" 1>&2
+    return 1
+  fi
+  rm -f "$archive"
+
+  unpacked="$unpackdir/$execName"
+  if [ ! -f "$unpacked" ]; then
+    rm -rf "$unpackdir"
+    echo "Error installing the jkite executable: no $execName in $nativeUrl" 1>&2
+    return 1
+  fi
+
+  # The archive carries the mode, but a tar that dropped it would leave an
+  # executable that cannot be run, and that is cheaper to fix than to diagnose.
+  chmod +x "$unpacked" 2> /dev/null
+  mv "$unpacked" "$execPath"
+  rm -rf "$unpackdir"
+  return 0
+}
+
+# --- Main --------------------------------------------------------------------
+
+abs_jbang_dir=$(script_dir)
+propertiesFile=$abs_jbang_dir/jkite.properties
+
+checkOnly=0
+if [ "${1:-}" = "--check" ]; then checkOnly=1; fi
+
+platform=$(platform_name) || exit 2
+
+read_properties
+case $? in
+  1) exit 1 ;;
+  2) exit 2 ;;
+esac
+
+execName="jkite-$platform"
+execDir="$CACHEDIR/native/$nativeVersion"
+execPath="$execDir/$execName"
+
+if [ "$checkOnly" -eq 1 ]; then
+  if exec_is_installed; then
+    echo "installed $nativeVersion $platform"
+    exit 0
+  fi
+  echo "download $nativeVersion $platform"
+  exit 3
+fi
+
+if ! exec_is_installed; then
+  install_exec
+  # install_exec returns as soon as another run has put an executable there, so
+  # what ends up being used is checked here rather than only where it is
+  # downloaded
+  if ! exec_is_installed; then
+    echo "$execPath was not installed, refusing to go on" 1>&2
+    exit 1
+  fi
+fi
+
+echo "$execPath"

@@ -50,7 +50,8 @@ esac
 
 # what a project gets; dist/ in the repository holds the same set
 files="jkite jkite.cmd jkite-bootstrap-jdk jkite-bootstrap-jdk.cmd
-       jkite-bootstrap-jar jkite-bootstrap-jar.cmd jkite.properties
+       jkite-bootstrap-jar jkite-bootstrap-jar.cmd
+       jkite-bootstrap-bin jkite-bootstrap-bin.cmd jkite.properties
        install.sh install.cmd README.md LICENSE"
 
 fetch() {  # $1 = file to fetch, $2 = file to write
@@ -92,6 +93,7 @@ mkdir -p "$dir"
 for f in $files; do
   cp -f "$staging/$f" "$dir/$f"
 done
-chmod +x "$dir/jkite" "$dir/jkite-bootstrap-jdk" "$dir/jkite-bootstrap-jar" "$dir/install.sh"
+chmod +x "$dir/jkite" "$dir/jkite-bootstrap-jdk" "$dir/jkite-bootstrap-jar" \
+        "$dir/jkite-bootstrap-bin" "$dir/install.sh"
 
 echo "Installed. Commit $(basename "$dir")/ and run '$(basename "$dir")/jkite <script.java>'." 1>&2

@@ -61,7 +61,7 @@ mkdir "%staging%" || exit /b 1
 
 echo Installing jkite from !base! into !dir! 1>&2
 rem what a project gets; dist\ in the repository holds the same set
-for %%F in (jkite jkite.cmd jkite-bootstrap-jdk jkite-bootstrap-jdk.cmd jkite-bootstrap-jar jkite-bootstrap-jar.cmd jkite.properties install.sh install.cmd README.md LICENSE) do (
+for %%F in (jkite jkite.cmd jkite-bootstrap-jdk jkite-bootstrap-jdk.cmd jkite-bootstrap-jar jkite-bootstrap-jar.cmd jkite-bootstrap-bin jkite-bootstrap-bin.cmd jkite.properties install.sh install.cmd README.md LICENSE) do (
   curl -fsSL --proto "=https,http" --proto-redir "=https" "!base!/%%F" -o "%staging%\%%F" || goto :failed
 )
 

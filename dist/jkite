@@ -330,36 +330,75 @@ case "${1:-}" in
     ;;
 esac
 
-# --- 2. Which jar to run -----------------------------------------------------
+# --- 2. What to run ----------------------------------------------------------
 
-# A project may vendor the jar by dropping it next to this script, and then
-# nothing is downloaded. Otherwise the bootstrap script installs the version
-# jkite.properties pins into the cache, shared by every project on this
-# machine, and prints where it put it; everything else it says goes to stderr.
-# It is run through bash rather than executed, so a checkout that lost the
-# execute bit (core.fileMode=false, a zip download) still works, as it does
-# for this script itself.
+# Two ways to run jkite: an executable built for this platform, which starts
+# without a JVM, or the jar, which needs one. The executable is preferred where
+# there is one - a machine with no Java then fetches one file rather than two,
+# and the JDK a script asks for with //JAVA becomes jkite's business rather
+# than the launcher's.
+#
+# jkite-bootstrap-bin --check answers which case this is without downloading
+# anything: 0 it is installed, 3 it would be downloaded, anything else there is
+# no executable for this platform and the jar runs, which works wherever a JVM
+# does. JKITE_USE_JAR=true takes the jar even where there is an executable,
+# which is how the jar path stays exercised on a platform that has both.
+useNative=0
+nativeWanted=0
+nativeCheck=
+if [ "${JKITE_USE_JAR:-}" != "true" ]; then
+  nativeCheck=$(bash "$abs_jbang_dir/jkite-bootstrap-bin" --check)
+  case $? in
+    0) useNative=1 ;;
+    3) useNative=1; nativeWanted=1 ;;
+  esac
+fi
+
 jarPath=$abs_jbang_dir/jkite.jar
 
-# What the two bootstrap scripts would have to fetch. Both are asked about at
-# once, so a first run asks a single question rather than one per download.
+# What would have to be fetched. It is all asked about at once, so a first run
+# asks a single question rather than one per download.
 netItems=
-if [ ! -f "$jarPath" ]; then
-  netItems="$netItems  - jkite.jar $(property distributionVersion)
+if [ "$useNative" -eq 1 ]; then
+  if [ "$nativeWanted" -eq 1 ]; then
+    netItems="  - the jkite executable ${nativeCheck#download }
 "
-fi
-# This is the real search, not a dry run: it prints why a JAVA_HOME was turned
-# down and leaves JAVA_EXEC set, and setup_java_exec below reuses it. Searching
-# twice would hide those messages, because the first pass leaves JAVA_HOME
-# pointing at whatever it settled on.
-if ! find_existing_java; then
-  netItems="$netItems  - a JDK to run it with (Temurin $(property bootstrapJdkVersion)); this machine has none
+  fi
+else
+  if [ ! -f "$jarPath" ]; then
+    netItems="$netItems  - jkite.jar $(property distributionVersion)
 "
+  fi
+  # This is the real search, not a dry run: it prints why a JAVA_HOME was turned
+  # down and leaves JAVA_EXEC set, and setup_java_exec below reuses it. Searching
+  # twice would hide those messages, because the first pass leaves JAVA_HOME
+  # pointing at whatever it settled on.
+  if ! find_existing_java; then
+    netItems="$netItems  - a JDK to run it with (Temurin $(property bootstrapJdkVersion)); this machine has none
+"
+  fi
 fi
 if [ -n "$netItems" ]; then
   confirm_downloads "$netItems" || exit 1
 fi
 
+# The bootstrap scripts are run through bash rather than executed, so a
+# checkout that lost the execute bit (core.fileMode=false, a zip download)
+# still works, as it does for this script itself. Each prints where it put what
+# it installed; everything else it says goes to stderr.
+if [ "$useNative" -eq 1 ]; then
+  execPath=$(bash "$abs_jbang_dir/jkite-bootstrap-bin") || exit 1
+  # Like execute_jkite below, a plain exec: the executable builds the script
+  # and runs it as a child process with our stdin, stdout and stderr, and exits
+  # with the script's status. There is no JAVA_EXEC in this path because there
+  # is no JVM in it.
+  exec "$execPath" "$@"
+fi
+
+# A project may vendor the jar by dropping it next to this script, and then
+# nothing is downloaded. Otherwise the bootstrap script installs the version
+# jkite.properties pins into the cache, shared by every project on this
+# machine.
 if [ ! -f "$jarPath" ]; then
   jarPath=$(bash "$abs_jbang_dir/jkite-bootstrap-jar") || exit 1
 fi

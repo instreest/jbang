@@ -31,7 +31,8 @@ class TestWrapperInstall extends AbstractScriptTest {
 	private static final Path DIST = Paths.get("dist").toAbsolutePath();
 	private static final List<String> FILES = Arrays.asList("jkite", "jkite.cmd",
 			"jkite-bootstrap-jdk", "jkite-bootstrap-jdk.cmd",
-			"jkite-bootstrap-jar", "jkite-bootstrap-jar.cmd", "jkite.properties",
+			"jkite-bootstrap-jar", "jkite-bootstrap-jar.cmd",
+			"jkite-bootstrap-bin", "jkite-bootstrap-bin.cmd", "jkite.properties",
 			"install.sh", "install.cmd", "README.md", "LICENSE");
 	private static final String JAR_PATH = "/releases/download/v9.9.9/jkite.jar";
 
@@ -242,7 +243,8 @@ class TestWrapperInstall extends AbstractScriptTest {
 	@Test
 	void distHoldsTheCurrentScriptsAndNoJar() throws Exception {
 		for (String name : Arrays.asList("jkite", "jkite.cmd", "jkite-bootstrap-jdk",
-				"jkite-bootstrap-jdk.cmd", "jkite-bootstrap-jar", "jkite-bootstrap-jar.cmd")) {
+				"jkite-bootstrap-jdk.cmd", "jkite-bootstrap-jar", "jkite-bootstrap-jar.cmd",
+				"jkite-bootstrap-bin", "jkite-bootstrap-bin.cmd")) {
 			assertArrayEquals(Files.readAllBytes(BASH_SCRIPT.resolveSibling(name)),
 					Files.readAllBytes(DIST.resolve(name)),
 					"dist/" + name + " is out of date, run misc/update-dist.sh");

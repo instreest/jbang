@@ -39,17 +39,41 @@ rem it has to see it too.
 set "assume_yes="
 for %%A in (%*) do call :note_assume_yes "%%~A"
 
-rem --- 2. Which jar to run --------------------------------------------------
+rem --- 2. What to run --------------------------------------------------------
+rem Two ways to run jkite: an executable built for this platform, which starts
+rem without a JVM, or the jar, which needs one. The executable is preferred
+rem where there is one - a machine with no Java then fetches one file rather
+rem than two, and the JDK a script asks for with //JAVA becomes jkite's
+rem business rather than the launcher's.
+rem
+rem jkite-bootstrap-bin.cmd --check says which case this is without downloading
+rem anything, in its first word: 'installed', 'download', or nothing at all
+rem when there is no executable for this platform and the jar runs, which works
+rem wherever a JVM does. The word rather than the exit code, because a CALL
+rem that carries a redirection does not hand that code back here.
+rem JKITE_USE_JAR=true takes the jar even where there is an executable, which
+rem is how the jar path stays exercised on a platform that has both.
+set "native_plan="
+set "native_what="
+if /i not "%JKITE_USE_JAR%"=="true" (
+  for /f "usebackq tokens=1,*" %%A in (`"%script_dir%jkite-bootstrap-bin.cmd" --check 2^>nul`) do (
+    set "native_plan=%%A"
+    set "native_what=%%B"
+  )
+)
+
 rem A project may vendor the jar by dropping it next to this script, and then
 rem nothing is downloaded. Otherwise the bootstrap script installs the version
 rem jkite.properties pins into the cache, shared by every project on this
 rem machine, and prints where it put it; everything else goes to stderr.
 set "jar_path=%script_dir%jkite.jar"
 
-rem Nothing is fetched without the operator agreeing to it. What the two
-rem bootstrap scripts would have to fetch is asked about at once, so a first run
-rem asks a single question rather than one per download.
+rem Nothing is fetched without the operator agreeing to it. What would have to
+rem be fetched is asked about at once, so a first run asks a single question
+rem rather than one per download.
 set "net_items="
+if "%native_plan%"=="download" call :add_net_item_native
+if defined native_plan goto :net_ask
 if not exist "%jar_path%" call :add_net_item_jar
 rem This is the real search, not a dry run: it prints why a JAVA_HOME was turned
 rem down and leaves java_exec set, and :find_java below reuses it. Searching twice
@@ -57,9 +81,15 @@ rem would hide those messages, because the first pass leaves JAVA_HOME pointing 
 rem whatever it settled on.
 call :find_existing_java
 if errorlevel 1 call :add_net_item_jdk
+:net_ask
 if not defined net_items goto :net_done
 call :confirm_downloads || exit /b 1
 :net_done
+
+if defined native_plan (
+  for /f "usebackq delims=" %%N in (`"%script_dir%jkite-bootstrap-bin.cmd"`) do set "exec_path=%%N"
+  goto :launch_native
+)
 
 if not exist "%jar_path%" (
   for /f "usebackq delims=" %%J in (`"%script_dir%jkite-bootstrap-jar.cmd"`) do set "jar_path=%%J"
@@ -74,6 +104,13 @@ rem --- 4. Launch ------------------------------------------------------------
 rem The jar does the rest: it builds the script and runs it as a child process
 rem with our stdin, stdout and stderr, and exits with the script's status.
 %launch_cmd% %*
+exit /b %ERRORLEVEL%
+
+rem The same launch without a JVM in front of it. There is no :find_java on the
+rem way here because there is nothing in this path that needs one.
+:launch_native
+if not exist "%exec_path%" exit /b 1
+"%exec_path%" %*
 exit /b %ERRORLEVEL%
 
 rem ===========================================================================
@@ -345,6 +382,10 @@ rem   never   never ask. JKITE_ASSUME_YES=1 and --yes do the same
 :note_assume_yes
 if "%~1"=="-y" set "assume_yes=1"
 if "%~1"=="--yes" set "assume_yes=1"
+exit /b 0
+
+:add_net_item_native
+set "net_items=%net_items%  - the jkite executable %native_what%|"
 exit /b 0
 
 :add_net_item_jar

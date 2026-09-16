@@ -42,6 +42,7 @@ cd "$(dirname "$0")/.."
 copied="src/main/scripts/jkite src/main/scripts/jkite.cmd
         src/main/scripts/jkite-bootstrap-jdk src/main/scripts/jkite-bootstrap-jdk.cmd
         src/main/scripts/jkite-bootstrap-jar src/main/scripts/jkite-bootstrap-jar.cmd
+        src/main/scripts/jkite-bootstrap-bin src/main/scripts/jkite-bootstrap-bin.cmd
         LICENSE"
 
 repo=${JKITE_REPO:-instreest/jkite}
@@ -149,6 +150,31 @@ done
 ./gradlew --quiet shadowJar -PjkiteVersion="$version"
 jarSha=$(sha256_of build/libs/jkite.jar)
 
+# The executables, one row per platform an archive was built for. native-image
+# does not cross-compile, so they are built by CI with one runner per platform
+# and collected here rather than produced by this script; $JKITE_NATIVE_DIR is
+# where that run's archives were put. A platform with no archive gets no row
+# and runs the jar, which is also what every platform does when this is run
+# with no archives at all - so a release without them is a jar-only release,
+# not a broken one.
+nativeDir=${JKITE_NATIVE_DIR:-build/native-image}
+nativeProperties="$work/native.properties"
+: > "$nativeProperties"
+nativeCount=0
+for sumFile in "$nativeDir"/jkite-*.tgz.sha256; do
+  [ -f "$sumFile" ] || continue
+  archive=$(basename "${sumFile%.sha256}")
+  plat=${archive#jkite-}
+  plat=${plat%.tgz}
+  sha=$(cut -d' ' -f1 < "$sumFile")
+  [ -n "$sha" ] || { echo "Empty SHA-256 in $sumFile" 1>&2; exit 1; }
+  printf 'nativeUrl.%s=%s\nnativeSha256Sum.%s=%s\n' \
+    "$plat" "$releaseBaseUrl/$repo/releases/download/v$version/$archive" \
+    "$plat" "$sha" >> "$nativeProperties"
+  nativeCount=$((nativeCount + 1))
+  echo "  $plat  executable" 1>&2
+done
+
 mkdir -p dist
 for from in $copied; do
   cp -f "$from" "dist/$(basename "$from")"
@@ -174,7 +200,22 @@ distributionSha256Sum=$jarSha
 bootstrapJdkVersion=$jdkVersion
 EOF
   sort "$jdkProperties"
+  if [ "$nativeCount" -gt 0 ]; then
+    cat <<EOF
+
+# The jkite executable for each platform one is built for. It needs no JVM to
+# start, so a launcher prefers it to the jar and installs no bootstrap JDK;
+# where a platform has no row here the jar runs, which works wherever a JVM
+# does. What is pinned is the archive, which is checked before it is unpacked.
+nativeVersion=$version
+EOF
+    sort "$nativeProperties"
+  fi
 } > dist/jkite.properties
 
-echo "dist/ refreshed for $version (bootstrap JDK $jdkVersion)" 1>&2
-echo "Now: gh release create v$version dist/* build/libs/jkite.jar && git add dist && git commit" 1>&2
+echo "dist/ refreshed for $version (bootstrap JDK $jdkVersion, $nativeCount executable(s))" 1>&2
+if [ "$nativeCount" -eq 0 ]; then
+  echo "No executables in $nativeDir, so this is a jar-only release. Download the" 1>&2
+  echo "Native workflow's artifacts there and re-run to pin them." 1>&2
+fi
+echo "Now: gh release create v$version dist/* build/libs/jkite.jar $nativeDir/jkite-*.tgz && git add dist && git commit" 1>&2

@@ -205,6 +205,33 @@ The JDK archives are a different case and stay as they are: `.zip` on Windows
 and `.tar.gz` elsewhere is not a choice jkite made, it is how Adoptium
 publishes them.
 
+## How a machine gets one
+
+`jkite-bootstrap-bin` and its cmd twin install the executable the way
+`jkite-bootstrap-jar` installs the jar: the URL and SHA-256 come from
+`jkite.properties`, the archive is verified before it is unpacked, and the
+result lands in `~/.jkite/cache/native/<version>`. `misc/update-dist.sh` writes
+those rows from the archives a Native CI run produced, so a release with no
+archives is a jar-only release rather than a broken one.
+
+The launcher prefers it. `jkite-bootstrap-bin --check` says which case a
+machine is in without downloading anything - installed, would download, or no
+executable for this platform - and the launcher asks about the download before
+it happens, as it already did for the jar and the JDK. Where there is no
+executable the jar runs, which works wherever a JVM does, and
+`JKITE_USE_JAR=true` takes the jar either way, which is how that path stays
+exercised on a platform that has both.
+
+What this removes is the bootstrap JDK. It exists only to run `jkite.jar`, so a
+machine running the executable never fetches it: one download of 12 MB instead
+of two totalling over 200 MB. The JDK a script asks for with `//JAVA` is
+unaffected - jkite installs that itself, in Java, as it always did.
+
+The archive's hash is checked before unpacking, and not again afterwards. The
+other option was to hash the installed executable on every run, the way the jar
+is checked, and it is not worth it at this size: reading 33 MB costs more than
+the executable's entire start.
+
 ## Things that behave differently
 
 **`java.home` is not set.** There is no JVM under the executable, so

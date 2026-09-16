@@ -34,10 +34,16 @@ safe: one run downloads while the others wait.
 | --- | --- |
 | `jkite`, `jkite.cmd` | the launchers |
 | `jkite.properties` | which jkite and which JDK this project uses: version, URL and SHA-256 |
+| `jkite-bootstrap-bin`, `.cmd` | download and verify the jkite executable for this platform |
 | `jkite-bootstrap-jar`, `.cmd` | download and verify `jkite.jar` |
 | `jkite-bootstrap-jdk`, `.cmd` | download and verify a JDK when the machine has none |
 | `install.sh`, `install.cmd` | install and update this directory |
 | `LICENSE`, `README.md` | |
+
+Where jkite publishes an executable for this platform, that is what runs: it
+needs no JVM, so nothing else is downloaded and `jkite-bootstrap-jdk` never
+comes into it. A platform with no executable runs the jar, which works wherever
+a JVM does, and `JKITE_USE_JAR=true` asks for the jar either way.
 
 `jkite.jar` is not here on purpose: it is a download, so this project's
 history carries about 80 kB of scripts rather than a binary per update. To pin
