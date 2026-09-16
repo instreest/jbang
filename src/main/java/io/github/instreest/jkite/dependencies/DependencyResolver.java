@@ -237,12 +237,14 @@ public final class DependencyResolver {
 			.withLocalRepositoryOverride(Settings.getLocalMavenRepoOverride())
 			.repositories(toRemoteRepositories(repositories))
 			.addRepositoriesOp(ContextOverrides.AddRepositoriesOp.REPLACE)
-			// Maven's own default is to warn and carry on when a checksum does
-			// not match or is missing, which makes the checksum a report rather
-			// than a check. Everything else jkite fetches has to match what was
-			// published, including where that means stopping, and a dependency
-			// becomes code that runs, so it is held to the same rule.
-			.checksumPolicy(ContextOverrides.ChecksumPolicy.FAIL)
+			// Deliberately Maven's own behaviour rather than the stricter rule
+			// the pinned downloads follow. A repository a script names may be
+			// an internal one that publishes no checksums at all, and jkite is
+			// not the place to make a build fail where Maven would not: which
+			// dependency a project gets is the project's own decision, and its
+			// repository's. What jkite does insist on is the connection it
+			// arrives over - see requireSafeRepository.
+			.checksumPolicy(ContextOverrides.ChecksumPolicy.WARN)
 			.snapshotUpdatePolicy(updateCache ? ContextOverrides.SnapshotUpdatePolicy.ALWAYS : null);
 		if (!silent && !Util.isQuiet()) {
 			overrides.repositoryListener(new ProgressListener());
