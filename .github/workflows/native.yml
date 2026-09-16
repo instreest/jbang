@@ -70,21 +70,28 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build the native executable
+      - name: Build the native executable and its archive
         shell: bash
-        run: ./gradlew nativeImage --stacktrace
+        run: ./gradlew nativeImageArchive --stacktrace
 
-      # An executable that builds but cannot run is not a result. This is the
-      # same check a person would do first: does it start, does it answer, and
-      # does it actually build and run a program.
-      - name: Smoke test
+      # What is tested is the archive rather than the build directory, because
+      # the archive is what ships: unpacking it the way a machine installing
+      # jkite would is the only thing that shows the tar carries the executable
+      # bit. It is one command on every runner - Windows reads a .tgz with the
+      # tar it ships, which is why the format is a .tgz and not a bare .gz.
+      #
+      # Nothing chmods here, deliberately. A chmod would hide exactly the
+      # failure this step exists to catch.
+      - name: Smoke test the published archive
         shell: bash
         env:
           JKITE_CONFIRM_DOWNLOADS: never
         run: |
           set -euo pipefail
-          exe=$(ls build/native-image/jkite-${{ matrix.platform }}*)
-          [ -x "$exe" ] || chmod +x "$exe"
+          mkdir -p smoke
+          tar -xf build/native-image/jkite-${{ matrix.platform }}.tgz -C smoke
+          exe=smoke/jkite-${{ matrix.platform }}
+          if [ "$RUNNER_OS" = Windows ]; then exe="$exe.exe"; fi
           "$exe" --version
           cat > hello.java <<'EOF'
           public class hello {
@@ -93,10 +100,13 @@ jobs:
           EOF
           test "$("$exe" hello.java)" = "ok"
 
+      # The archive and its digest, which is what a release publishes and what
+      # jkite.properties will point at. The executable itself is inside it.
       - uses: actions/upload-artifact@v4
         with:
           name: jkite-${{ matrix.platform }}
           path: |
-            build/native-image/jkite-${{ matrix.platform }}*
+            build/native-image/jkite-${{ matrix.platform }}.tgz
+            build/native-image/jkite-${{ matrix.platform }}.tgz.sha256
           if-no-files-found: error
           retention-days: 7

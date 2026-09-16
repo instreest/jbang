@@ -195,6 +195,19 @@ def nativePlatform() {
 	return "$osName-$archName"
 }
 
+// Anything released here is pinned by SHA-256, the way jkite.properties pins
+// the jar and the bootstrap JDKs, so whatever produces a file writes the digest
+// beside it instead of leaving it to be computed by hand afterwards.
+def reportArtifact(File file) {
+	def digest = java.security.MessageDigest.getInstance("SHA-256")
+	file.eachByte(64 * 1024) { buf, n -> digest.update(buf, 0, n) }
+	def hex = digest.digest().encodeHex().toString()
+	new File(file.parentFile, "${file.name}.sha256").text = "$hex  ${file.name}\n"
+	println "native-image: ${file.name} (${file.length().intdiv(1024 * 1024)} MB)"
+	println "native-image: sha256 $hex"
+	return hex
+}
+
 tasks.register('nativeImage', Exec) {
 	dependsOn shadowJar
 	description = "Build a native executable for the platform this build runs on"
@@ -258,17 +271,49 @@ tasks.register('nativeImage', Exec) {
 		println "native-image: building $execFile"
 	}
 
-	// A released binary is pinned by SHA-256 in jkite.properties the way the
-	// jar and the bootstrap JDKs are, so the build prints the digest it just
-	// produced rather than leaving it to be computed by hand afterwards.
 	doLast {
-		def digest = java.security.MessageDigest.getInstance("SHA-256")
-		execFile.eachByte(64 * 1024) { buf, n -> digest.update(buf, 0, n) }
-		def hex = digest.digest().encodeHex().toString()
-		new File(outputDir, "${execFile.name}.sha256").text = "$hex  ${execFile.name}\n"
-		println "native-image: ${execFile.name} (${execFile.length().intdiv(1024 * 1024)} MB)"
-		println "native-image: sha256 $hex"
+		reportArtifact(execFile)
 	}
 
 	outputs.file(execFile)
+}
+
+// What actually gets published, rather than the bare executable. A .tgz
+// because it is the one format both sides unpack with what they already have:
+// Windows reads it with the tar it ships (there is no gzip.exe, and a bare .gz
+// is refused as an unrecognized archive), and the POSIX bootstrap already
+// pipes gzip into tar to install a JDK. It also carries the executable bit,
+// which a zip carries only if whatever wrote it chose to - and nothing here
+// chmods after unpacking.
+//
+// It is paid once per machine rather than once per run, which is the whole
+// reason the compression is here and not in the executable: 33 MB becomes
+// about 12 MB, while packing the executable itself (UPX) would cost 115 ms on
+// every start.
+tasks.register('nativeImageArchive', Tar) {
+	dependsOn 'nativeImage'
+	description = "Package the native executable as jkite-<platform>.tgz"
+	group = "build"
+
+	def windows = System.getProperty("os.name").toLowerCase().contains("windows")
+	def execBase = "jkite-${nativePlatform()}"
+	def outputDir = layout.buildDirectory.dir("native-image").get().asFile
+	def execFile = new File(outputDir, windows ? "${execBase}.exe" : execBase)
+
+	compression = Compression.GZIP
+	// .tgz rather than .tar.gz: both tars read it by content, not by name, and
+	// Windows hides known extensions, which turns jkite-x.tar.gz into
+	// jkite-x.tar in every file listing a person sees.
+	archiveFileName = "${execBase}.tgz"
+	destinationDirectory = layout.buildDirectory.dir("native-image")
+
+	from(execFile) {
+		// Gradle does not carry the source file's mode into the archive, so
+		// without this the executable unpacks as 0644 and cannot be run.
+		filePermissions { unix("0755") }
+	}
+
+	doLast {
+		reportArtifact(archiveFile.get().asFile)
+	}
 }

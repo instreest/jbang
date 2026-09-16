@@ -69,13 +69,14 @@ be missing from the result.
 
 ```sh
 export GRAALVM_HOME=/path/to/graalvm-community-25   # or put native-image on PATH
-./gradlew nativeImage
+./gradlew nativeImageArchive        # or nativeImage, for the executable alone
 ```
 
 The output is `build/native-image/jkite-<platform>` - `linux-amd64`,
 `darwin-arm64`, and so on, named the way `jkite.properties` names platforms so
-a built file drops straight into that table. A `.sha256` file is written beside
-it, because that is how a release pins anything here.
+a built file drops straight into that table - and `jkite-<platform>.tgz`, which
+is what a release publishes. Each gets a `.sha256` beside it, because that is
+how a release pins anything here.
 
 `--no-fallback` is passed on purpose. Without it, a build that cannot resolve
 everything quietly emits a launcher that needs a JVM after all - an executable
@@ -170,8 +171,39 @@ which makes it a trade of the one thing this was built for against a number
 that only shows up in `ls`.
 
 Compression belongs at the download instead, where it is paid once per machine
-rather than once per run: the 33.7 MB executable is 12 MB gzipped and 8.6 MB
-xz'd, and the launchers already unpack archives to install a JDK.
+rather than once per run. That is what `nativeImageArchive` is for: 33.7 MB
+becomes 12.1 MB, and starting is untouched because nothing is decompressed at
+run time.
+
+### Why .tgz
+
+The format is not free choice - it has to be unpackable with what each machine
+already has, since the bootstrap scripts install no tools. Measured, with
+libarchive's bsdtar standing in for the tar Windows ships:
+
+| | Windows `tar.exe` | Linux GNU `tar` | executable bit |
+| --- | --- | --- | --- |
+| bare `.gz` | `Unrecognized archive format` | exits 0, unpacks nothing | - |
+| **`.tgz`** | **works** | **works** | **0755 kept** |
+| `.zip` | works | `This does not look like a tar archive` | only if the writer set it |
+
+A bare `.gz` is the one to rule out first: Windows ships no `gzip.exe`, its tar
+refuses a file that is not an archive, and PowerShell is not available to these
+scripts by design. Worse, GNU tar handed a bare `.gz` exits 0 having unpacked
+nothing, so a launcher checking the exit status would report success.
+
+A `.zip` fails from the other side - GNU tar cannot read one and `unzip` is not
+something to assume, Git for Windows does not ship it either - and it carries
+the executable bit only if whatever wrote it chose to, while nothing here
+chmods after unpacking.
+
+`.tgz` rather than `.tar.gz` only because Windows hides known extensions, which
+displays `jkite-x.tar.gz` as `jkite-x.tar`. Both tars read the file by content,
+and `Unpacker` already accepts either.
+
+The JDK archives are a different case and stay as they are: `.zip` on Windows
+and `.tar.gz` elsewhere is not a choice jkite made, it is how Adoptium
+publishes them.
 
 ## Things that behave differently
 
