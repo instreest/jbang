@@ -134,13 +134,44 @@ On one Linux x64 machine, GraalVM CE 25.0.1:
 
 | | jar on a JVM | native |
 | --- | --- | --- |
-| startup (`--version`, median of 7) | 49 ms | 4 ms |
-| size | 6.3 MB jar + a JDK | 40 MB, nothing else |
+| startup (`--version`, median of 9) | 49 ms | 5 ms |
+| size | 6.3 MB jar + a JDK | 33 MB, nothing else |
 | build | seconds | 1 m 21 s |
 
 Verified end to end: `--version`, `--help`, running a plain script, resolving a
 dependency from the local repository, and downloading one from Maven Central
 over HTTPS.
+
+## Size
+
+The executable carries the parts of the JDK it uses, so it is larger than the
+jar and smaller than the jar plus a JDK. `-Os` is passed because it is free
+here: it takes about a fifth off and measured start did not change, since a
+process that starts, builds one program and exits never reaches the throughput
+`-O2` is buying.
+
+Measured on the same machine:
+
+| | file | start |
+| --- | --- | --- |
+| default (`-O2`) | 41.5 MB | 4.9 ms |
+| **`-Os`** | **33.7 MB** | **4.8 ms** |
+| `-Os`, then `strip` | 33.7 MB - no change | - |
+| `-Os`, then UPX `--best` | 11.0 MB | 119.9 ms |
+
+`strip` does nothing: native-image already emits a stripped binary. Charsets
+and locales are likewise already minimal - `-H:AddAllCharsets` is off by
+default and only the default locale is included.
+
+UPX is the interesting one, and it is rejected. It is the largest reduction
+available and it costs 115 ms per run, because the whole executable is
+decompressed into memory on every start. That is slower than the jar on a JVM,
+which makes it a trade of the one thing this was built for against a number
+that only shows up in `ls`.
+
+Compression belongs at the download instead, where it is paid once per machine
+rather than once per run: the 33.7 MB executable is 12 MB gzipped and 8.6 MB
+xz'd, and the launchers already unpack archives to install a JDK.
 
 ## Things that behave differently
 

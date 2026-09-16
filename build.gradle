@@ -244,7 +244,13 @@ tasks.register('nativeImage', Exec) {
 					"--exact-reachability-metadata",
 					"-H:+ReportExceptionStackTraces",
 					// leave -Dkey=value for jkite instead of consuming it
-					"-H:-ParseRuntimeOptions"]
+					"-H:-ParseRuntimeOptions",
+					// optimise for size rather than for throughput. It takes
+					// about a fifth off the executable and costs nothing that
+					// matters here: measured start was unchanged, and a
+					// process that starts, builds one program and exits never
+					// reaches the speed -O2 is buying.
+					"-Os"]
 		if (configDir.isDirectory()) {
 			args += "-H:ConfigurationFileDirectories=$configDir"
 		}
