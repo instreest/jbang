@@ -17,6 +17,25 @@ name the project and its license, so that
 [THIRD-PARTY.md](THIRD-PARTY.md) can be kept true. Code under a license that
 cannot be redistributed under MIT cannot be taken.
 
+### Why it stays MIT
+
+MIT permits redistribution under other terms, so this fork could put its own
+code under a different license — Apache-2.0, say, for its patent grant — while
+keeping JBang's notice on the files that are JBang's. It deliberately does not,
+and the reason is the direction code travels.
+
+Compatibility here runs one way. MIT code can go into an Apache-2.0 project,
+but not back: JBang is MIT, and it could not take a fix from an Apache-2.0
+jkite and keep distributing it under MIT. The shims in `dev.jbang.*` are
+written against upstream's API, and this file asks contributors to send a fix
+to JBang when the fix belongs there. Relicensing would close the return path
+that the mirror, the shims and `misc/sync-upstream.sh` exist to keep open —
+this project would be dismantling its own bridge to upstream.
+
+Matching some other project's license is not a reason to move. A tool jkite
+runs is a separate program in a separate process; nothing is combined, so
+nothing has to agree.
+
 ## Reporting a security problem
 
 Not here. See [SECURITY.md](SECURITY.md) — a vulnerability goes in a private
