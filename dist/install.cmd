@@ -61,18 +61,48 @@ mkdir "%staging%" || exit /b 1
 
 echo Installing jkite from !base! into !dir! 1>&2
 rem what a project gets; dist\ in the repository holds the same set
-for %%F in (jkite jkite.cmd jkite-bootstrap-jdk jkite-bootstrap-jdk.cmd jkite-bootstrap-jar jkite-bootstrap-jar.cmd jkite.properties install.sh install.cmd README.md LICENSE) do (
+set "files=jkite jkite.cmd jkite-bootstrap-jdk jkite-bootstrap-jdk.cmd jkite-bootstrap-jar jkite-bootstrap-jar.cmd jkite.properties install.sh install.cmd README.md LICENSE"
+for %%F in (%files%) do (
   curl -fsSL --proto "=https,http" --proto-redir "=https" "!base!/%%F" -o "%staging%\%%F" || goto :failed
 )
 
 if not exist "!dir!" mkdir "!dir!"
-copy /y "%staging%\*" "!dir!" >nul || goto :failed
+rem Written beside each target and renamed into place, never copied onto it.
+rem install.cmd is one of these files, and on an update it is the script
+rem cmd.exe is reading: it keeps a byte offset into the file it is running, so
+rem overwriting that file in place makes the rest of this run continue from
+rem whatever now lies at that offset. A move within the directory replaces the
+rem name and leaves what is being read alone.
+for %%F in (%files%) do (
+  copy /y "%staging%\%%F" "!dir!\%%F.jkite-new" >nul || goto :failed
+  move /y "!dir!\%%F.jkite-new" "!dir!\%%F" >nul || goto :failed
+)
 rmdir /s /q "%staging%"
 
+call :mark_executable
+
 for %%D in ("!dir!") do echo Installed. Commit %%~nxD\ and run '%%~nxD\jkite ^<script.java^>'. 1>&2
+exit /b 0
+
+rem Windows has no execute bit and git records what the filesystem reports, so
+rem a jkite\ first installed here is committed mode 644 and a colleague on
+rem macOS or Linux cannot run jkite/jkite at all - it fails with "Permission
+rem denied" before anything else happens. git is the only place the bit can be
+rem set from here, and the files are about to be committed anyway.
+:mark_executable
+where git >nul 2>nul || goto :no_git
+git -C "!dir!" rev-parse --is-inside-work-tree >nul 2>nul || goto :no_git
+git -C "!dir!" add --chmod=+x -- jkite jkite-bootstrap-jdk jkite-bootstrap-jar install.sh >nul 2>nul || goto :no_git
+echo Marked the shell scripts executable in git, so this install also runs on macOS and Linux. 1>&2
+exit /b 0
+:no_git
+echo Note: the shell scripts could not be marked executable in git here. Before 1>&2
+echo committing, run this, or colleagues on macOS and Linux cannot run them: 1>&2
+for %%D in ("!dir!") do echo     git add --chmod^=+x %%~nxD/jkite %%~nxD/jkite-bootstrap-jdk %%~nxD/jkite-bootstrap-jar %%~nxD/install.sh 1>&2
 exit /b 0
 
 :failed
 echo Installation failed, !dir! was left unchanged 1>&2
 rmdir /s /q "%staging%" 2>nul
+del /q "!dir!\*.jkite-new" 2>nul
 exit /b 1

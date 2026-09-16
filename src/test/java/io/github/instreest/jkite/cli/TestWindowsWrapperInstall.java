@@ -1,5 +1,6 @@
 package io.github.instreest.jkite.cli;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -183,6 +184,61 @@ class TestWindowsWrapperInstall extends AbstractScriptTest {
 
 		assertEquals(0, result.exitCode, result.stderr);
 		assertTrue(readProperties().contains("distributionVersion=9.9.10"), readProperties());
+	}
+
+	/**
+	 * --update runs the installed install.cmd, and install.cmd is one of the
+	 * files it installs, so it writes over the script cmd.exe is reading.
+	 * cmd.exe keeps a byte offset into that file, so the failure only shows when
+	 * the new release's installer differs in length from the installed one. The
+	 * one served here is the real installer with a comment block inserted near
+	 * the top, which shifts every later offset.
+	 */
+	@Test
+	void updateSurvivesAnInstallerOfADifferentLength() throws Exception {
+		assertEquals(0, install(project).exitCode);
+		wm.resetAll();
+		serveDist(jar, sha256(jar), "9.9.10");
+		String installer = new String(Files.readAllBytes(DIST.resolve("install.cmd")), StandardCharsets.UTF_8);
+		StringBuilder padding = new StringBuilder();
+		for (int i = 0; i < 40; i++) {
+			padding.append("rem a later release says more about itself than this one did\r\n");
+		}
+		int afterFirstLine = installer.indexOf('\n') + 1;
+		byte[] longer = (installer.substring(0, afterFirstLine) + padding + installer.substring(afterFirstLine))
+			.getBytes(StandardCharsets.UTF_8);
+		wm.stubFor(WireMock.get(WireMock.urlEqualTo("/releases/latest/download/install.cmd"))
+			.willReturn(WireMock.aResponse().withStatus(200).withBody(longer)));
+
+		RunResult result = runLauncher("--update");
+
+		assertEquals(0, result.exitCode, result.stderr);
+		assertTrue(readProperties().contains("distributionVersion=9.9.10"),
+				"the pin was not updated: " + result.stderr);
+		assertArrayEquals(longer, Files.readAllBytes(project.resolve("jkite").resolve("install.cmd")),
+				"the new installer was not the one left behind");
+	}
+
+	/**
+	 * Windows has no execute bit, so git would record the shell scripts 644 and
+	 * the jkite/ this produces would be unrunnable for everyone on macOS and
+	 * Linux. The installer asks git to record the bit, which is the only place
+	 * it can be set from here.
+	 */
+	@Test
+	void theShellScriptsAreRecordedExecutableInGit() throws Exception {
+		assertEquals(0, runProcess(Arrays.asList("git", "init"), env(), null, project).exitCode);
+
+		assertEquals(0, install(project).exitCode);
+
+		RunResult staged = runProcess(Arrays.asList("git", "ls-files", "-s"), env(), null, project);
+		assertEquals(0, staged.exitCode, staged.stderr);
+		for (String name : Arrays.asList("jkite/jkite", "jkite/jkite-bootstrap-jdk",
+				"jkite/jkite-bootstrap-jar", "jkite/install.sh")) {
+			assertTrue(Arrays.stream(staged.stdout.split("\\R"))
+				.anyMatch(line -> line.endsWith("\t" + name) && line.startsWith("100755 ")),
+					name + " is not recorded executable:\n" + staged.stdout);
+		}
 	}
 
 	@Test

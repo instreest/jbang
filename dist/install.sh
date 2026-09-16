@@ -81,17 +81,30 @@ fi
 # Everything is fetched into a staging directory first, so a failed download
 # leaves an existing installation as it was
 staging=$(mktemp -d "${TMPDIR:-/tmp}/jkite.XXXXXX")
-trap 'rm -rf "$staging"' EXIT
+trap 'rm -rf "$staging"; rm -f "$dir"/*.jkite-new.$$' EXIT
 
 echo "Installing jkite from $base into $dir" 1>&2
 for f in $files; do
   fetch "$f" "$staging/$f"
 done
 
+# The mode is set here rather than on the installed copy, so that each file
+# arrives complete and executable in one step rather than in two.
+chmod +x "$staging/jkite" "$staging/jkite-bootstrap-jdk" \
+         "$staging/jkite-bootstrap-jar" "$staging/install.sh"
+
 mkdir -p "$dir"
+# Written beside the target and renamed into place, never copied onto it.
+# install.sh is one of these files, and on an update it is the script bash is
+# reading: cp truncates and rewrites that same inode, and bash then seeks back
+# to its saved offset in what is now different content and runs whatever lies
+# there. rename(2) gives the new bytes a new inode and leaves the running
+# script's descriptor on the old one, which stays readable until it exits.
+# It has to be a rename within $dir - moving from $staging is usually a move
+# across filesystems, which is a copy onto the target again.
 for f in $files; do
-  cp -f "$staging/$f" "$dir/$f"
+  cp -f "$staging/$f" "$dir/$f.jkite-new.$$"
+  mv -f "$dir/$f.jkite-new.$$" "$dir/$f"
 done
-chmod +x "$dir/jkite" "$dir/jkite-bootstrap-jdk" "$dir/jkite-bootstrap-jar" "$dir/install.sh"
 
 echo "Installed. Commit $(basename "$dir")/ and run '$(basename "$dir")/jkite <script.java>'." 1>&2

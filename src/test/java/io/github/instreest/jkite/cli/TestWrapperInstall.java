@@ -221,6 +221,41 @@ class TestWrapperInstall extends AbstractScriptTest {
 			.contains("distributionVersion=9.9.10"), "the pin was not updated");
 	}
 
+	/**
+	 * --update runs the installed install.sh, and install.sh is one of the files
+	 * it installs, so it writes over the script bash is reading. That only shows
+	 * when the new release's installer differs in length from the installed one:
+	 * bash resumes at the byte offset it had saved, which now falls in the
+	 * middle of something else. The installer served here is the real one with a
+	 * comment block inserted near the top, so every later offset is shifted.
+	 */
+	@Test
+	void updateSurvivesAnInstallerOfADifferentLength() throws Exception {
+		assertEquals(0, install(project).exitCode);
+		Path wrapper = project.resolve("jkite");
+		wm.resetAll();
+		serveDist(jar, sha256(jar), "9.9.10");
+		String installer = new String(Files.readAllBytes(DIST.resolve("install.sh")), StandardCharsets.UTF_8);
+		StringBuilder padding = new StringBuilder("\n");
+		for (int i = 0; i < 40; i++) {
+			padding.append("# a later release says more about itself than this one did\n");
+		}
+		int afterShebang = installer.indexOf('\n') + 1;
+		byte[] longer = (installer.substring(0, afterShebang) + padding + installer.substring(afterShebang))
+			.getBytes(StandardCharsets.UTF_8);
+		wm.stubFor(WireMock.get(WireMock.urlEqualTo("/releases/latest/download/install.sh"))
+			.willReturn(WireMock.aResponse().withStatus(200).withBody(longer)));
+
+		RunResult result = runProcess(bashCmd(wrapper.resolve("jkite"), "--update"), env());
+
+		assertEquals(0, result.exitCode, result.stderr);
+		assertTrue(new String(Files.readAllBytes(wrapper.resolve("jkite.properties")), StandardCharsets.UTF_8)
+			.contains("distributionVersion=9.9.10"), "the pin was not updated: " + result.stderr);
+		assertArrayEquals(longer, Files.readAllBytes(wrapper.resolve("install.sh")),
+				"the new installer was not the one left behind");
+		assertTrue(Files.isExecutable(wrapper.resolve("install.sh")), "the installed script lost its execute bit");
+	}
+
 	@Test
 	void updateWarnsThatAVendoredJarStillWins() throws Exception {
 		assertEquals(0, install(project).exitCode);
