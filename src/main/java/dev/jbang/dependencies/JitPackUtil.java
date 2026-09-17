@@ -1,7 +1,7 @@
 package dev.jbang.dependencies;
 
-import java.net.URI;
-import java.net.URISyntaxException;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
@@ -32,11 +32,11 @@ public class JitPackUtil {
 	public static String ensureGAV(String ref) {
 		try {
 			// If the reference is a URL we'll try to convert it to a proper GAV
-			URI url = new URI(ref);
-			if ("https".equals(url.getScheme()) || "http".equals(url.getScheme())) {
+			URL url = new URL(ref);
+			if (url.getProtocol().equals("https") || url.getProtocol().equals("http")) {
 				// Strip and save the #part of the URL
 				final String actualRef;
-				String hash = url.getRawFragment();
+				String hash = url.getRef();
 				if (hash != null) {
 					actualRef = ref.substring(0, ref.lastIndexOf('#'));
 				} else {
@@ -81,7 +81,7 @@ public class JitPackUtil {
 					}
 				}
 			}
-		} catch (URISyntaxException ex) {
+		} catch (MalformedURLException ex) {
 			// Ignore exception and just return the ref as-is
 		}
 		return ref;
