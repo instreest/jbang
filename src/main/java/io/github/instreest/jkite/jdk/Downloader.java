@@ -3,6 +3,8 @@ package io.github.instreest.jkite.jdk;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -84,7 +86,7 @@ final class Downloader {
 		// itself, so no caller can reach a host the JDK policy would refuse
 		JdkSource.requireIndexUrl(current, "to download");
 		for (int i = 0; i < MAX_REDIRECTS; i++) {
-			HttpURLConnection conn = (HttpURLConnection) new URL(current).openConnection();
+			HttpURLConnection conn = (HttpURLConnection) toUrl(current).openConnection();
 			conn.setInstanceFollowRedirects(false);
 			conn.setConnectTimeout(CONNECT_TIMEOUT);
 			conn.setReadTimeout(READ_TIMEOUT);
@@ -95,7 +97,7 @@ final class Downloader {
 				if (location == null) {
 					throw new IOException("Redirect without Location from " + current);
 				}
-				current = new URL(new URL(current), location).toString();
+				current = resolve(current, location);
 				conn.disconnect();
 				JdkSource.requireRedirect(current, "to follow a redirect to");
 				continue;
@@ -115,5 +117,26 @@ final class Downloader {
 			return;
 		}
 		throw new IOException("Too many redirects for " + url);
+	}
+
+	/**
+	 * The java.net.URL constructors are deprecated, so a URL is parsed as a URI
+	 * and only turned into a URL to open the connection.
+	 */
+	private static URL toUrl(String url) throws IOException {
+		try {
+			return new URI(url).toURL();
+		} catch (URISyntaxException | IllegalArgumentException e) {
+			throw new IOException("Malformed URL: " + url, e);
+		}
+	}
+
+	/** Resolves a Location header against the URL it was returned for. */
+	private static String resolve(String base, String location) throws IOException {
+		try {
+			return new URI(base).resolve(new URI(location)).toString();
+		} catch (URISyntaxException | IllegalArgumentException e) {
+			throw new IOException("Malformed Location header from " + base + ": " + location, e);
+		}
 	}
 }
