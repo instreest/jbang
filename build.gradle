@@ -92,6 +92,15 @@ test {
 	// are about the gate remove this from the environment they hand their
 	// subprocesses.
 	environment 'JKITE_CONFIRM_DOWNLOADS', 'never'
+	// A local Maven repository of the test run's own. Dependency resolution is
+	// tested against a file: repository built on the spot, and without this the
+	// artifacts would land in the developer's ~/.m2/repository - so a test would
+	// write into it, and could pass because of something already there.
+	environment 'JKITE_MAVEN_REPO', layout.buildDirectory.dir('test-maven-repo').get().asFile.absolutePath
+	// and a JKITE_DIR of its own, for the same reason: the resolved-dependency
+	// cache is written on every resolve, and without this it would be the one
+	// in the developer's home directory that a test reads and writes.
+	environment 'JKITE_DIR', layout.buildDirectory.dir('test-jkite').get().asFile.absolutePath
 	testLogging {
 		events "failed"
 		exceptionFormat "full"
