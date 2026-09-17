@@ -342,9 +342,12 @@ public final class Util {
 
 	public static boolean isURL(String str) {
 		try {
-			new java.net.URL(str);
+			// toURL() rejects a relative URI and an unknown protocol, the two
+			// things the java.net.URL constructor used to reject here
+			new java.net.URI(str).toURL();
 			return true;
-		} catch (java.net.MalformedURLException e) {
+		} catch (java.net.URISyntaxException | java.net.MalformedURLException
+				| IllegalArgumentException e) {
 			return false;
 		}
 	}
