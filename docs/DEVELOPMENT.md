@@ -95,8 +95,20 @@ directive handling can be taken over without merging:
 ```bash
 misc/sync-upstream.sh            # take the mirrored files from upstream/main
 misc/sync-upstream.sh <ref>      # ... or from a tag or commit
+misc/sync-upstream.sh --check    # is the mirror still a mirror?
 ./gradlew build
 ```
+
+`--check` is the one that keeps the table above true, and CI runs it on every
+push. It compares each mirrored file with upstream at the revision
+`misc/upstream-ref.txt` records - not at upstream's head, which moves on its
+own - and it checks that every file under `dev/jbang` appears in exactly one of
+the two lists, since a file in neither is one nobody knows the rules for. It
+reads and fetches one commit; it changes nothing.
+
+It is there because an edit to a mirrored file is invisible: it compiles, it
+passes, and then a sync overwrites it and the change is gone with nothing said.
+That has happened here once.
 
 The script reports which upstream commits touched the mirrored files and which
 touched the shims, and records the synced revision in `misc/upstream-ref.txt`.
@@ -144,7 +156,11 @@ fail. Two of the JDKs `jkite.properties` pins are Darwin ones, so a Mac is a
 machine this project says it works on, and until this job existed nobody had
 ever run the scripts on one.
 
-A fourth job runs the jar itself, on Java 11 and on Java 25. Every test above
+A fourth job runs `misc/sync-upstream.sh --check`, which is what stops a
+mirrored file being edited here; see [Staying in step with
+JBang](#staying-in-step-with-jbang).
+
+A fifth runs the jar itself, on Java 11 and on Java 25. Every test above
 loads these classes from the build's own class path, which says nothing about
 whether `build/libs/jkite.jar` starts: the shadowed jar, its manifest, its
 merged service files and its `--release 11` bytecode are only exercised by

@@ -94,6 +94,10 @@ So if the fix is in `Directives.java`, the pull request that fixes it goes to
 JBang, and jkite picks it up with `misc/sync-upstream.sh`. Everyone gets it
 that way, and it survives.
 
+CI checks this rather than trusting it: `misc/sync-upstream.sh --check`
+compares every mirrored file with upstream and fails if one has been edited
+here. Run it yourself if you are not sure which part of the tree you are in.
+
 **Run the build before sending.**
 
 ```bash

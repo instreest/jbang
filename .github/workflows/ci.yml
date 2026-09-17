@@ -152,3 +152,18 @@ jobs:
           code=0
           "$RUN_JAVA" -jar "$jar" "$work/Hello.java" fail > /dev/null 2>&1 || code=$?
           test "$code" = 3
+
+  # The mirror is only a mirror while nobody edits it. An edit there compiles,
+  # passes every test, and is then overwritten by the next sync with nothing
+  # said - which has happened here once already. This is the only check that
+  # would have caught it, so it is cheap on purpose: one commit fetched from
+  # upstream, a few seconds.
+  mirror:
+    name: the mirror still matches upstream
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare with upstream at the recorded revision
+        shell: bash
+        run: misc/sync-upstream.sh --check
