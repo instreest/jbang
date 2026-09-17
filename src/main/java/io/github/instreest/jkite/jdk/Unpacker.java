@@ -61,6 +61,13 @@ final class Unpacker {
 			return null; // root folder itself
 		}
 		entry = entry.subpath(1, entry.getNameCount());
+		// Before the folder this platform selects is looked at, so that an entry
+		// which climbs out is refused everywhere rather than refused on Linux
+		// and quietly dropped on macOS, where the Contents/Home filter would
+		// have reached it first. What is refused must not depend on the host.
+		if (entry.startsWith("..")) {
+			throw new IOException("Entry is outside of the target dir: " + entryName);
+		}
 		if (selectFolder != null) {
 			if (!entry.startsWith(selectFolder) || entry.equals(selectFolder)) {
 				return null;

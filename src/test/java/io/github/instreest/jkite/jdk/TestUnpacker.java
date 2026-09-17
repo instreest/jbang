@@ -43,9 +43,9 @@ class TestUnpacker {
 	void stripsTheRootFolderOfATar() throws IOException {
 		Path archive = tar("jdk.tar.gz", tar -> {
 			dirEntry(tar, "jdk-25.0.3+9/");
-			dirEntry(tar, "jdk-25.0.3+9/bin/");
-			fileEntry(tar, "jdk-25.0.3+9/bin/java", "binary", 0755);
-			fileEntry(tar, "jdk-25.0.3+9/release", "JAVA_VERSION=\"25.0.3\"", 0644);
+			dirEntry(tar, in("jdk-25.0.3+9", "bin/"));
+			fileEntry(tar, in("jdk-25.0.3+9", "bin/java"), "binary", 0755);
+			fileEntry(tar, in("jdk-25.0.3+9", "release"), "JAVA_VERSION=\"25.0.3\"", 0644);
 		});
 		Path out = dir.resolve("out");
 
@@ -60,8 +60,8 @@ class TestUnpacker {
 	void keepsTheExecutableBitOfATar() throws IOException {
 		assumeFalse(Util.isWindows(), "POSIX permissions");
 		Path archive = tar("jdk.tar.gz", tar -> {
-			fileEntry(tar, "jdk/bin/java", "binary", 0755);
-			fileEntry(tar, "jdk/lib/modules", "data", 0644);
+			fileEntry(tar, in("jdk", "bin/java"), "binary", 0755);
+			fileEntry(tar, in("jdk", "lib/modules"), "data", 0644);
 		});
 		Path out = dir.resolve("out");
 
@@ -78,17 +78,17 @@ class TestUnpacker {
 	void readsPathsTooLongForAPlainTarHeader() throws IOException {
 		// > 100 characters, so the name only exists in a pax header; reading the
 		// plain header alone would write a truncated name without failing
-		StringBuilder deep = new StringBuilder("jdk/lib/src");
+		StringBuilder deep = new StringBuilder("lib/src");
 		while (deep.length() < 160) {
 			deep.append("/subdirectory");
 		}
-		String longPath = deep + "/TheClassWithAVeryLongNameIndeed.java";
-		Path archive = tar("jdk.tar.gz", tar -> fileEntry(tar, longPath, "source", 0644));
+		String inTheJdk = deep + "/TheClassWithAVeryLongNameIndeed.java";
+		Path archive = tar("jdk.tar.gz", tar -> fileEntry(tar, in("jdk", inTheJdk), "source", 0644));
 		Path out = dir.resolve("out");
 
 		Unpacker.unpackJdk(archive, out);
 
-		Path expected = out.resolve(longPath.substring("jdk/".length()));
+		Path expected = out.resolve(inTheJdk);
 		assertThat(Files.isRegularFile(expected), is(true));
 	}
 
@@ -96,8 +96,8 @@ class TestUnpacker {
 	void createsTheLinksInsideTheArchive() throws IOException {
 		assumeFalse(Util.isWindows(), "symbolic links need a privilege on Windows");
 		Path archive = tar("jdk.tar.gz", tar -> {
-			fileEntry(tar, "jdk/bin/java", "binary", 0755);
-			symlink(tar, "jdk/bin/javaw", "java");
+			fileEntry(tar, in("jdk", "bin/java"), "binary", 0755);
+			symlink(tar, in("jdk", "bin/javaw"), "java");
 		});
 		Path out = dir.resolve("out");
 
@@ -112,8 +112,8 @@ class TestUnpacker {
 	void stripsTheRootFolderOfAZipAndKeepsItsModes() throws IOException {
 		assumeFalse(Util.isWindows(), "POSIX permissions");
 		Path archive = zip("jdk.zip", zip -> {
-			fileEntry(zip, "jdk-25/bin/java.exe", "binary", 0755);
-			fileEntry(zip, "jdk-25/release", "JAVA_VERSION=\"25.0.3\"", 0644);
+			fileEntry(zip, in("jdk-25", "bin/java.exe"), "binary", 0755);
+			fileEntry(zip, in("jdk-25", "release"), "JAVA_VERSION=\"25.0.3\"", 0644);
 		});
 		Path out = dir.resolve("out");
 
@@ -130,6 +130,9 @@ class TestUnpacker {
 
 	@Test
 	void refusesAnEntryThatLeavesTheOutputDirectory() throws IOException {
+		// left as it stands rather than put inside the JDK, because an entry
+		// that climbs out has to be refused before any platform's folder
+		// selection has a chance to drop it quietly instead
 		Path archive = tar("evil.tar.gz", tar -> fileEntry(tar, "jdk/../../../escaped.txt", "owned", 0644));
 		Path out = dir.resolve("out");
 
@@ -145,7 +148,7 @@ class TestUnpacker {
 		// nothing is left of the path: there is no place for it in a JDK
 		Path archive = tar("jdk.tar.gz", tar -> {
 			fileEntry(tar, "jdk/../climbed.txt", "content", 0644);
-			fileEntry(tar, "jdk/release", "JAVA_VERSION=\"25\"", 0644);
+			fileEntry(tar, in("jdk", "release"), "JAVA_VERSION=\"25\"", 0644);
 		});
 		Path out = dir.resolve("out");
 
@@ -159,7 +162,7 @@ class TestUnpacker {
 	@Test
 	void refusesALinkThatPointsOutOfTheOutputDirectory() throws IOException {
 		assumeFalse(Util.isWindows(), "symbolic links need a privilege on Windows");
-		Path archive = tar("evil.tar.gz", tar -> symlink(tar, "jdk/escape", "../../.."));
+		Path archive = tar("evil.tar.gz", tar -> symlink(tar, in("jdk", "escape"), "../../.."));
 		Path out = dir.resolve("out");
 
 		IOException e = assertThrows(IOException.class, () -> Unpacker.unpackJdk(archive, out));
@@ -175,8 +178,8 @@ class TestUnpacker {
 		// the write through it has to be refused too.
 		Path outside = Files.createDirectory(dir.resolve("outside"));
 		Path archive = tar("evil.tar.gz", tar -> {
-			symlink(tar, "jdk/link", outside.toString());
-			fileEntry(tar, "jdk/link/planted.txt", "owned", 0644);
+			symlink(tar, in("jdk", "link"), outside.toString());
+			fileEntry(tar, in("jdk", "link/planted.txt"), "owned", 0644);
 		});
 		Path out = dir.resolve("out");
 
@@ -188,9 +191,9 @@ class TestUnpacker {
 	@Test
 	void ignoresEntriesThatAreNotPartOfAJdk() throws IOException {
 		Path archive = tar("jdk.tar.gz", tar -> {
-			TarArchiveEntry fifo = new TarArchiveEntry("jdk/dev/pipe", TarArchiveEntry.LF_FIFO);
+			TarArchiveEntry fifo = new TarArchiveEntry(in("jdk", "dev/pipe"), TarArchiveEntry.LF_FIFO);
 			put(tar, fifo, null);
-			fileEntry(tar, "jdk/release", "JAVA_VERSION=\"25\"", 0644);
+			fileEntry(tar, in("jdk", "release"), "JAVA_VERSION=\"25\"", 0644);
 		});
 		Path out = dir.resolve("out");
 
@@ -210,8 +213,85 @@ class TestUnpacker {
 	}
 
 	// -------------------------------------------------------------------------
+	// the folder macOS selects, checked from every machine
+	// -------------------------------------------------------------------------
+
+	/**
+	 * A macOS JDK archive holds the JDK under Contents/Home, and that folder,
+	 * not the archive's root, is what has to land in the output directory.
+	 * Forced here rather than left to a macOS runner, so that every machine
+	 * checks it: until CI grew a Mac, this path had never run anywhere, and
+	 * what it did on an archive of another shape was unpack nothing at all.
+	 */
+	@Test
+	void onMacTheContentsHomeFolderIsWhatIsUnpacked() throws IOException {
+		Path archive = tar("jdk.tar.gz", tar -> {
+			fileEntry(tar, "jdk-25/Contents/Home/release", "JAVA_VERSION=\"25\"", 0644);
+			fileEntry(tar, "jdk-25/Contents/Home/bin/java", "binary", 0755);
+			fileEntry(tar, "jdk-25/Contents/Info.plist", "metadata", 0644);
+			fileEntry(tar, "jdk-25/beside.txt", "not part of the JDK", 0644);
+		});
+		Path out = dir.resolve("out");
+
+		asMac(() -> Unpacker.unpackJdk(archive, out));
+
+		assertThat(Files.isRegularFile(out.resolve("release")), is(true));
+		assertThat(Files.isRegularFile(out.resolve("bin/java")), is(true));
+		// what is beside the selected folder is not the JDK, at any depth
+		assertThat(Files.exists(out.resolve("Contents")), is(false));
+		assertThat(Files.exists(out.resolve("Info.plist")), is(false));
+		assertThat(Files.exists(out.resolve("beside.txt")), is(false));
+	}
+
+	/**
+	 * What is refused must not depend on the host. On macOS the Contents/Home
+	 * filter would reach this entry before the containment check and drop it
+	 * without a word, which is a different answer to the same archive.
+	 */
+	@Test
+	void onMacAnEscapingEntryIsRefusedJustTheSame() throws IOException {
+		Path archive = tar("evil.tar.gz", tar -> fileEntry(tar, "jdk/../../../escaped.txt", "owned", 0644));
+		Path out = dir.resolve("out");
+
+		IOException e = assertThrows(IOException.class, () -> asMac(() -> Unpacker.unpackJdk(archive, out)));
+
+		assertThat(e.getMessage(), containsString("outside of the target dir"));
+		assertThat(Files.exists(dir.getParent().resolve("escaped.txt")), is(false));
+	}
+
+	// -------------------------------------------------------------------------
 	// archive building
 	// -------------------------------------------------------------------------
+
+	/**
+	 * An entry inside the JDK, spelt the way the running platform really
+	 * receives it: a macOS archive holds the JDK under Contents/Home, and that
+	 * is the folder Unpacker selects there. Building one shape everywhere would
+	 * leave the macOS path untested - and it would describe a JDK that macOS
+	 * unpacks nothing out of.
+	 */
+	private static String in(String root, String insideTheJdk) {
+		return root + "/" + (Util.isMac() ? "Contents/Home/" : "") + insideTheJdk;
+	}
+
+	/**
+	 * Runs something as though this were macOS. Util reads os.name on each
+	 * call, so this reaches the folder selection, and the tests share one JVM
+	 * and run one at a time, so nothing else sees it.
+	 */
+	private static void asMac(ThrowingRunnable body) throws IOException {
+		String was = System.getProperty("os.name");
+		System.setProperty("os.name", "Mac OS X");
+		try {
+			body.run();
+		} finally {
+			System.setProperty("os.name", was);
+		}
+	}
+
+	private interface ThrowingRunnable {
+		void run() throws IOException;
+	}
 
 	private Path tar(String name, Consumer<TarArchiveOutputStream> content) throws IOException {
 		Path archive = dir.resolve(name);
