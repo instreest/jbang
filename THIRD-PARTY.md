@@ -16,7 +16,7 @@ project. Its name is its own; where the code comes from is said here.
 | the files listed in `misc/upstream-mirror.txt` (among them `Directives.java`, `MavenCoordinate.java`, `JitPackUtil.java` and their test) | [jbangdev/jbang](https://github.com/jbangdev/jbang), Copyright (c) 2020 Max Rydahl Andersen, copied unchanged | MIT |
 | the files listed in `misc/upstream-shims.txt`, and the parts of `src/main/java/io/github/instreest/jkite/*` and `src/main/scripts/*` that are derived from upstream | [jbangdev/jbang](https://github.com/jbangdev/jbang), Copyright (c) 2020 Max Rydahl Andersen, derived | MIT |
 | `Jdk.java`, `JdkManager.java`, the root-folder stripping and `Contents/Home` selection of `Unpacker.java`, parts of `Util.java` (OS/architecture detection, link handling) | [jbangdev/jbang-devkitman](https://github.com/jbangdev/jbang-devkitman), Copyright (c) Max Rydahl Andersen and contributors | MIT |
-| `OsDetector.java` (OS and architecture normalisation tables) | [os-maven-plugin](https://github.com/trustin/os-maven-plugin) by Trustin Lee, as also used by the Nisse os-detector in JBang | Apache License 2.0 |
+| `OsDetector.java` (OS and architecture normalisation tables) | [os-maven-plugin](https://github.com/trustin/os-maven-plugin) by Trustin Lee, as also used by the Nisse os-detector in JBang. The file keeps its original copyright and licence notice and says what was changed, as the licence asks | Apache License 2.0 |
 
 `Placeholders.java` expands the same `${...}` syntax as the
 `PropertiesValueResolver` JBang carries, but is jkite's own code: that file
@@ -59,7 +59,7 @@ repository.
 | In the jar | |
 | --- | --- |
 | `META-INF/NOTICE` | the NOTICE files of all bundled Apache-2.0 artifacts, merged |
-| `META-INF/licenses/Apache-2.0.txt` | Apache License 2.0, for Maven Resolver, Apache Maven, HttpClient, Commons, Gson, JSpecify and the Error Prone annotations |
+| `META-INF/licenses/Apache-2.0.txt` | Apache License 2.0, for Maven Resolver, Apache Maven, HttpClient, Commons, Gson, JSpecify and the Error Prone annotations, and for the os-maven-plugin code `OsDetector.java` is derived from |
 | `META-INF/licenses/MIT-slf4j.txt` | SLF4J |
 | `META-INF/licenses/BSD-3-Clause-asm.txt` | ASM |
 | `META-INF/licenses/EPL-2.0.txt` | MIMA |

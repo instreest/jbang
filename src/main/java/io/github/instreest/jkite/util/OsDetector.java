@@ -1,3 +1,26 @@
+/*
+ * Copyright 2014 Trustin Heuiseung Lee.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+/*
+ * Modified for jkite: the normalisation of os.name and os.arch is taken from
+ * kr.motd.maven.os.Detector, with the detection of the Linux release, the
+ * Maven plumbing and everything else that file does left out, and with the
+ * os.detected.* properties written into a Properties of jkite's own. The
+ * tables themselves are unchanged, because a classifier that differs from
+ * os-maven-plugin's would not match what is published on Maven Central.
+ */
 package io.github.instreest.jkite.util;
 
 import java.util.Locale;
