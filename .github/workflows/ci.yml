@@ -35,6 +35,11 @@ jobs:
   test:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # A stalled runner once held this job for four hours and was then killed
+    # with no log kept at all, so the one thing to look at afterwards did not
+    # exist. Every platform finishes in about four minutes, so anything past
+    # twenty is not slow, it is stuck - and failing then leaves the log behind.
+    timeout-minutes: 20
     strategy:
       # one platform failing must not hide the result of the other
       fail-fast: false
@@ -77,6 +82,8 @@ jobs:
   shipped-jar:
     name: the shipped jar on Java ${{ matrix.java }}
     runs-on: ubuntu-latest
+    # as above; this one takes well under a minute
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
