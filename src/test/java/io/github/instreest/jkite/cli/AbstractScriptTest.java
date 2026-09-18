@@ -263,6 +263,13 @@ abstract class AbstractScriptTest {
 		Map<String, String> env = new HashMap<>(System.getenv());
 		env.put("JKITE_DIR", jbdir.toString());
 		env.put("JKITE_CACHE_DIR", tdir.toString());
+		// No retries by default. A launcher test that reaches a download reaches
+		// one that is meant to fail, and the retries then cost 1+2+4+8+16
+		// seconds of sleeping for a result the first attempt already had. Five
+		// tests in TestNetworkConsent alone were spending 31 seconds each that
+		// way - 85% of the whole suite's time. TestScriptRetry, which is about
+		// retrying, sets its own count over this one.
+		env.put("JKITE_DOWNLOAD_RETRY", "0");
 		env.remove("JAVA_HOME");
 		return env;
 	}

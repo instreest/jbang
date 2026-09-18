@@ -100,7 +100,6 @@ class TestRun extends AbstractScriptTest {
 		// script, which fails fast at the unreachable address it is pinned to
 		env.remove("JAVA_HOME");
 		env.put("PATH", pathWithoutJava());
-		env.put("JKITE_DOWNLOAD_RETRY", "0");
 		env.put("no_proxy", "localhost,127.0.0.1");
 		env.put("NO_PROXY", "localhost,127.0.0.1");
 		RunResult result = runProcess(bashCmd(launcher, "exit", "3"), env);

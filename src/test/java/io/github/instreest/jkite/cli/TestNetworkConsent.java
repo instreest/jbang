@@ -186,10 +186,7 @@ class TestNetworkConsent extends AbstractScriptTest {
 	 */
 	@Test
 	void anOptionAfterTheScriptBelongsToTheScript() throws Exception {
-		Map<String, String> env = env(null);
-		// this one really goes on to fetch, and the point is made on the first try
-		env.put("JKITE_DOWNLOAD_RETRY", "0");
-		RunResult result = runProcess(bashCmd(launcher, script.toString(), "-o", "out.txt"), env);
+		RunResult result = runProcess(bashCmd(launcher, script.toString(), "-o", "out.txt"), env(null));
 
 		assertTrue(!result.stderr.contains("--offline was given"),
 				"the script's own -o was read as jkite's: " + result.stderr);

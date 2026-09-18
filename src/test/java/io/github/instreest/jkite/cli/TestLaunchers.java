@@ -180,7 +180,6 @@ class TestLaunchers extends AbstractScriptTest {
 		Map<String, String> env = env();
 		env.put("JAVA_HOME", fakeJdk("java8", "1.8.0_292"));
 		env.put("PATH", pathWithoutJava());
-		env.put("JKITE_DOWNLOAD_RETRY", "0");
 
 		RunResult result = run(env, "exit", "3");
 
