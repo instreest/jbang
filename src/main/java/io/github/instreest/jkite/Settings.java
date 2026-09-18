@@ -41,6 +41,8 @@ public final class Settings {
 	public static final String ENV_DOWNLOAD_RETRY_DELAY = "JKITE_DOWNLOAD_RETRY_DELAY";
 	/** auto / always / never: whether a download is confirmed before it starts. */
 	public static final String ENV_CONFIRM_DOWNLOADS = "JKITE_CONFIRM_DOWNLOADS";
+	/** Seconds to wait for a cache lock before giving up, 0 meaning forever. */
+	public static final String ENV_LOCK_TIMEOUT = "JKITE_LOCK_TIMEOUT";
 	public static final String ENV_ASSUME_YES = "JKITE_ASSUME_YES";
 
 	public static final String CP_SEPARATOR = File.pathSeparator;
@@ -72,6 +74,13 @@ public final class Settings {
 	 */
 	public static final String JDK_REDIRECT_HOST_SUFFIX = ".githubusercontent.com";
 	public static final int DEFAULT_DOWNLOAD_RETRY = 5;
+	/**
+	 * Ten minutes, which is what the bootstrap scripts already wait: the same
+	 * variable governs the lock they take before Java exists and the lock
+	 * taken after it, and a variable that means two things is worse than
+	 * either meaning.
+	 */
+	public static final int DEFAULT_LOCK_TIMEOUT = 600;
 
 	public enum CacheClass {
 		urls, jars, jdks
@@ -128,6 +137,14 @@ public final class Settings {
 	/** Seconds between download attempts, 0 meaning exponential backoff. */
 	public static int getDownloadRetryDelay() {
 		return intFromEnv(ENV_DOWNLOAD_RETRY_DELAY, 0);
+	}
+
+	/**
+	 * How long to wait for another jkite process to release a cache lock,
+	 * in seconds; 0 waits for as long as it takes.
+	 */
+	public static int getLockTimeout() {
+		return intFromEnv(ENV_LOCK_TIMEOUT, DEFAULT_LOCK_TIMEOUT);
 	}
 
 	/**

@@ -231,9 +231,15 @@ does the jar download one, and it needs no JDK discovery service to do it:
 3. The result is unpacked into a temporary directory, validated, and moved into
    place under a lock, so parallel runs wait rather than download twice.
 
-Eclipse Temurin is the only distribution used. Requesting a full version such as
-`//JAVA 25.0.3` installs exactly that, which is what to use when a build must be
-reproducible; `25` or `25+` accepts any matching release.
+Eclipse Temurin is the only distribution used. `//JAVA` takes a major version
+(`25`) or a major version and anything later (`25+`), and nothing else: a full
+version such as `//JAVA 25.0.3` is refused by the parser, which is upstream's.
+So a script cannot pin the JDK it is built with, and nothing here pretends
+otherwise: the jar records in its manifest which JDK built it, and that is read
+back to decide whether the jar can be reused - it is rebuilt when the recorded
+JDK no longer satisfies the `//JAVA` line, when it is newer than the JDK
+available now, or when `//PREVIEW` was used and the versions differ. A later
+release of the same major version reuses the jar.
 
 ## Dependencies
 

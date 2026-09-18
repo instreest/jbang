@@ -6,16 +6,24 @@ import java.util.regex.Pattern;
 import dev.jbang.ExitException;
 
 /**
- * A Java version as requested by <code>//JAVA</code> or <code>--java</code>.
- * Accepted forms are a major version (<code>17</code>), a major version or
- * later (<code>17+</code>), a full version (<code>25.0.3</code>) and a full
- * version or later (<code>25.0.3+</code>).
+ * A Java version as requested by <code>//JAVA</code>: a major version
+ * (<code>17</code>) or a major version and anything later (<code>17+</code>).
+ * Those are the two forms a script can actually ask for. jkite has no
+ * <code>--java</code> option - what a tool needs is the tool author's to
+ * declare, not its user's to override - and <code>//JAVA</code> is read by
+ * upstream's parser, which accepts a number and an optional plus sign and
+ * nothing else.
  *
- * A request without a plus sign matches any version that starts with the
- * requested components, so <code>17</code> matches <code>17.0.9+9</code> while
- * <code>25.0.3</code> matches <code>25.0.3+9</code> but not
- * <code>25.0.30</code>. This makes it possible to pin an exact JDK for
- * reproducible builds.
+ * {@link #parse} nevertheless understands a full version such as
+ * <code>25.0.3</code>, and a request without a plus sign matches any version
+ * that begins with the requested components: <code>17</code> matches
+ * <code>17.0.9+9</code>, and <code>25.0.3</code> would match
+ * <code>25.0.3+9</code> but not <code>25.0.30</code>. Nothing in jkite
+ * produces such a request today - the directive is rejected before it gets
+ * here - so this is not a way to pin an exact JDK, whatever the shape of the
+ * code suggests. It is kept because the other half of the comparison, the
+ * concrete version read from a JDK's release file or from the index, is a full
+ * version and is parsed by the same components.
  */
 public final class RequestedVersion implements Comparable<RequestedVersion> {
 	private static final Pattern SYNTAX = Pattern.compile("\\d+(\\.\\d+)*\\+?");
