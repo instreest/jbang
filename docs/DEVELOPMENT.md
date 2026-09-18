@@ -160,7 +160,16 @@ A fourth job runs `misc/sync-upstream.sh --check`, which is what stops a
 mirrored file being edited here; see [Staying in step with
 JBang](#staying-in-step-with-jbang).
 
-A fifth runs the jar itself, on Java 11 and on Java 25. Every test above
+A fifth runs `misc/update-dist.sh --check`. `dist/` is a copy of the launcher
+scripts, and it is the copy people actually run, so a fix made in
+`src/main/scripts` and not carried over is a fix nobody installs. The same
+check also compares the file lists in `dist/install.sh` and `dist/install.cmd`
+against what `dist/` holds: the installers name every file by hand, because
+when they run there is no checkout to list and no directory index to read, so
+a file added to `dist/` has to be added to two lists in two languages and
+nothing used to say when it was not.
+
+A sixth runs the jar itself, on Java 11 and on Java 25. Every test above
 loads these classes from the build's own class path, which says nothing about
 whether `build/libs/jkite.jar` starts: the shadowed jar, its manifest, its
 merged service files and its `--release 11` bytecode are only exercised by

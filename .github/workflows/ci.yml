@@ -167,3 +167,18 @@ jobs:
       - name: Compare with upstream at the recorded revision
         shell: bash
         run: misc/sync-upstream.sh --check
+
+  # dist/ is what a project checks in, so it is the copy people actually run,
+  # and it is a copy: the launcher scripts are duplicated there from
+  # src/main/scripts. A fix made in one and not the other is a fix that is not
+  # in what anybody installs. The check for that existed and nothing ran it,
+  # which is the same as not having it.
+  dist:
+    name: dist/ matches the sources
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare dist/ with the launcher scripts
+        shell: bash
+        run: misc/update-dist.sh --check

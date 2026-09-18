@@ -59,16 +59,61 @@ bootstrapJavaVersion=25
 # jkite.jar. Drop the mapping once Temurin publishes windows-arm64.
 platforms="linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windows-arm64:windows-amd64"
 
+# The files install.sh and install.cmd fetch, as each of them lists them. They
+# name every file by hand because at the moment they run there is no checkout
+# to list and no directory index to read: they are fetched one at a time from a
+# release. So a file added to or removed from dist/ has to be added to or
+# removed from two lists, in two languages, and nothing says when it was not -
+# the installer just quietly installs an incomplete set, and the failure lands
+# on whoever runs the tool rather than on whoever changed dist/.
+installer_list() {  # $1 = the installer to read the list out of
+  case $1 in
+    *.cmd) sed -n 's/^set "files=\(.*\)"$/\1/p' "$1" ;;
+    *)     awk '/^files="/ { f = 1 }
+                f { line = $0
+                    sub(/^files="/, "", line)
+                    # the closing quote has to be looked for before it is
+                    # stripped, or the list runs on to the end of the file
+                    last = (line ~ /"/)
+                    sub(/".*$/, "", line)
+                    print line
+                    if (last) { exit }
+                  }' "$1" ;;
+  esac | tr ' \t\n' '\n\n\n' | grep -v '^$' | sort
+}
+
+check_installers() {
+  present=$(ls dist | sort)
+  bad=
+  for installer in dist/install.sh dist/install.cmd; do
+    listed=$(installer_list "$installer")
+    if [ "$listed" != "$present" ]; then
+      echo "$(basename "$installer") does not list what dist/ holds:" 1>&2
+      diff <(echo "$present") <(echo "$listed") \
+        | sed -e 's/^</  only in dist\/:     /' -e 's/^>/  only in the list: /' \
+        | grep -v '^[0-9-]' 1>&2
+      bad=1
+    fi
+  done
+  [ -z "$bad" ]
+}
+
 if [ "${1:-}" = "--check" ]; then
   stale=
   for from in $copied; do
     cmp -s "$from" "dist/$(basename "$from")" || stale="$stale $(basename "$from")"
   done
+  failed=
   if [ -n "$stale" ]; then
     echo "dist/ is out of date:$stale (run misc/update-dist.sh <version>)" 1>&2
+    failed=1
+  fi
+  check_installers || failed=1
+  if [ -n "$failed" ]; then
     exit 1
   fi
-  echo "dist/ is up to date with the launcher scripts and LICENSE" 1>&2
+  echo "dist/ is up to date with the launcher scripts and LICENSE," 1>&2
+  echo "and both installers list every file in it" 1>&2
   echo "(the jar and the JDK are downloads and are not checked here)" 1>&2
   exit 0
 fi
