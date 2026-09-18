@@ -178,3 +178,61 @@ shadowJar {
 }
 
 assemble.dependsOn shadowJar
+
+// The notices THIRD-PARTY.md says are in the jar have to actually be in it.
+// A dependency bump can drop one without failing anything: the build keeps
+// working, the jar keeps running, and the only thing that changes is that a
+// file promising attribution is no longer telling the truth. That is the kind
+// of thing nobody notices until somebody is checking the licences of what they
+// ship, which is exactly when it is expensive.
+tasks.register('verifyNotices') {
+	dependsOn shadowJar
+	description = 'Checks that jkite.jar carries the notices THIRD-PARTY.md claims for it'
+	group = 'verification'
+	def jar = shadowJar.archiveFile
+	def doc = file('THIRD-PARTY.md')
+	inputs.file(jar)
+	inputs.file(doc)
+	outputs.upToDateWhen { false }
+	doLast {
+		def required = [
+			'META-INF/NOTICE',
+			'META-INF/LICENSE-jkite.txt',
+			'META-INF/THIRD-PARTY.md',
+			'META-INF/licenses/Apache-2.0.txt',
+			'META-INF/licenses/MIT-slf4j.txt',
+			'META-INF/licenses/BSD-3-Clause-asm.txt',
+			'META-INF/licenses/EPL-2.0.txt',
+			'META-INF/licenses/MPL-2.0.txt',
+			// carried by plexus-utils at these paths, for the three files in it
+			// that are not Apache-2.0
+			'licenses/extreme.indiana.edu.license.TXT',
+			'licenses/thoughtworks.TXT',
+			'licenses/javolution.license.TXT',
+		]
+		def present = []
+		new java.util.zip.ZipFile(jar.get().asFile).withCloseable { zip ->
+			zip.entries().each { present << it.name }
+		}
+		def missing = required.findAll { !present.contains(it) }
+		if (missing) {
+			throw new GradleException(
+				"THIRD-PARTY.md says jkite.jar carries these and it does not: " + missing.join(', ')
+					+ "\nEither the jar lost them or the document is out of date; fix whichever it is.")
+		}
+		// the acknowledgement the Indiana University licence asks for in
+		// clause 3, which the merged NOTICE is what satisfies
+		def notice = new java.util.zip.ZipFile(jar.get().asFile).withCloseable { zip ->
+			zip.getInputStream(zip.getEntry('META-INF/NOTICE')).getText('UTF-8')
+		}
+		['Indiana University', 'javolution', 'ThoughtWorks'].each { who ->
+			if (!notice.contains(who)) {
+				throw new GradleException(
+					"META-INF/NOTICE no longer acknowledges " + who
+						+ ", which plexus-utils' own NOTICE does and THIRD-PARTY.md says this jar does too.")
+			}
+		}
+	}
+}
+
+check.dependsOn verifyNotices

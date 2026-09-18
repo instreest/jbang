@@ -38,7 +38,8 @@ Classpath Exception).
 | Library | License |
 | --- | --- |
 | [MIMA](https://github.com/maveniverse/mima) (`eu.maveniverse.maven.mima:*`) | Eclipse Public License 2.0 |
-| [Apache Maven Resolver](https://maven.apache.org/resolver/) including its HTTP transport, and Apache Maven model/settings builders (`org.apache.maven.resolver:*`, `org.apache.maven:*`) with their Plexus dependencies | Apache License 2.0 |
+| [Apache Maven Resolver](https://maven.apache.org/resolver/) including its HTTP transport, and Apache Maven model/settings builders (`org.apache.maven.resolver:*`, `org.apache.maven:*`) | Apache License 2.0 |
+| The Plexus components those pull in (`org.codehaus.plexus:plexus-utils`, `plexus-interpolation`, `plexus-cipher`, `plexus-sec-dispatcher`) | Apache License 2.0, except for three parts of `plexus-utils` — see below |
 | [Apache HttpClient / HttpCore](https://hc.apache.org/) (`org.apache.httpcomponents:*`) and the Mozilla public suffix list it carries, pulled in by that transport | Apache License 2.0 / MPL-2.0 for the list |
 | [Apache Commons Compress](https://commons.apache.org/proper/commons-compress/), with Commons IO, Lang and Codec (`org.apache.commons:*`, `commons-io:*`, `commons-codec:*`) | Apache License 2.0 |
 | [Gson](https://github.com/google/gson) (`com.google.code.gson:gson`) | Apache License 2.0 |
@@ -65,6 +66,7 @@ repository.
 | `META-INF/licenses/EPL-2.0.txt` | MIMA |
 | `META-INF/licenses/MPL-2.0.txt` | the public suffix list carried by Apache HttpClient |
 | `META-INF/LICENSE-jkite.txt` | JBang, and this fork |
+| `licenses/extreme.indiana.edu.license.TXT`, `licenses/thoughtworks.TXT`, `licenses/javolution.license.TXT` | the three inside `plexus-utils`, carried at the paths that artifact uses |
 | `META-INF/THIRD-PARTY.md` | this file |
 
 Neither the Eclipse Public License 2.0 (MIMA) nor the Mozilla Public License
@@ -77,6 +79,25 @@ MIMA is distributed under the Eclipse Public License 2.0, which asks that
 recipients be told where to get the source: it is at
 <https://github.com/maveniverse/mima>, and every released version is on Maven
 Central with its `-sources` jar.
+
+### The three licenses inside `plexus-utils`
+
+`plexus-utils` is an Apache-2.0 artifact whose own `NOTICE` and `licenses/`
+directory say that some of its files are not. All of them are in `jkite.jar`,
+because a shaded jar takes the classes rather than the packages they came in.
+They are listed here because a table row reading "Apache License 2.0" is not
+true of them, and because two of the three ask for an acknowledgement that a
+license file alone does not give.
+
+| Files | Terms |
+| --- | --- |
+| `org.codehaus.plexus.util.xml.pull.MXParser`, `XmlPullParser`, `XmlPullParserException` — the XML pull parser the Maven model builder reads POMs with | Indiana University Extreme! Lab Software License 1.1.1. A BSD-style license whose clause 3 asks that redistributions acknowledge the Extreme! Lab; `META-INF/NOTICE` in `jkite.jar` does, and so does this paragraph |
+| `org.codehaus.plexus.util.cli.Commandline`, `StreamPumper`, `StreamConsumer` | The CruiseControl license, Copyright (c) 2001-2003 ThoughtWorks, Inc.: BSD 3-Clause in substance |
+| `org.codehaus.plexus.util.FastMap` | Declared public domain by its author (J.A.D.E., later Javolution). `licenses/javolution.license.TXT` travels with it and is kept |
+
+Nothing here restricts redistribution beyond what MIT already allows, and
+nothing here is copyleft. What they ask for is attribution, which is why they
+are written down rather than summarised away.
 
 The exact list of bundled artifacts can be printed with
 `./gradlew dependencies --configuration runtimeClasspath`.
