@@ -117,9 +117,21 @@ an implementation detail rather than this project's API.
 The built jar is cached under a directory named after a hash of everything the
 build is made of: the bytes of every source and resource the script declares,
 the name each resource gets inside the jar, the compile options, the requested
-Java version, the manifest entries and jkite's own version. So an unchanged
-tool is never compiled twice, and a tool that would build differently is never
-served from the jar of the build before it.
+Java version, the manifest entries, jkite's own version, and what the
+dependencies resolved to - the coordinate and the bytes, not the `//DEPS` line,
+which is in the source bytes already. So an unchanged tool is never compiled
+twice, and a tool that would build differently is never served from the jar of
+the build before it.
+
+The dependencies are in there because they can move while the script does not:
+a snapshot rebuilt, a coordinate republished. The jar is compiled against that
+class path and then run against whatever is resolved next time, and a mismatch
+between the two shows up as a `NoSuchMethodError` from code nobody touched
+rather than as a rebuild.
+
+javac is told `-encoding UTF-8`, which is how jkite read the same file to find
+its directives. Left to itself javac uses the platform's default charset, and
+the same source would compile into different class files on two machines.
 
 The jar that comes out is written down too: its size and digest go into
 `<name>.jar.id` next to it, and a jar that no longer matches is built again

@@ -362,6 +362,16 @@ public class Project {
 			update(digest, "main", declaredMainClass);
 			compileOptions.forEach(option -> update(digest, "option", option));
 			manifestAttributes.forEach((key, value) -> update(digest, "manifest", key + "=" + value));
+			// What the dependencies resolved to, not the //DEPS lines - those are
+			// in the source bytes below already. What is not is what they resolve
+			// to, and that moves while the script does not: a coordinate
+			// republished, a snapshot, a version a BOM manages. The jar is
+			// compiled against that class path and then run against whatever is
+			// resolved next time, so without this a jar built against one set of
+			// classes is handed a different set to run on, and the mismatch shows
+			// up as a NoSuchMethodError rather than as a rebuild.
+			resolveClassPath().forEach(artifact -> update(digest, "dependency",
+					artifact.getCoordinate() + " " + artifact.getFingerprint()));
 			// the files, by content rather than by the text they decode to
 			sources.forEach(src -> update(digest, "source", src.getFileName() + " " + contentHash(src)));
 			resources.forEach(res -> update(digest, "resource",

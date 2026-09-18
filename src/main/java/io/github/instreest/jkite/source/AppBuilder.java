@@ -189,8 +189,12 @@ public class AppBuilder {
 		return null;
 	}
 
-	private void compile(Path compileDir) throws IOException {
-		Jdk jdk = project.getJdk();
+	/**
+	 * What javac is asked to do. Separated from running it so that the options
+	 * can be read back: several of them are there for a reason that is not
+	 * visible in the result of a successful compile.
+	 */
+	List<String> compileCommand(Path compileDir, Jdk jdk) {
 		List<String> cmd = new ArrayList<>();
 		cmd.add(jdk.javacCmd());
 		if (project.enablePreview()) {
@@ -198,6 +202,15 @@ public class AppBuilder {
 			cmd.add("-source");
 			cmd.add(Integer.toString(jdk.majorVersion()));
 		}
+		// The directives were read as UTF-8, so javac has to read the same file
+		// the same way. Left to itself it uses the platform's default charset,
+		// which is UTF-8 on a recent JDK but not on an older one and not on a
+		// Windows machine with a legacy code page - and then the same source
+		// builds differently on two machines, a string literal or an identifier
+		// coming out mangled rather than as an error anyone would see. Before
+		// the script's own options, because javac takes the last -encoding it
+		// is given: a script that means another encoding can still say so.
+		cmd.addAll(Arrays.asList("-encoding", "UTF-8"));
 		cmd.addAll(project.getCompileOptions());
 		String cp = project.getDependencyClassPath();
 		if (!cp.isEmpty()) {
@@ -219,6 +232,11 @@ public class AppBuilder {
 		// command line is long enough to go through an @-file.
 		cmd.addAll(Arrays.asList("-sourcepath", compileDir.toAbsolutePath().toString()));
 		cmd.addAll(project.getSources().stream().map(Path::toString).collect(Collectors.toList()));
+		return cmd;
+	}
+
+	private void compile(Path compileDir) throws IOException {
+		List<String> cmd = compileCommand(compileDir, project.getJdk());
 
 		Util.infoMsg("Building jar for " + project.getMainSource().getFileName() + "...");
 		Util.verboseMsg("Compile: " + String.join(" ", cmd));
