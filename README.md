@@ -230,6 +230,14 @@ about the dependencies. `--update` asks before replacing an installation.
 Enter accepts. The question and its answer go to the terminal, never to stdout,
 so a pipeline built on a tool's output is unaffected.
 
+"On a terminal" means something slightly different on each launcher, and the
+difference shows only when stdin is redirected and nothing else is. The POSIX
+launcher opens the terminal device itself, so `jkite Tool.java < data.txt` at a
+terminal is still asked. `jkite.cmd` decides from stdin, so the same command
+counts as having no terminal: with `auto` it says what it is fetching and goes
+ahead, and with `always` it stops. Neither downloads anything unannounced,
+which is what the setting is for; pass `--yes` if you meant to allow it.
+
 ```yaml
 - run: jkite/jkite tools/Report.java
   env:
