@@ -137,34 +137,60 @@ class TestSubstAndJunction extends AbstractScriptTest {
 	}
 
 	/**
-	 * The fact the toRealPath() decision turns on, measured on its own: does
-	 * asking the file system for the real path put the Japanese directory
-	 * back?
+	 * The fact the toRealPath() decision turns on, measured on its own, for a
+	 * subst drive.
 	 *
-	 * If it does, then switching Project from normalize() to toRealPath()
-	 * would break both cases above, and the symlink correctness it buys costs
-	 * the only workaround a user has for a name their code page cannot hold.
+	 * Measured answer: toRealPath() leaves Z:\\Report.java as
+	 * Z:\\Report.java. A subst drive is a per-session drive-letter mapping
+	 * held by the object manager, not a reparse point in the file system, so
+	 * asking the file system for the real path does not see through it. I
+	 * expected the opposite and was wrong.
+	 *
+	 * So switching Project from normalize() to toRealPath() would not take
+	 * the subst workaround away, and this test is what would say so if a
+	 * future Windows or JDK changed its mind.
 	 */
 	@Test
 	@EnabledOnOs(OS.WINDOWS)
-	void toRealPathPutsTheJapaneseDirectoryBack() throws Exception {
-		Path real = tempDir.resolve(JAPANESE + "-real");
+	void toRealPathLeavesASubstDriveAlone() throws Exception {
+		Path real = tempDir.resolve(JAPANESE + "-real-subst");
 		script(real);
 		String drive = subst(real);
-		Path link = tempDir.resolve("ascii-link-real");
-		RunResult made = cmd("mklink /J \"" + link + "\" \"" + real + "\"");
 		try {
-			Path viaSubst = Paths.get(drive + "\\Report.java").toRealPath();
-			assertTrue(viaSubst.toString().contains(JAPANESE),
-					"subst survives toRealPath, so it would stay a workaround: " + viaSubst);
+			Path resolved = Paths.get(drive + "\\Report.java").toRealPath();
 
-			if (made.exitCode == 0) {
-				Path viaJunction = link.resolve("Report.java").toRealPath();
-				assertTrue(viaJunction.toString().contains(JAPANESE),
-						"the junction survives toRealPath: " + viaJunction);
-			}
+			assertTrue(!resolved.toString().contains(JAPANESE),
+					"toRealPath now sees through subst, so it would take the workaround away: "
+							+ resolved);
 		} finally {
 			cmd("subst " + drive + " /d");
 		}
+	}
+
+	/**
+	 * The same for a junction, which is a different mechanism and may well
+	 * answer differently: a junction IS a reparse point in the file system,
+	 * which is exactly what toRealPath() is defined to follow.
+	 *
+	 * Whichever way it comes out, it is worth having written down, because
+	 * "use a junction" and "use subst" are advice that would otherwise look
+	 * interchangeable.
+	 */
+	@Test
+	@EnabledOnOs(OS.WINDOWS)
+	void toRealPathFollowsAJunction() throws Exception {
+		Path real = tempDir.resolve(JAPANESE + "-real-junction");
+		script(real);
+		Path link = tempDir.resolve("ascii-link-real");
+		RunResult made = cmd("mklink /J \"" + link + "\" \"" + real + "\"");
+		if (made.exitCode != 0) {
+			abort("mklink /J is not usable here: " + made.stdout + made.stderr);
+		}
+
+		Path resolved = link.resolve("Report.java").toRealPath();
+
+		assertTrue(resolved.toString().contains(JAPANESE),
+				"a junction survives toRealPath too, so it is as good a workaround as subst: "
+						+ resolved);
 	}
 }

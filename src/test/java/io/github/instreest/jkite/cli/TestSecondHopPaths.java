@@ -202,9 +202,13 @@ class TestSecondHopPaths extends AbstractScriptTest {
 	 * is not sufficient: on its own it makes no failing case pass, it removes
 	 * one of the two reasons.
 	 *
-	 * This asserts the distinction rather than just the failure, so that if
-	 * jkite ever starts putting a bad path of its own back, this test fails
-	 * for a different reason and says which.
+	 * What changed since: jkite now looks at the path before starting javac
+	 * and refuses it with a message that names the path, the encoding and
+	 * what to do. So the failure is still the script's own name - that part
+	 * is unchanged and unchangeable - but it is now jkite saying so rather
+	 * than javac's "Invalid filename". This asserts that, rather than just
+	 * the failure, so that if jkite ever starts putting a bad path of its
+	 * own back, this test fails for a different reason and says which.
 	 */
 	@Test
 	@EnabledOnOs(OS.WINDOWS)
@@ -217,11 +221,12 @@ class TestSecondHopPaths extends AbstractScriptTest {
 		assertTrue(result.exitCode != 0,
 				"javac now takes a source path outside the code page; this test and the note in "
 						+ "README can go: " + said);
-		assertTrue(said.contains("Invalid filename"),
-				"it fails, but not on the source file - so something else is handing javac a bad "
-						+ "path again: " + said);
-		assertTrue(!said.contains("checkDirectory"),
-				"it is failing on the build directory again, which is jkite's own and was made "
-						+ "ASCII on purpose: " + said);
+		assertTrue(said.contains("The path of the script"),
+				"it fails, but not by naming the script - so something else is handing javac a "
+						+ "bad path again: " + said);
+		assertTrue(said.contains("windows-1252") || said.contains("windows-"),
+				"it did not say which encoding could not hold it: " + said);
+		assertTrue(!said.contains("Invalid filename") && !said.contains("checkDirectory"),
+				"it still gets as far as javac, so the check did not look at this path: " + said);
 	}
 }
