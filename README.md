@@ -295,26 +295,26 @@ which is what the setting is for; pass `--yes` if you meant to allow it.
 
 ## Paths
 
-A project can live where your projects live. On Linux and macOS, non-ASCII
-directory names work — Japanese, Cyrillic and accented Latin are all tested.
-Paths past Windows' 260-character limit work everywhere, Windows included.
+A project can live where your projects live. Non-ASCII directory names work —
+Japanese, Cyrillic and accented Latin are all tested, on Linux, macOS and
+Windows — and so do paths past Windows' 260-character limit.
 
-**On Windows, do not install `jkite/` under a directory whose name your console
-code page cannot hold.** `jkite.cmd` finds its own jar through `%~dp0`, which
-comes back through that code page — 932 on a Japanese machine, 1252 on a
-Western one, never all of Unicode — so a name outside it arrives as `?` and the
-run stops with `Unable to access jarfile`. A Japanese name under a Japanese
-Windows is fine; a Japanese name under an English one is not, and neither is a
-mix. The `~\.jkite` cache is unaffected: it is passed in environment variables,
-which do not go through the code page.
+Windows needed work for that, and the reason is worth knowing if you hit
+something like it elsewhere. `java.exe` converts its own command line to the
+machine's ANSI code page, so a jar under a path that page cannot hold arrives
+as question marks and Java says `Unable to access jarfile`. It is not the
+console's code page, so `chcp` does not help. `jkite.cmd` hands Java the 8.3
+short name of its jar, which is ASCII whatever the directory is called.
 
-One exception, and it is the JDK's rather than jkite's: a character outside the
-Basic Multilingual Plane, which in practice means an emoji, anywhere in the path
-that `jkite/` is installed under. `java -jar` then fails before anything of
-jkite runs, with `Error decoding percent encoded characters`, because the JDK
-cannot turn that path into the URL it puts on its own class path. Nothing jkite
-does can reach that. An emoji elsewhere — in a script's name, in a directory
-the script reads — is fine.
+That covers the path jkite controls. The same limit still applies to a **script
+name** you pass on Windows: `jkite\jkite.cmd tools\レポート.java` reaches Java
+through the same conversion. Keep script filenames inside your code page, or
+inside ASCII; the directories they sit in are fine.
+
+One more, and it is the JDK's rather than jkite's: a character outside the Basic
+Multilingual Plane — in practice an emoji — anywhere in the path `jkite/` is
+installed under. `java -jar` then fails before anything of jkite runs, with
+`Error decoding percent encoded characters`. An emoji elsewhere is fine.
 
 ## Requirements
 

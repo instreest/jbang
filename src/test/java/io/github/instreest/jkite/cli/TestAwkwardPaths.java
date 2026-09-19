@@ -119,52 +119,13 @@ class TestAwkwardPaths extends AbstractScriptTest {
 	 * paths carrying characters the platform's legacy encoding may not have.
 	 */
 	@Test
-	@EnabledOnOs({ OS.LINUX, OS.MAC })
 	void aProjectInAnAccentedDirectoryRuns() throws Exception {
 		runInADirectoryNamed(LATIN);
 	}
 
 	@Test
-	@EnabledOnOs({ OS.LINUX, OS.MAC })
 	void aProjectInAJapaneseOrCyrillicDirectoryRuns() throws Exception {
 		runInADirectoryNamed(WIDE);
-	}
-
-	/**
-	 * What Windows does instead, recorded rather than wished away.
-	 *
-	 * Installed under a directory whose name the console's active code page
-	 * cannot hold, jkite.cmd cannot find its own jar: java is handed
-	 * "...\\??????-??????\\jkite\\jkite.jar" and says it cannot access it. The
-	 * path is mangled between the batch file and java, not before - the test
-	 * hands cmd.exe a correct UTF-16 command line, and Windows itself has no
-	 * trouble with the directory. What cannot hold it is %~dp0, which comes
-	 * back through the code page the console happens to be in: 1252 on the CI
-	 * runner, 932 on a Japanese machine, and never all of Unicode.
-	 *
-	 * The cache directory is fine, which is the useful half of this: it
-	 * arrives in an environment variable, and those are UTF-16 all the way.
-	 * See aCacheDirectoryWithANonAsciiNameWorks, which passes here.
-	 *
-	 * The candidate fix is "chcp 65001" at the top of jkite.cmd, and it needs
-	 * judging on a real Windows machine rather than from a CI log: it changes
-	 * the console for whatever runs afterwards, and batch parsing under
-	 * UTF-8 has its own history. Until then this test says what happens, and
-	 * fails the day it stops happening.
-	 */
-	@Test
-	@EnabledOnOs(OS.WINDOWS)
-	void aNonAsciiInstallDirectoryIsMangledByTheConsoleCodePage() throws Exception {
-		Path base = Files.createDirectories(tempDir.resolve(WIDE));
-		Path launcher = installInto(base.resolve("jkite"), CMD_SCRIPT);
-
-		RunResult result = runProcess(command(launcher, "exit", "3"), env(base));
-
-		assertEquals(1, result.exitCode,
-				"jkite.cmd now works under a non-ASCII path; delete this test, enable the two "
-						+ "above on Windows and take the note out of README: " + result.stderr);
-		assertTrue(result.stderr.contains("Unable to access jarfile"), result.stderr);
-		assertTrue(result.stderr.contains("?"), "the path was not mangled after all: " + result.stderr);
 	}
 
 	private void runInADirectoryNamed(String name) throws Exception {
@@ -287,9 +248,14 @@ class TestAwkwardPaths extends AbstractScriptTest {
 	 *   SHORT  - does it open the jar when given the 8.3 path, which is
 	 *            ASCII whatever the directory is called
 	 *
-	 * LONG failing while CHILD passes puts it in java.exe, which converts its
-	 * command line to the machine's ANSI code page - and that is not what
-	 * chcp changes. SHORT passing then names the fix.
+	 * The answer, on a runner in code page 437 with the installation under a
+	 * Japanese name: VAR_OK, CHILD_OK, LONG_FAIL, SHORT_OK. So it is java.exe,
+	 * which converts its command line to the machine's ANSI code page - not
+	 * the console's, which is all chcp changes - and the 8.3 name is the way
+	 * past it. That is what jkite.cmd hands it now.
+	 *
+	 * This stays as the reason that change exists, and as the notice if the
+	 * reason stops holding.
 	 */
 	@Test
 	@EnabledOnOs(OS.WINDOWS)
@@ -320,10 +286,11 @@ class TestAwkwardPaths extends AbstractScriptTest {
 		assertTrue(said.contains("VAR_OK"), "the name was lost in a variable. " + said);
 		assertTrue(said.contains("CHILD_OK"), "the name was lost handing it to a child. " + said);
 		assertTrue(said.contains("SHORT_OK"),
-				"even the 8.3 path does not work, so there is no easy fix. " + said);
-		assertTrue(said.contains("LONG_OK"),
-				"java.exe cannot open a jar under this path while cmd.exe can, and the 8.3 path "
-						+ "works - so the fix is to hand java the short path. " + said);
+				"the 8.3 path stopped working, and jkite.cmd hands java that. " + said);
+		assertTrue(said.contains("LONG_FAIL"),
+				"java.exe now opens a jar under a path its code page cannot hold. If that holds "
+						+ "for every Java jkite supports, :to_short_path in jkite.cmd can go and "
+						+ "this test with it. " + said);
 	}
 
 	private static Path scriptForThisPlatform() {

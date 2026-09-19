@@ -73,7 +73,23 @@ if not exist "%jar_path%" exit /b 1
 
 rem --- 3. Which Java to use -------------------------------------------------
 call :find_java || exit /b 1
-set launch_cmd="%java_exec%" %JKITE_JAVA_OPTIONS% -jar "%jar_path%"
+rem The jar goes to java by its 8.3 name, which is ASCII whatever the
+rem directory is called. java.exe converts its own command line to the
+rem machine's ANSI code page, so a path outside that page - a project under
+rem C:\Users\<a Japanese name> on an English Windows, and the other way round -
+rem reaches it as question marks and it says "Unable to access jarfile".
+rem
+rem Measured rather than guessed: on a runner in code page 437, with the
+rem installation under a Japanese directory name, cmd.exe could see the file
+rem through a variable and could hand the name to a child process, and
+rem java.exe could not open the jar at that path but could at the 8.3 one.
+rem So this is java's limit and not the console's, and chcp does not touch it.
+rem
+rem jar_path itself is left alone: it is what the messages say, and %~s only
+rem reads well to a machine. Where 8.3 names are turned off for a volume
+rem this gives the long name back unchanged, which is no worse than before.
+call :to_short_path jar_arg "%jar_path%"
+set launch_cmd="%java_exec%" %JKITE_JAVA_OPTIONS% -jar "%jar_arg%"
 
 rem --- 4. Launch ------------------------------------------------------------
 rem The jar does the rest: it builds the script and runs it as a child process
@@ -149,7 +165,9 @@ if not defined java_exec goto :jar_version_nojava
 del /f /q "%search_err%" 2>nul
 set "probe=%TEMP%\jkite-%run_id%-jarversion.txt"
 set "probe_err=%TEMP%\jkite-%run_id%-jarversion-err.txt"
-"%java_exec%" -jar "%~1" --version > "%probe%" 2> "%probe_err%"
+rem by its 8.3 name, for the reason given where launch_cmd is built
+call :to_short_path version_jar "%~1"
+"%java_exec%" -jar "%version_jar%" --version > "%probe%" 2> "%probe_err%"
 for /f "usebackq delims=" %%V in ("%probe%") do if not defined found set "found=%%V"
 if not defined found call :say_jar_not_asked "%probe_err%"
 del /f /q "%probe%" "%probe_err%" 2>nul
@@ -438,3 +456,16 @@ if /i not "%net_mode%"=="always" exit /b 0
 echo There is no terminal to ask on and JKITE_CONFIRM_DOWNLOADS=always. 1>&2
 echo Set it to auto or never, or pass --yes, to allow the download. 1>&2
 exit /b 1
+
+rem ===========================================================================
+rem Paths
+rem ===========================================================================
+
+rem Sets %1 to the 8.3 form of the path in %2. Only for a path about to be
+rem handed to java.exe; see where launch_cmd is built for why. A path that has
+rem no short form - 8.3 generation turned off for the volume, or a file that is
+rem not there - comes back unchanged, which is what it would have been anyway.
+:to_short_path
+for %%I in ("%~2") do set "%~1=%%~sI"
+if not defined %~1 set "%~1=%~2"
+exit /b 0
