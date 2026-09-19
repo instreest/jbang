@@ -69,9 +69,9 @@ platforms="linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windo
 installer_list() {  # $1 = the installer to read the list out of
   case $1 in
     *.cmd) sed -n 's/^set "files=\(.*\)"$/\1/p' "$1" ;;
-    *)     awk '/^files="/ { f = 1 }
+    *)     awk '/^[[:space:]]*files="/ { f = 1 }
                 f { line = $0
-                    sub(/^files="/, "", line)
+                    sub(/^[[:space:]]*files="/, "", line)
                     # the closing quote has to be looked for before it is
                     # stripped, or the list runs on to the end of the file
                     last = (line ~ /"/)

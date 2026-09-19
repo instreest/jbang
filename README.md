@@ -82,6 +82,25 @@ A project that would rather not depend on the download can put a
 `jkite.jar` into `jkite/` itself: it wins over the properties, and then
 only a JDK is ever fetched.
 
+### What is trusted
+
+Worth being plain about, since the first command above is `curl ... | bash`.
+
+What that command trusts is https and GitHub: there is no signature on
+`install.sh`, and there is nothing a first install could check one against.
+Every other download is verified. The installer fetches the rest of `jkite/`
+from the same release over https, and everything after that is pinned by
+SHA-256 in the `jkite.properties` you commit — so `jkite.jar` and the JDK,
+which are the large downloads and the ones that become code, are checked
+against a value in your own repository rather than against whatever the
+network serves.
+
+Read `install.sh` before running it if you would rather not pipe it:
+`curl -fsSL <url> -o install.sh`, read it, `bash install.sh`. It is about a
+hundred lines. A dropped connection cannot leave a half-installation either
+way — the whole script is one function called on its last line, so a truncated
+copy does nothing at all rather than part of the job.
+
 ## Updating
 
 Which jkite a project runs is a property of the project, as it is for the
