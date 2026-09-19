@@ -269,46 +269,61 @@ class TestAwkwardPaths extends AbstractScriptTest {
 	}
 
 	/**
-	 * Where the path is lost, asked in a way that cannot be answered by an
-	 * encoding artefact.
+	 * Which link in the chain loses the path, asked so that no answer can be
+	 * an encoding artefact.
 	 *
-	 * The symptom is java saying "Unable to access jarfile ...??????...", and
-	 * those question marks prove nothing on their own: java writes that
-	 * message to stderr through the console code page, so a path that arrived
-	 * perfectly intact would still be printed with them. Two different faults
-	 * produce the same picture - cmd.exe losing the name when it expands
-	 * %~dp0, or the name surviving as far as java and being lost there - and
-	 * they have different fixes. chcp only helps the first.
+	 * java's "Unable to access jarfile ...??????..." proves nothing by
+	 * itself: it is written to stderr through the console code page, so an
+	 * intact path prints the same way. The first probe already answered the
+	 * first question - cmd.exe can see a file next to its own batch file
+	 * under this name, so %~dp0 is fine and chcp is not the fix. These carry
+	 * on down the chain, each one a yes-or-no that goes through the
+	 * filesystem or an exit code rather than through any text:
 	 *
-	 * So this asks cmd.exe a yes-or-no question instead of reading anything
-	 * back: from inside a batch file in that directory, does the jar next to
-	 * me exist? "if exist" goes through the filesystem, not through a code
-	 * page, and writing FOUND or MISSING is pure ASCII either way. FOUND means
-	 * %~dp0 is intact inside cmd and the loss happens on the way to java;
-	 * MISSING means cmd never had it.
+	 *   VAR    - does the name survive being put in a variable
+	 *   CHILD  - does it survive being handed to a child process on its
+	 *            command line, asked of cmd.exe, which is Unicode throughout
+	 *   LONG   - does java.exe open the jar when given that path
+	 *   SHORT  - does it open the jar when given the 8.3 path, which is
+	 *            ASCII whatever the directory is called
+	 *
+	 * LONG failing while CHILD passes puts it in java.exe, which converts its
+	 * command line to the machine's ANSI code page - and that is not what
+	 * chcp changes. SHORT passing then names the fix.
 	 */
 	@Test
 	@EnabledOnOs(OS.WINDOWS)
-	void whereTheNonAsciiPathIsActuallyLost() throws Exception {
+	void whichLinkLosesTheNonAsciiPath() throws Exception {
 		Path base = Files.createDirectories(tempDir.resolve(WIDE));
 		Path dir = base.resolve("jkite");
 		installInto(dir, CMD_SCRIPT);
 		Path probe = dir.resolve("probe.cmd");
 		Files.write(probe, ("@echo off\r\n"
-				+ "if exist \"%~dp0jkite.jar\" (echo FOUND) else (echo MISSING)\r\n"
-				+ "chcp\r\n").getBytes(StandardCharsets.US_ASCII));
+				+ "chcp\r\n"
+				+ "set \"d=%~dp0\"\r\n"
+				+ "if exist \"%d%jkite.jar\" (echo VAR_OK) else (echo VAR_LOST)\r\n"
+				+ "cmd /c if exist \"%d%jkite.jar\" echo CHILD_OK\r\n"
+				+ "for %%I in (\"%d%.\") do set \"s=%%~sI\"\r\n"
+				+ "echo SHORTPATH=%s%\r\n"
+				+ "\"%JAVA_HOME%\\bin\\java.exe\" -jar \"%d%jkite.jar\" exit 3 >nul 2>&1\r\n"
+				+ "if errorlevel 3 (echo LONG_OK) else (echo LONG_FAIL)\r\n"
+				+ "\"%JAVA_HOME%\\bin\\java.exe\" -jar \"%s%\\jkite.jar\" exit 3 >nul 2>&1\r\n"
+				+ "if errorlevel 3 (echo SHORT_OK) else (echo SHORT_FAIL)\r\n")
+			.getBytes(StandardCharsets.US_ASCII));
 
-		RunResult result = runProcess(Arrays.asList("cmd.exe", "/c", probe.toString()),
-				new HashMap<>(System.getenv()));
+		Map<String, String> env = new HashMap<>(System.getenv());
+		env.put("JAVA_HOME", System.getProperty("java.home"));
+		RunResult result = runProcess(Arrays.asList("cmd.exe", "/c", probe.toString()), env);
 
-		// Not an assertion about which one is right - it is a measurement, and
-		// the message carries it into the log either way.
-		assertTrue(result.stdout.contains("FOUND") || result.stdout.contains("MISSING"),
-				"the probe said neither: " + result.stdout + result.stderr);
-		assertTrue(result.stdout.contains("FOUND"),
-				"cmd.exe cannot see a file next to its own batch file under this name, so %~dp0 is "
-						+ "where the name is lost and chcp is the thing to try. Probe said: "
-						+ result.stdout.trim());
+		String said = result.stdout.trim() + result.stderr.trim();
+		// The message is the measurement: it goes into the CI log either way.
+		assertTrue(said.contains("VAR_OK"), "the name was lost in a variable. " + said);
+		assertTrue(said.contains("CHILD_OK"), "the name was lost handing it to a child. " + said);
+		assertTrue(said.contains("SHORT_OK"),
+				"even the 8.3 path does not work, so there is no easy fix. " + said);
+		assertTrue(said.contains("LONG_OK"),
+				"java.exe cannot open a jar under this path while cmd.exe can, and the 8.3 path "
+						+ "works - so the fix is to hand java the short path. " + said);
 	}
 
 	private static Path scriptForThisPlatform() {
