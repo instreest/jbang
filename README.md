@@ -316,8 +316,23 @@ directory above it, and `JKITE_DIR`. Not just the filename: jkite hands javac
 the absolute path of the source, so every directory between the drive and the
 file is on that command line, and one Japanese folder is enough. A Japanese
 name on a Japanese Windows is inside the code page and works; it is the mixed
-case that does not, such as anything Japanese under an English install, where
-the run stops with `Invalid filename`.
+case that does not, such as anything Japanese under an English install. jkite
+checks before it starts `javac` and stops with a message naming the path and
+the code page, rather than letting `javac` say `Invalid filename`.
+
+If renaming the directory is not an option, **give it an ASCII path with
+`subst`**:
+
+```
+subst X: "C:\Users\name\プロジェクト"
+X:
+jkite Report.java
+```
+
+Work through `X:` and nothing outside the code page ever reaches `javac`. It
+needs no administrator rights and changes nothing about the machine — only
+this session, and `subst X: /d` undoes it. A junction (`mklink /J`) works the
+same way. Both are measured on the Windows CI job rather than assumed.
 
 jkite no longer adds to that list: the build directory used to be named after
 the script, so `レポート.java` put its own name into a path of jkite's making as

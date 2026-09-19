@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -94,10 +95,20 @@ class TestCacheLock {
 
 	private Process holder;
 
+	/**
+	 * Waits, rather than only asking. destroyForcibly() returns as soon as
+	 * the kill is sent, and on Windows the holder still has the lock file
+	 * open until it has actually gone - which is after JUnit has tried to
+	 * delete the temp directory, so the test fails on cleanup having passed.
+	 * POSIX unlinks an open file happily, which is why this only ever showed
+	 * up on the Windows job.
+	 */
 	@AfterEach
-	void stopTheHolder() {
+	void stopTheHolder() throws InterruptedException {
 		if (holder != null) {
 			holder.destroyForcibly();
+			assertTrue(holder.waitFor(30, TimeUnit.SECONDS),
+					"the holder would not die, so the lock file is still open");
 		}
 	}
 
