@@ -327,14 +327,37 @@ done
 
 abs_jbang_dir=$(script_dir)
 
-# Windows shells (Cygwin, Git Bash, MSYS2) hand over to the Windows launcher: it
-# only needs what Windows ships with, whereas jkite-bootstrap-jdk would need
-# unzip, which Git Bash for one does not have. The shell converts POSIX paths
-# in the arguments for cmd.exe.
+# Windows shells (Cygwin, Git Bash, MSYS2) hand over to the Windows launcher.
+# The reason is the JDK: Temurin ships Windows as a .zip, and
+# jkite-bootstrap-jdk unpacks .tar.gz and nothing else - jkite-bootstrap-jdk.cmd
+# is what knows how to unpack the Windows one. Everything the .cmd side needs
+# ships with Windows.
+#
+# Without jkite.cmd beside us there is nothing to hand over to, and the POSIX
+# path is taken. That is not a silent wrong answer: jkite-bootstrap-jdk matches
+# uname -s against Linux and Darwin only and refuses a MINGW/MSYS/CYGWIN one by
+# name, before any download. Checked.
+#
+# A caution about the arguments. MSYS and Cygwin rewrite arguments that look
+# like absolute POSIX paths into Windows ones on the way to a native program.
+# For the script that is wanted - "jkite /c/work/Tool.java" arrives as a path
+# cmd.exe can open - but it happens to every other argument too, so a tool's
+# own "--path=/api/v1" arrives rewritten, silently. Set MSYS_NO_PATHCONV=1
+# (Git Bash) or MSYS2_ARG_CONV_EXCL='*' (MSYS2) for a run that must not have
+# that done to it; the script path is converted here explicitly and so keeps
+# working either way.
 case "$(uname -s)" in
   CYGWIN*|MINGW*|MSYS*)
     if [ -f "$abs_jbang_dir/jkite.cmd" ]; then
-      cmd /c "$(cygpath -m "$abs_jbang_dir"/jkite.cmd)" "$@"
+      # cygpath ships with all three of these shells. If it is somehow not
+      # there, stop rather than running "cmd /c ''" with the arguments after
+      # it, which would have cmd.exe run the first of them as a command.
+      win_cmd=$(cygpath -m "$abs_jbang_dir/jkite.cmd") || exit 1
+      if [ -z "$win_cmd" ]; then
+        echo "cygpath could not convert $abs_jbang_dir/jkite.cmd" 1>&2
+        exit 1
+      fi
+      cmd /c "$win_cmd" "$@"
       exit $?
     fi
     ;;

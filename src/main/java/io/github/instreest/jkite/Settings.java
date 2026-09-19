@@ -91,8 +91,42 @@ public final class Settings {
 
 	public static Path getConfigDir() {
 		String jd = System.getenv(ENV_DIR);
-		Path dir = jd != null ? Paths.get(jd) : Paths.get(System.getProperty("user.home")).resolve(".jkite");
+		Path dir = jd != null ? Paths.get(jd) : homeDir().resolve(".jkite");
 		return mkdirs(dir);
+	}
+
+	/**
+	 * Where the launcher would have put things, which is what this has to
+	 * agree with.
+	 *
+	 * The launchers decide this before there is a JVM to ask: the POSIX one
+	 * uses $HOME, jkite.cmd uses %USERPROFILE%. Java's user.home is neither of
+	 * those on Linux - it comes from the passwd entry - so anything that sets
+	 * HOME without changing the passwd entry makes the two disagree, and a
+	 * container image, a systemd unit and "sudo -u" all do exactly that. The
+	 * run then keeps its jar in one tree and its JDKs and dependency cache in
+	 * another, and in the common container case where the passwd entry says
+	 * /nonexistent the second tree cannot be written at all - after the
+	 * launcher has already worked.
+	 *
+	 * user.home stays as the fallback, for a login with no HOME in its
+	 * environment at all.
+	 */
+	private static Path homeDir() {
+		return homeDir(System.getenv(Util.isWindows() ? "USERPROFILE" : "HOME"),
+				System.getProperty("user.home"));
+	}
+
+	static Path homeDir(String fromEnvironment, String userHome) {
+		if (fromEnvironment != null && !fromEnvironment.trim().isEmpty()) {
+			Path dir = Paths.get(fromEnvironment.trim());
+			// a relative HOME would put the cache wherever the run started,
+			// which is neither what the launcher did nor anything anyone wants
+			if (dir.isAbsolute()) {
+				return dir;
+			}
+		}
+		return Paths.get(userHome);
 	}
 
 	public static Path getCacheDir() {

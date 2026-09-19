@@ -63,8 +63,11 @@ jobs:
         shell: bash
         run: ./gradlew build --stacktrace
 
+      # always, not only on failure: a green run is exactly when you want to
+      # read which tests were skipped, and the summary line prints a count
+      # rather than names
       - name: Upload the test report
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-report-${{ matrix.os }}
