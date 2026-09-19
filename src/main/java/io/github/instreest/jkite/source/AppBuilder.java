@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import dev.jbang.ExitException;
+import io.github.instreest.jkite.util.UsablePaths;
 import io.github.instreest.jkite.dependencies.ArtifactInfo;
 import io.github.instreest.jkite.jdk.Jdk;
 import dev.jbang.util.CommandBuffer;
@@ -56,6 +57,7 @@ public class AppBuilder {
 
 	/** Builds the project and returns the jar. */
 	public Path build() throws IOException {
+		checkTheseCanReachJavac();
 		Path jar = project.getJarFile();
 		if (!Util.isFresh() && isUpToDate(jar)) {
 			Util.verboseMsg("No build required. Reusing jar from " + jar);
@@ -116,6 +118,27 @@ public class AppBuilder {
 		} catch (IOException e) {
 			Util.verboseMsg("Building as previously built jar could not be read: " + e);
 			return false;
+		}
+	}
+
+	/**
+	 * Looks at the paths before javac and java are asked to, because neither
+	 * of them says which path was the problem.
+	 *
+	 * The build directory covers the compile directory and the jar, which are
+	 * inside it, and it is checked as a class path entry because the jar goes
+	 * on one. The sources only ever go on a command line as arguments of their
+	 * own, so a separator in one of those is harmless - measured, not assumed -
+	 * and they are checked for the encoding alone.
+	 */
+	private void checkTheseCanReachJavac() {
+		UsablePaths.requireClassPathEntry(project.getBuildDir(), "the cache directory (JKITE_DIR)");
+		for (Path source : project.getSources()) {
+			UsablePaths.requireUsable(source, "the script");
+		}
+		for (ArtifactInfo artifact : project.resolveClassPath()) {
+			UsablePaths.requireClassPathEntry(artifact.getFile(),
+					"the dependency " + artifact.getCoordinate());
 		}
 	}
 

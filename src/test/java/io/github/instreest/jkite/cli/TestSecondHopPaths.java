@@ -121,6 +121,31 @@ class TestSecondHopPaths extends AbstractScriptTest {
 	}
 
 	/**
+	 * The class path separator in a path jkite is given, end to end, so that
+	 * the check is known to be wired in and not only unit tested.
+	 *
+	 * ':' is legal in a POSIX filename and is what separates one class path
+	 * entry from the next, so a JKITE_DIR of "/tmp/ho:me" used to end the run
+	 * at "Could not find or load main class Report" - true, and no help. This
+	 * is POSIX-only because Windows does not allow ':' in a name at all;
+	 * there the same thing is ';', which the unit tests cover.
+	 */
+	@Test
+	@EnabledOnOs({ OS.LINUX, OS.MAC })
+	void aCacheDirectoryCarryingTheClassPathSeparatorIsRefusedWithAReason() throws Exception {
+		Path script = script(tempDir.resolve("plain6"), "Report");
+
+		RunResult result = runJkite(script, tempDir.resolve("ho:me"));
+		String said = result.stdout + result.stderr;
+
+		assertTrue(result.exitCode != 0, said);
+		assertTrue(said.contains("class path"),
+				"it did not say what was wrong with the path: " + said);
+		assertTrue(!said.contains("Could not find or load main class"),
+				"it still gets as far as java and fails there: " + said);
+	}
+
+	/**
 	 * An ASCII filename does not save a script that lives in a directory
 	 * named in Japanese, and this is here because that is the first thing
 	 * anyone assumes.
