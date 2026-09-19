@@ -423,11 +423,53 @@ public class Project {
 
 	public Path getBuildDir() {
 		return Settings.getCacheDir(Settings.CacheClass.jars)
-			.resolve(mainSource.getFileName() + "." + getStableId());
+			.resolve(inAscii(mainSource.getFileName().toString()) + "." + getStableId());
 	}
 
 	public Path getJarFile() {
-		return getBuildDir().resolve(Util.getBaseName(mainSource.getFileName().toString()) + ".jar");
+		return getBuildDir().resolve(inAscii(Util.getBaseName(mainSource.getFileName().toString())) + ".jar");
+	}
+
+	/**
+	 * The script's name, reduced to characters a path can carry anywhere.
+	 *
+	 * jkite hands these paths to javac and to java, and on Windows both are
+	 * launchers that convert their command line to the machine's ANSI code
+	 * page. A character outside that page arrives as a question mark, which is
+	 * not something a Windows path may contain at all, and the run ends at
+	 * "Error during compile" with a stack trace from WindowsPath.parse. A
+	 * script called レポート.java on an English Windows is enough: measured on
+	 * a CI runner in code page 437, where it fails and the same script with an
+	 * ASCII name does not.
+	 *
+	 * The name is here to be read, not to identify anything - the hash beside
+	 * it already does that, and it covers the source bytes, so two scripts
+	 * whose names reduce to the same thing still get their own directory. So
+	 * reducing it costs nothing and is done on every platform rather than on
+	 * the one that needs it, because a cache that changes shape by platform is
+	 * a worse thing to reason about than a name with underscores in it.
+	 *
+	 * What is kept is every printable ASCII character a filename may hold on
+	 * both POSIX and Windows. That is deliberately wider than it needs to be:
+	 * any name that works today is left exactly as it is, so no cache is
+	 * invalidated and nothing is rebuilt for the sake of this.
+	 */
+	static String inAscii(String name) {
+		StringBuilder out = new StringBuilder(name.length());
+		for (int i = 0; i < name.length(); i++) {
+			char c = name.charAt(i);
+			out.append(canBeInAName(c) ? c : '_');
+		}
+		return out.toString();
+	}
+
+	private static boolean canBeInAName(char c) {
+		if (c < 0x20 || c >= 0x7f) {
+			return false;
+		}
+		// what Windows reserves; the separators are impossible in a name
+		// anywhere, and the rest it refuses outright
+		return "<>:\"/\\|?*".indexOf(c) < 0;
 	}
 
 	public Path getCompileDir() {
