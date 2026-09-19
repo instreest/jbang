@@ -177,7 +177,7 @@ jkite [<options>] <script.java> [<args>...]
 | `--verbose` | print what is being done |
 | `--quiet` | only print errors |
 | `--fresh` | ignore the caches and rebuild |
-| `--clear-cache` | remove the built jars and resolved dependencies, and exit |
+| `--clear-cache` | remove the built jars and resolved dependencies, and exit. It prints the directories before it empties them; the installed JDKs are kept |
 | `-o`, `--offline` | never access the network |
 | `-Dkey=value` | a system property, for `${...}` in directives and for the script |
 | `-R<option>` | an extra JVM option for the script |
@@ -326,7 +326,8 @@ A JDK 11 or newer is used if there is one, and installed if there is not.
 `BASH_SOURCE`, so `sh`, `dash` and `ash` will not run them. macOS and every
 usual Linux ship it; a minimal container may not. Alpine needs two things of
 its own - `bash`, and a JDK installed by hand, since the JDKs jkite downloads
-are built against glibc.
+are built against glibc. jkite stops there and says so rather than fetching
+one; `JKITE_JDK_INDEX` pointed at an index of musl builds is the way round it.
 
 ## How it works, and contributing
 

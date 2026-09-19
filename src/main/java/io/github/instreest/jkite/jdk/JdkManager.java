@@ -140,6 +140,7 @@ public final class JdkManager {
 	 * never changes which JDK the next run picks.
 	 */
 	public Jdk install(RequestedVersion version) {
+		requireAnInstallableJdk(Util.getOS(), System.getenv(Settings.ENV_JDK_INDEX));
 		if (Util.isOffline()) {
 			throw new ExitException(ExitException.EXIT_GENERIC_ERROR,
 					"No suitable JDK was found for requested version " + version + " and we are offline");
@@ -176,6 +177,32 @@ public final class JdkManager {
 			}
 			return finish(jdk);
 		}
+	}
+
+	/**
+	 * Stops before a JDK that could not run here is fetched.
+	 *
+	 * The JDKs in the index are built against glibc and do not run on musl,
+	 * so on Alpine there is nothing here to install. The launcher has always
+	 * said so and stopped - jkite-bootstrap-jdk matches /etc/alpine-release
+	 * and refuses by name - and README says a JDK has to be installed by
+	 * hand there. This half only warned, and then went on to spend several
+	 * minutes fetching two hundred megabytes of JDK that cannot execute, so
+	 * the run ended at the exec rather than at the decision. The two halves
+	 * of one run now give one answer.
+	 *
+	 * Unless JKITE_JDK_INDEX is set, which is the way out the warning used to
+	 * point at: an index of musl builds is the caller's to supply, and having
+	 * supplied one they are not to be told it cannot be done.
+	 */
+	static void requireAnInstallableJdk(Util.OS os, String indexOverride) {
+		if (os != Util.OS.alpine_linux || (indexOverride != null && !indexOverride.trim().isEmpty())) {
+			return;
+		}
+		throw new ExitException(ExitException.EXIT_UNEXPECTED_STATE,
+				"There is no JDK to install for Alpine (musl): the ones jkite can download are built"
+						+ " against glibc and will not run here. Install a JDK yourself and set"
+						+ " JAVA_HOME, or set " + Settings.ENV_JDK_INDEX + " to an index of musl builds.");
 	}
 
 	private JdkIndex.Entry selectEntry(RequestedVersion version) {

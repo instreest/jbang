@@ -128,7 +128,7 @@ public final class Main {
 					Util.setFresh(true);
 					break;
 				case "--clear-cache":
-					Settings.clearCache().forEach(realOut::println);
+					Settings.clearCache(realOut::println);
 					throw new ExitException(ExitException.EXIT_OK);
 				case "-o":
 				case "--offline":

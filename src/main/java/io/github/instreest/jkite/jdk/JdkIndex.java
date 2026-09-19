@@ -160,10 +160,11 @@ public final class JdkIndex {
 			osName = "linux";
 			break;
 		case alpine_linux:
-			// the index only lists glibc builds; they do not run on musl, so an
-			// Alpine user has to point JKITE_JDK_INDEX at a suitable index
-			Util.warnMsg("The JDK index has no musl (Alpine) builds; "
-					+ "set " + Settings.ENV_JDK_INDEX + " or install a JDK yourself");
+			// Reached only with JKITE_JDK_INDEX set: JdkManager refuses to
+			// install here otherwise, because the published index holds glibc
+			// builds and they do not run on musl. An index the caller supplied
+			// is keyed the same way, so the platform name is still the linux
+			// one. No warning - the caller answered this already.
 			osName = "linux";
 			break;
 		case mac:

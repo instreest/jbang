@@ -111,6 +111,16 @@ test {
 	// cache is written on every resolve, and without this it would be the one
 	// in the developer's home directory that a test reads and writes.
 	environment 'JKITE_DIR', layout.buildDirectory.dir('test-jkite').get().asFile.absolutePath
+	// Set on purpose, and expected to be ignored. JKITE_CACHE_DIR_JARS and its
+	// two siblings used to move one kind of cached thing somewhere of its own:
+	// undocumented, unread by the launcher - so the JDKs one gave a machine two
+	// JDK caches - and it decided which directory --clear-cache emptied. With
+	// it set to somewhere obviously wrong, the test that every cache kind sits
+	// under the cache directory is what says it is still ignored.
+	environment 'JKITE_CACHE_DIR_JARS',
+		layout.buildDirectory.dir('should-be-ignored').get().asFile.absolutePath
+	environment 'JKITE_CACHE_DIR_JDKS',
+		layout.buildDirectory.dir('should-be-ignored').get().asFile.absolutePath
 	testLogging {
 		events "failed"
 		exceptionFormat "full"

@@ -8,6 +8,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import dev.jbang.ExitException;
@@ -135,10 +136,20 @@ public final class Settings {
 		return mkdirs(dir);
 	}
 
+	/**
+	 * One kind of cached thing, always under the cache directory.
+	 *
+	 * There used to be a per-kind override here, JKITE_CACHE_DIR_JARS and its
+	 * two siblings, inherited and never documented. It did two unhelpful
+	 * things. The launcher does not read them - it knows only JKITE_CACHE_DIR
+	 * - so setting the JDKs one gave a machine two JDK caches and two
+	 * downloads of the same JDK, one for each half of a run. And
+	 * --clear-cache removes the contents of the jars and urls directories, so
+	 * an undocumented variable decided which directory that was. Neither was
+	 * worth a setting nobody had written down.
+	 */
 	public static Path getCacheDir(CacheClass cclass) {
-		String v = System.getenv(ENV_CACHE_DIR + "_" + cclass.name().toUpperCase(Locale.ROOT));
-		Path dir = v != null ? Paths.get(v) : getCacheDir().resolve(cclass.name());
-		return mkdirs(dir);
+		return mkdirs(getCacheDir().resolve(cclass.name()));
 	}
 
 	public static Path getDependencyCacheFile() {
@@ -220,21 +231,35 @@ public final class Settings {
 	 * fetching one again costs minutes - and so is jkite's own jar, which is
 	 * running.
 	 *
-	 * @return one line per thing it did, for the caller to print
+	 * @param say where each line goes, as it happens
 	 */
-	public static List<String> clearCache() {
-		List<String> report = new ArrayList<>();
-		report.add(removeContents(getCacheDir(CacheClass.jars), "built jars"));
-		report.add(removeContents(getCacheDir(CacheClass.urls), "unfinished downloads"));
+	public static void clearCache(Consumer<String> say) {
+		Path jars = getCacheDir(CacheClass.jars);
+		Path urls = getCacheDir(CacheClass.urls);
 		Path deps = getDependencyCacheFile();
+		// Printed as it goes rather than collected and returned, so that the
+		// list of what is about to be removed is on the screen before it is:
+		// jkite asks before it downloads, and the one thing it does that
+		// cannot be undone should at least say what it is about to do it to
+		// while there is still time to read it. A JKITE_DIR or
+		// JKITE_CACHE_DIR pointing somewhere unintended is visible here and
+		// nowhere else.
+		say.accept("Removing the contents of:");
+		say.accept("  " + jars + "   (built jars)");
+		say.accept("  " + urls + "   (unfinished downloads)");
 		if (Files.exists(deps)) {
-			report.add(Util.deletePath(deps, true)
+			say.accept("  " + deps + "   (resolved dependencies)");
+		}
+		say.accept("");
+		say.accept(removeContents(jars, "built jars"));
+		say.accept(removeContents(urls, "unfinished downloads"));
+		if (Files.exists(deps)) {
+			say.accept(Util.deletePath(deps, true)
 					? "removed the resolved dependencies of " + deps
 					: "could not remove " + deps);
 		}
-		report.add("kept the JDKs in " + getCacheDir(CacheClass.jdks)
+		say.accept("kept the JDKs in " + getCacheDir(CacheClass.jdks)
 				+ " (remove that directory by hand to fetch them again)");
-		return report;
 	}
 
 	private static String removeContents(Path dir, String what) {
