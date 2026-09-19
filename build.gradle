@@ -105,6 +105,17 @@ test {
 		events "failed"
 		exceptionFormat "full"
 	}
+	// How many actually ran. A test class that is silently skipped - an
+	// @EnabledOnOs that never matches, a platform assumption that is not true
+	// on this runner - is worse than no test at all: it reads as coverage and
+	// it is a green tick that means nothing. Only failures are logged above,
+	// so without this line a skip and a pass look identical in a CI log.
+	afterSuite { desc, result ->
+		if (desc.parent == null) {
+			logger.lifecycle("Tests: ${result.testCount} run, ${result.skippedTestCount} skipped, "
+				+ "${result.failedTestCount} failed (${result.resultType})")
+		}
+	}
 }
 
 tasks.withType(JavaCompile).configureEach {
