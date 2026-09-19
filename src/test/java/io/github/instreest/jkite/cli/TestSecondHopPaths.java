@@ -94,6 +94,7 @@ class TestSecondHopPaths extends AbstractScriptTest {
 	 * on the second hop whatever the machine is called.
 	 */
 	@Test
+	@EnabledOnOs({ OS.LINUX, OS.MAC })
 	void aScriptNamedInJapaneseRuns() throws Exception {
 		Path script = script(tempDir.resolve("plain2"), JAPANESE);
 
@@ -120,41 +121,43 @@ class TestSecondHopPaths extends AbstractScriptTest {
 	}
 
 	/**
-	 * The half jkite cannot reach, recorded so that it is a known limit.
+	 * What is left on Windows, and where it now stops - which is the measure
+	 * of what reducing the build directory name achieved.
 	 *
-	 * The measurement that started this said the failure is not at the run at
-	 * all. It is at the compile: javac.exe is a launcher like java.exe and
-	 * converts its command line to the machine's ANSI code page, and
-	 * AppBuilder hands it "-d" and the build directory. A character outside
-	 * that page arrives as a question mark, which a Windows path may not hold,
-	 * and WindowsPath.parse refuses the string.
+	 * Before, the compile died inside javac's own argument checking, on the
+	 * "-d" it was handed: Arguments.checkDirectory, WindowsPath.parse, a path
+	 * with question marks in it. That path was jkite's, named after the
+	 * script, and it is ASCII now. The failure has moved to the only path left
+	 * that is not jkite's to choose:
 	 *
-	 *   at jdk.compiler/...Arguments.checkDirectory
-	 *   at java.base/sun.nio.fs.WindowsPath.parse
-	 *   [jkite] [ERROR] Error during compile.
+	 *   error: Invalid filename: C:\...\????.java
 	 *
-	 * Two things put such a name in that path. One was jkite's own: the build
-	 * directory is named after the script, so レポート.java put its own name
-	 * there - that name is reduced to ASCII now, and
-	 * aScriptNamedInJapaneseRuns above is what says so, on Windows too.
+	 * That is the script the user named and asked jkite to run. Nothing here
+	 * can rename it, and javac.exe converts its command line to the machine's
+	 * ANSI code page whatever jkite does. So the reduction was necessary and
+	 * is not sufficient: on its own it makes no failing case pass, it removes
+	 * one of the two reasons.
 	 *
-	 * This is the other one, and it is not jkite's to choose: JKITE_DIR is
-	 * wherever the user put it. On a Japanese Windows a Japanese name is
-	 * inside the code page and works; it is the mixed case that does not.
-	 * Nothing in jkite can rename somebody's directory, so this says what
-	 * happens and fails the day it stops happening.
+	 * This asserts the distinction rather than just the failure, so that if
+	 * jkite ever starts putting a bad path of its own back, this test fails
+	 * for a different reason and says which.
 	 */
 	@Test
 	@EnabledOnOs(OS.WINDOWS)
-	void aCacheDirectoryOutsideTheCodePageStillStopsTheCompile() throws Exception {
-		Path script = script(tempDir.resolve("plain4"), "Report");
+	void whatIsLeftOnWindowsIsTheScriptsOwnPath() throws Exception {
+		Path script = script(tempDir.resolve("plain4"), JAPANESE);
 
-		RunResult result = runJkite(script, tempDir.resolve(JAPANESE + "-home4"));
+		RunResult result = runJkite(script, tempDir.resolve("home4"));
+		String said = result.stdout + result.stderr;
 
 		assertTrue(result.exitCode != 0,
-				"a JKITE_DIR named in Japanese now works on Windows; this test and the note in "
-						+ "README can go: " + result.stdout + result.stderr);
-		assertTrue((result.stdout + result.stderr).contains("Error during compile"),
-				"it still fails, but somewhere else than the compile: " + result.stdout + result.stderr);
+				"javac now takes a source path outside the code page; this test and the note in "
+						+ "README can go: " + said);
+		assertTrue(said.contains("Invalid filename"),
+				"it fails, but not on the source file - so something else is handing javac a bad "
+						+ "path again: " + said);
+		assertTrue(!said.contains("checkDirectory"),
+				"it is failing on the build directory again, which is jkite's own and was made "
+						+ "ASCII on purpose: " + said);
 	}
 }

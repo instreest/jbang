@@ -307,21 +307,20 @@ console's code page, so `chcp` does not help. `jkite.cmd` hands Java the 8.3
 short name of its jar, which is ASCII whatever the directory is called.
 
 The same conversion applies to every JDK tool jkite then starts, and on Windows
-it bites at the compile rather than the run: `javac` is handed `-d` and a build
-directory under `~/.jkite`, and a path outside the code page arrives as question
+it bites at the compile rather than the run: `javac` is handed the source file
+and a build directory, and a path outside the code page arrives as question
 marks, which is not something a Windows path may contain.
 
-**Script names are fine.** The build directory used to be named after the
-script, so `レポート.java` put its own name into that path; the name is reduced
-to ASCII now, and a script can be called whatever you call it. Nothing else
-changes — a name that already worked is used exactly as it is, so no build
-directory is renamed and nothing is rebuilt.
+**On Windows, keep the script's filename and `JKITE_DIR` inside your code
+page.** A Japanese name on a Japanese Windows is inside it and works; it is the
+mixed case that does not, such as a Japanese filename under an English install,
+where the run stops with `Invalid filename`. Directories the script merely sits
+in are fine — it is the file jkite compiles and the cache it compiles into.
 
-What is left is **`JKITE_DIR`**, which is wherever you put it and not jkite's
-to rename. On a Japanese Windows a Japanese name is inside the code page and
-works; it is the mixed case that does not, such as a Japanese folder name under
-an English install. Keep `~/.jkite` inside your code page, or point `JKITE_DIR`
-somewhere that is.
+jkite no longer adds to that list: the build directory used to be named after
+the script, so `レポート.java` put its own name into a path of jkite's making as
+well. It does not any more. A name that already worked is used exactly as it
+is, so nothing is renamed and nothing is rebuilt for it.
 
 One more, and it is the JDK's rather than jkite's: a character outside the Basic
 Multilingual Plane — in practice an emoji — anywhere in the path `jkite/` is
