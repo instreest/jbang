@@ -121,6 +121,45 @@ class TestSecondHopPaths extends AbstractScriptTest {
 	}
 
 	/**
+	 * An ASCII filename does not save a script that lives in a directory
+	 * named in Japanese, and this is here because that is the first thing
+	 * anyone assumes.
+	 *
+	 * What javac is handed is the absolute path - Project puts the source
+	 * through toAbsolutePath() before anything else - so every directory
+	 * between the drive and the file is on that command line, and the ANSI
+	 * code page has to hold all of it. Calling the file Report.java changes
+	 * one component out of several.
+	 */
+	@Test
+	@EnabledOnOs({ OS.LINUX, OS.MAC })
+	void anAsciiScriptInAJapaneseDirectoryRuns() throws Exception {
+		Path script = script(tempDir.resolve(JAPANESE + "-project"), "Report");
+
+		RunResult result = runJkite(script, tempDir.resolve("home5"));
+
+		assertEquals(0, result.exitCode, result.stdout + result.stderr);
+		assertTrue(result.stdout.contains("ran"), result.stdout + result.stderr);
+	}
+
+	/**
+	 * The same thing on Windows, measured rather than assumed, because the
+	 * answer is the one people act on: an ASCII filename is not enough.
+	 */
+	@Test
+	@EnabledOnOs(OS.WINDOWS)
+	void anAsciiFilenameDoesNotRescueAJapaneseDirectory() throws Exception {
+		Path script = script(tempDir.resolve(JAPANESE + "-project"), "Report");
+
+		RunResult result = runJkite(script, tempDir.resolve("home5"));
+		String said = result.stdout + result.stderr;
+
+		assertTrue(result.exitCode != 0,
+				"an ASCII filename under a Japanese directory now works; README says it does not, "
+						+ "and should be corrected: " + said);
+	}
+
+	/**
 	 * What is left on Windows, and where it now stops - which is the measure
 	 * of what reducing the build directory name achieved.
 	 *

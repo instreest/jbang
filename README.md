@@ -311,11 +311,13 @@ it bites at the compile rather than the run: `javac` is handed the source file
 and a build directory, and a path outside the code page arrives as question
 marks, which is not something a Windows path may contain.
 
-**On Windows, keep the script's filename and `JKITE_DIR` inside your code
-page.** A Japanese name on a Japanese Windows is inside it and works; it is the
-mixed case that does not, such as a Japanese filename under an English install,
-where the run stops with `Invalid filename`. Directories the script merely sits
-in are fine — it is the file jkite compiles and the cache it compiles into.
+**On Windows, keep the whole path inside your code page** — the script, every
+directory above it, and `JKITE_DIR`. Not just the filename: jkite hands javac
+the absolute path of the source, so every directory between the drive and the
+file is on that command line, and one Japanese folder is enough. A Japanese
+name on a Japanese Windows is inside the code page and works; it is the mixed
+case that does not, such as anything Japanese under an English install, where
+the run stops with `Invalid filename`.
 
 jkite no longer adds to that list: the build directory used to be named after
 the script, so `レポート.java` put its own name into a path of jkite's making as
