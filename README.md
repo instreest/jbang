@@ -220,6 +220,36 @@ the project. Several runs at once are safe: each download is taken by one run
 while the others wait, and every file is renamed into place only once it is
 complete, so a build matrix never trips over a half-written file.
 
+## Behind a proxy
+
+`http_proxy`, `https_proxy` and `no_proxy` are enough. The launcher fetches
+with curl or wget, which read them; the jar reads none of them by itself, so
+jkite translates them into the JVM's own settings before it connects. A
+`-Dhttps.proxyHost` passed in `JKITE_JAVA_OPTIONS` wins over the environment.
+
+Dependencies are the exception: they are fetched by Maven Resolver, which is
+configured the way Maven is, in the `<proxies>` section of
+`~/.m2/settings.xml`.
+
+If the proxy terminates TLS and re-signs with a company CA, note which trust
+store each half uses. curl uses the operating system's, so the launcher works
+as soon as the CA is installed there. Java does not: it uses the `cacerts` of
+the JDK that is running, and a JDK jkite downloaded is a stock Temurin whose
+`cacerts` has never heard of your company. The symptom is a launcher that
+succeeds and then a `PKIX path building failed` from the jar. Either point
+jkite at a JDK that has the CA —
+
+```bash
+export JAVA_HOME=/path/to/a/jdk/with/the/ca
+```
+
+— or give the jar the trust store directly:
+
+```bash
+export JKITE_JAVA_OPTIONS="-Djavax.net.ssl.trustStore=/path/to/truststore.p12 \
+                           -Djavax.net.ssl.trustStorePassword=..."
+```
+
 ## Downloads ask first
 
 jkite fetches three kinds of thing: its own jar, a JDK to run that jar with,

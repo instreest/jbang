@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import io.github.instreest.jkite.source.AppBuilder;
 import io.github.instreest.jkite.source.CmdGenerator;
 import io.github.instreest.jkite.source.Project;
+import io.github.instreest.jkite.util.EnvironmentProxy;
 import io.github.instreest.jkite.spi.DownloadGate;
 import io.github.instreest.jkite.spi.Providers;
 import dev.jbang.util.CommandBuffer;
@@ -53,6 +54,9 @@ public final class Main {
 	}
 
 	public static void main(String... args) {
+		// before anything opens a connection: the launcher already honoured
+		// http_proxy and no_proxy with curl, and the JVM reads neither
+		EnvironmentProxy.apply();
 		int exitCode;
 		try {
 			exitCode = run(new ArrayList<>(Arrays.asList(args)));
