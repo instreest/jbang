@@ -10,6 +10,8 @@ import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
 
+import dev.jbang.ExitException;
+
 /** The ${...} placeholders a directive may use. */
 class TestPlaceholders {
 
@@ -80,10 +82,47 @@ class TestPlaceholders {
 		assertEquals("a$b", replace("a$b"));
 	}
 
+	/**
+	 * And it is the script author's mistake, not jkite's, so it exits the way
+	 * every other bad input does. It used to be an IllegalStateException,
+	 * which Main reports as a generic error - exit 1, where a missing script
+	 * or an unknown option exits 2. A directive nobody can expand is the same
+	 * kind of thing as those.
+	 */
 	@Test
-	void aPlaceholderNothingResolvesIsAnError() {
-		IllegalStateException e = assertThrows(IllegalStateException.class, () -> replace("${absent}"));
+	void aPlaceholderNothingResolvesIsInvalidInput() {
+		ExitException e = assertThrows(ExitException.class, () -> replace("${absent}"));
 		assertTrue(e.getMessage().contains("absent"), e.getMessage());
-		assertThrows(IllegalStateException.class, () -> replace("${version"));
+		assertEquals(ExitException.EXIT_INVALID_INPUT, e.getStatus(), e.getMessage());
+	}
+
+	@Test
+	void aPlaceholderThatIsNeverClosedIsInvalidInputToo() {
+		ExitException e = assertThrows(ExitException.class, () -> replace("${version"));
+
+		assertEquals(ExitException.EXIT_INVALID_INPUT, e.getStatus(), e.getMessage());
+		assertTrue(e.getMessage().contains("Unterminated"), e.getMessage());
+	}
+
+	/**
+	 * The two limits the javadoc names, pinned so that they are a decision
+	 * rather than a surprise. Neither is what upstream does differently; both
+	 * are what a reader would otherwise have to find out by being caught.
+	 */
+	@Test
+	void aPlaceholderEndsAtTheFirstClosingBrace() {
+		// Someone writing "${nothing:a}b}" meaning a fallback of "a}b" gets
+		// "ab}": the placeholder closed at the first brace, its fallback was
+		// "a", and "b}" is what was left over as text.
+		assertEquals("ab}", replace("${nothing:a}b}"));
+	}
+
+	@Test
+	void aValueIsNotLookedAtAgain() {
+		Properties p = new Properties();
+		p.setProperty("outer", "${inner}");
+		p.setProperty("inner", "reached");
+
+		assertEquals("${inner}", Placeholders.replace("${outer}", p));
 	}
 }

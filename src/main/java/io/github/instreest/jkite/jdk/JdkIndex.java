@@ -50,6 +50,8 @@ public final class JdkIndex {
 	static final String INDEX_GROUP_ID = "io.get-coursier.jvm.indices";
 	static final String INDEX_VERSION_RANGE = "[0,)";
 	static final String INDEX_ENTRY_PREFIX = "coursier/jvm/indices/v1/";
+	/** See {@link #readAtMost}: forty times the real thing, and still nothing. */
+	static final int MAX_INDEX_BYTES = 16 * 1024 * 1024;
 
 	/** One downloadable JDK. */
 	public static final class Entry {
@@ -146,9 +148,35 @@ public final class JdkIndex {
 				throw new IOException("No index for " + platform + " in " + jar);
 			}
 			try (InputStream is = zip.getInputStream(entry)) {
-				return Util.readString(is);
+				return readAtMost(is, MAX_INDEX_BYTES, jar);
 			}
 		}
+	}
+
+	/**
+	 * Reads an entry, refusing one that does not stop.
+	 *
+	 * A zip says how long an entry is and does not have to be telling the
+	 * truth, so the length is taken from the bytes that arrive rather than
+	 * from the header. What is being read here is a file this project does not
+	 * publish, fetched at an open version range, and jkite would otherwise go
+	 * on reading it until the JVM ran out of memory. The index for a platform
+	 * is around 360 kB today and compresses about fifteen to one, so the limit
+	 * is some forty times the real thing: large enough not to be reached by a
+	 * list that grows, small enough to be nothing.
+	 */
+	static String readAtMost(InputStream is, int limit, Path source) throws IOException {
+		byte[] buffer = new byte[8192];
+		java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+		int n;
+		while ((n = is.read(buffer)) > 0) {
+			if (out.size() + n > limit) {
+				throw new IOException("The JDK index in " + source + " is longer than " + limit
+						+ " bytes, which no real index is; refusing to read the rest of it");
+			}
+			out.write(buffer, 0, n);
+		}
+		return new String(out.toByteArray(), StandardCharsets.UTF_8);
 	}
 
 	/** The index name of the current platform, e.g. "linux-amd64". */

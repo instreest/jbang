@@ -55,7 +55,7 @@ jkite\jkite.cmd tools\Report.java  # Windows
 ````
 
 `install.cmd` installs from a Windows command prompt. The installer writes
-eleven files, about 90 kB, into `jkite/`; commit all of them, the way a
+eleven files, about 95 kB, into `jkite/`; commit all of them, the way a
 Gradle or Maven wrapper is committed.
 
 ## What gets committed, and what gets downloaded

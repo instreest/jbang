@@ -10,7 +10,7 @@
 # Neither download is decided at run time. The jar is a release asset and the
 # JDK is Eclipse Temurin, and the version, URL and SHA-256 of each is resolved
 # here, once, and committed with the project. So a project's history carries
-# about 80 kB of scripts instead of a binary, the launcher scripts have nothing
+# about 95 kB of scripts instead of a binary, the launcher scripts have nothing
 # to parse but a properties file, and what a checkout installs is the same
 # thing every time.
 #
@@ -68,7 +68,9 @@ platforms="linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64 windo
 # on whoever runs the tool rather than on whoever changed dist/.
 installer_list() {  # $1 = the installer to read the list out of
   case $1 in
-    *.cmd) sed -n 's/^set "files=\(.*\)"$/\1/p' "$1" ;;
+    # the trailing \r: .cmd files are checked out with CRLF (.gitattributes),
+    # so the line does not end at the closing quote
+    *.cmd) tr -d '\r' < "$1" | sed -n 's/^set "files=\(.*\)"$/\1/p' ;;
     *)     awk '/^[[:space:]]*files="/ { f = 1 }
                 f { line = $0
                     sub(/^[[:space:]]*files="/, "", line)
