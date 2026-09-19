@@ -92,6 +92,16 @@ test {
 	// are about the gate remove this from the environment they hand their
 	// subprocesses.
 	environment 'JKITE_CONFIRM_DOWNLOADS', 'never'
+	// sun.jnu.encoding, which decides whether this JVM can name a file at all,
+	// follows the locale. A container with no LANG set gets ASCII, and the
+	// tests for non-ASCII paths then skip themselves - correctly, but they are
+	// the tests most worth running, and skipping is not an answer. A developer
+	// machine and the CI runners have a UTF-8 locale; this gives one to
+	// whatever does not. It does not apply on Windows, where the JVM takes the
+	// ANSI code page instead, which is the thing those tests are there to find
+	// out about.
+	environment 'LANG', 'C.UTF-8'
+	environment 'LC_ALL', 'C.UTF-8'
 	// A local Maven repository of the test run's own. Dependency resolution is
 	// tested against a file: repository built on the spot, and without this the
 	// artifacts would land in the developer's ~/.m2/repository - so a test would

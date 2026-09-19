@@ -293,6 +293,20 @@ which is what the setting is for; pass `--yes` if you meant to allow it.
     JKITE_CONFIRM_DOWNLOADS: never
 ```
 
+## Paths
+
+A project can live where your projects live. Non-ASCII directory names work —
+Japanese, Cyrillic, accented Latin are all tested, on Linux, macOS and Windows —
+and so do paths past Windows' 260-character limit.
+
+One exception, and it is the JDK's rather than jkite's: a character outside the
+Basic Multilingual Plane, which in practice means an emoji, anywhere in the path
+that `jkite/` is installed under. `java -jar` then fails before anything of
+jkite runs, with `Error decoding percent encoded characters`, because the JDK
+cannot turn that path into the URL it puts on its own class path. Nothing jkite
+does can reach that. An emoji elsewhere — in a script's name, in a directory
+the script reads — is fine.
+
 ## Requirements
 
 A machine needs `bash` with `curl` or `wget`, `sha256sum` or `shasum`, and
