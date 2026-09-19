@@ -268,6 +268,49 @@ class TestAwkwardPaths extends AbstractScriptTest {
 				"it failed, but not the way it used to: " + result.stderr);
 	}
 
+	/**
+	 * Where the path is lost, asked in a way that cannot be answered by an
+	 * encoding artefact.
+	 *
+	 * The symptom is java saying "Unable to access jarfile ...??????...", and
+	 * those question marks prove nothing on their own: java writes that
+	 * message to stderr through the console code page, so a path that arrived
+	 * perfectly intact would still be printed with them. Two different faults
+	 * produce the same picture - cmd.exe losing the name when it expands
+	 * %~dp0, or the name surviving as far as java and being lost there - and
+	 * they have different fixes. chcp only helps the first.
+	 *
+	 * So this asks cmd.exe a yes-or-no question instead of reading anything
+	 * back: from inside a batch file in that directory, does the jar next to
+	 * me exist? "if exist" goes through the filesystem, not through a code
+	 * page, and writing FOUND or MISSING is pure ASCII either way. FOUND means
+	 * %~dp0 is intact inside cmd and the loss happens on the way to java;
+	 * MISSING means cmd never had it.
+	 */
+	@Test
+	@EnabledOnOs(OS.WINDOWS)
+	void whereTheNonAsciiPathIsActuallyLost() throws Exception {
+		Path base = Files.createDirectories(tempDir.resolve(WIDE));
+		Path dir = base.resolve("jkite");
+		installInto(dir, CMD_SCRIPT);
+		Path probe = dir.resolve("probe.cmd");
+		Files.write(probe, ("@echo off\r\n"
+				+ "if exist \"%~dp0jkite.jar\" (echo FOUND) else (echo MISSING)\r\n"
+				+ "chcp\r\n").getBytes(StandardCharsets.US_ASCII));
+
+		RunResult result = runProcess(Arrays.asList("cmd.exe", "/c", probe.toString()),
+				new HashMap<>(System.getenv()));
+
+		// Not an assertion about which one is right - it is a measurement, and
+		// the message carries it into the log either way.
+		assertTrue(result.stdout.contains("FOUND") || result.stdout.contains("MISSING"),
+				"the probe said neither: " + result.stdout + result.stderr);
+		assertTrue(result.stdout.contains("FOUND"),
+				"cmd.exe cannot see a file next to its own batch file under this name, so %~dp0 is "
+						+ "where the name is lost and chcp is the thing to try. Probe said: "
+						+ result.stdout.trim());
+	}
+
 	private static Path scriptForThisPlatform() {
 		return System.getProperty("os.name").toLowerCase().contains("win") ? CMD_SCRIPT : BASH_SCRIPT;
 	}
