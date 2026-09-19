@@ -13,6 +13,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 /**
  * The second hop, which the launcher tests never cross.
@@ -92,6 +94,7 @@ class TestSecondHopPaths extends AbstractScriptTest {
 	 * on the second hop whatever the machine is called.
 	 */
 	@Test
+	@EnabledOnOs({ OS.LINUX, OS.MAC })
 	void aScriptNamedInJapaneseRuns() throws Exception {
 		Path script = script(tempDir.resolve("plain2"), JAPANESE);
 
@@ -106,6 +109,7 @@ class TestSecondHopPaths extends AbstractScriptTest {
 
 	/** And the other way in: an ASCII script under a cache that is not. */
 	@Test
+	@EnabledOnOs({ OS.LINUX, OS.MAC })
 	void anOrdinaryScriptUnderAJapaneseCacheRuns() throws Exception {
 		Path script = script(tempDir.resolve("plain3"), "Report");
 
@@ -114,5 +118,48 @@ class TestSecondHopPaths extends AbstractScriptTest {
 		assertEquals(0, result.exitCode,
 				"a cache directory named in Japanese stopped the run:\n" + result.stdout + result.stderr);
 		assertTrue(result.stdout.contains("ran"), result.stdout + result.stderr);
+	}
+
+	/**
+	 * What Windows does instead, and where - which is not where I expected.
+	 *
+	 * I went looking for the run: jkite.jar starts a JVM for the script with
+	 * the built jar and every dependency on -classpath, and java.exe converts
+	 * its command line to the machine's ANSI code page. The measurement says
+	 * it never gets that far. It stops one step earlier, at javac:
+	 *
+	 *   at jdk.compiler/...Arguments.checkDirectory
+	 *   at java.base/sun.nio.fs.WindowsPath.parse
+	 *   [jkite] [ERROR] Error during compile.
+	 *
+	 * WindowsPath.parse refusing the string is the giveaway. "?" is not a
+	 * character a Windows path may contain, so the name had already been
+	 * turned into question marks before javac looked at it - javac.exe is a
+	 * launcher like java.exe and converts its command line the same way, and
+	 * AppBuilder hands it "-d" and the build directory.
+	 *
+	 * Two things put a non-ASCII name in that directory, and they are not the
+	 * same kind of problem. One is the cache directory, which is wherever
+	 * JKITE_DIR says - the user's path, and on a Japanese Windows a Japanese
+	 * name is inside the code page and works. The other is jkite's own doing:
+	 * Project.getBuildDir() is cache/jars/&lt;script&gt;.&lt;hash&gt;, so a script called
+	 * レポート.java puts its own name there. The hash already tells those
+	 * directories apart; the name is only there to be read.
+	 *
+	 * Recorded rather than fixed, because the fix is a change to the cache
+	 * layout and that is not mine to make quietly.
+	 */
+	@Test
+	@EnabledOnOs(OS.WINDOWS)
+	void aNonAsciiPathStopsTheCompileOnWindows() throws Exception {
+		Path script = script(tempDir.resolve("plain4"), JAPANESE);
+
+		RunResult result = runJkite(script, tempDir.resolve("home4"));
+
+		assertTrue(result.exitCode != 0,
+				"a script named in Japanese now builds on Windows; this test and the note in "
+						+ "README can go: " + result.stdout + result.stderr);
+		assertTrue((result.stdout + result.stderr).contains("Error during compile"),
+				"it still fails, but somewhere else than the compile: " + result.stdout + result.stderr);
 	}
 }

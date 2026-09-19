@@ -306,10 +306,18 @@ as question marks and Java says `Unable to access jarfile`. It is not the
 console's code page, so `chcp` does not help. `jkite.cmd` hands Java the 8.3
 short name of its jar, which is ASCII whatever the directory is called.
 
-That covers the path jkite controls. The same limit still applies to a **script
-name** you pass on Windows: `jkite\jkite.cmd tools\レポート.java` reaches Java
-through the same conversion. Keep script filenames inside your code page, or
-inside ASCII; the directories they sit in are fine.
+That covers the launcher. The same conversion applies to every JDK tool jkite
+then starts, and on Windows it bites at the compile: `javac` is handed `-d` and
+a build directory under `~/.jkite`, and a path outside the code page arrives as
+question marks, which is not something a Windows path may contain. The run
+stops with `Error during compile`.
+
+Two things put such a name there. **A script name** — `レポート.java` — because
+the build directory is named after the script. And **`JKITE_DIR`** pointing
+somewhere outside the code page. On a Japanese Windows a Japanese name is
+inside the code page and both work; it is the mixed case that does not, such as
+a Japanese name under an English install. Until this is fixed, keep script
+filenames and `JKITE_DIR` inside your code page.
 
 One more, and it is the JDK's rather than jkite's: a character outside the Basic
 Multilingual Plane — in practice an emoji — anywhere in the path `jkite/` is
