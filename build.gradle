@@ -120,10 +120,21 @@ test {
 	// on this runner - is worse than no test at all: it reads as coverage and
 	// it is a green tick that means nothing. Only failures are logged above,
 	// so without this line a skip and a pass look identical in a CI log.
+	// and which ones failed, printed at the end rather than where they
+	// happened: a failing build ends with a Gradle stack trace a hundred and
+	// fifty lines long, and on CI the names scroll off the top of whatever
+	// anyone reads. The last line of the log should say what broke.
+	def failed = []
+	afterTest { desc, result ->
+		if (result.resultType == TestResult.ResultType.FAILURE) {
+			failed << "${desc.className.tokenize('.').last()}.${desc.name}"
+		}
+	}
 	afterSuite { desc, result ->
 		if (desc.parent == null) {
 			logger.lifecycle("Tests: ${result.testCount} run, ${result.skippedTestCount} skipped, "
 				+ "${result.failedTestCount} failed (${result.resultType})")
+			failed.each { logger.lifecycle("  failed: " + it) }
 		}
 	}
 }
@@ -151,6 +162,7 @@ jar {
 	}
 }
 
+import org.gradle.api.tasks.testing.TestResult
 import com.github.jengelman.gradle.plugins.shadow.transformers.ApacheLicenseResourceTransformer
 import com.github.jengelman.gradle.plugins.shadow.transformers.ApacheNoticeResourceTransformer
 

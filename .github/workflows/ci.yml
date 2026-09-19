@@ -13,6 +13,12 @@
 # userland is BSD's. jkite.properties pins a JDK for two Darwin platforms, so
 # they are platforms this project claims to support.
 #
+# No --stacktrace. It printed a hundred and fifty lines of Gradle's own
+# plumbing after every failure - never jkite's - and pushed the one thing worth
+# reading, which test failed, off the top of anything anyone scrolls back
+# through. The names are printed at the end of the run instead, and the whole
+# report is uploaded as an artifact whether the build passed or not.
+#
 # `./gradlew build` runs the whole suite, so no test is named here and a new
 # one is picked up by being written.
 name: CI
@@ -61,7 +67,7 @@ jobs:
       # the same one a contributor runs
       - name: Build and test
         shell: bash
-        run: ./gradlew build --stacktrace
+        run: ./gradlew build
 
       # always, not only on failure: a green run is exactly when you want to
       # read which tests were skipped, and the summary line prints a count
@@ -115,7 +121,7 @@ jobs:
 
       - name: Build the jar
         shell: bash
-        run: ./gradlew shadowJar --stacktrace
+        run: ./gradlew shadowJar
 
       - name: Run it
         shell: bash
