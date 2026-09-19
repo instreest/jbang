@@ -78,6 +78,16 @@ dependencies {
 
 test {
 	useJUnitPlatform()
+	// The shaded jar, for the tests that have to run jkite rather than call
+	// into it. The second half of a run - jkite.jar starting a JVM for the
+	// script - is a different process with a different command line from the
+	// first, and a test that calls AppBuilder in-process never crosses it.
+	dependsOn shadowJar
+	// Named rather than read off shadowJar: its archiveFileName is set further
+	// down this file, so asking the task here gets the default name it still
+	// has at this point, and handing over the provider hands over its
+	// toString. If the name ever changes, the test that uses this says so.
+	systemProperty 'jkite.jar', layout.buildDirectory.file('libs/jkite.jar').get().asFile.absolutePath
 	// The launcher tests run the scripts out of the source tree, which Gradle
 	// cannot see from the Java sources. Without this, editing a script leaves
 	// the test task up to date and the tests that cover it never run.
