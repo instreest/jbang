@@ -295,9 +295,18 @@ which is what the setting is for; pass `--yes` if you meant to allow it.
 
 ## Paths
 
-A project can live where your projects live. Non-ASCII directory names work —
-Japanese, Cyrillic, accented Latin are all tested, on Linux, macOS and Windows —
-and so do paths past Windows' 260-character limit.
+A project can live where your projects live. On Linux and macOS, non-ASCII
+directory names work — Japanese, Cyrillic and accented Latin are all tested.
+Paths past Windows' 260-character limit work everywhere, Windows included.
+
+**On Windows, do not install `jkite/` under a directory whose name your console
+code page cannot hold.** `jkite.cmd` finds its own jar through `%~dp0`, which
+comes back through that code page — 932 on a Japanese machine, 1252 on a
+Western one, never all of Unicode — so a name outside it arrives as `?` and the
+run stops with `Unable to access jarfile`. A Japanese name under a Japanese
+Windows is fine; a Japanese name under an English one is not, and neither is a
+mix. The `~\.jkite` cache is unaffected: it is passed in environment variables,
+which do not go through the code page.
 
 One exception, and it is the JDK's rather than jkite's: a character outside the
 Basic Multilingual Plane, which in practice means an emoji, anywhere in the path

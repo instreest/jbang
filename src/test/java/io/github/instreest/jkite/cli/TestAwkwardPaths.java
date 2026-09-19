@@ -119,13 +119,52 @@ class TestAwkwardPaths extends AbstractScriptTest {
 	 * paths carrying characters the platform's legacy encoding may not have.
 	 */
 	@Test
+	@EnabledOnOs({ OS.LINUX, OS.MAC })
 	void aProjectInAnAccentedDirectoryRuns() throws Exception {
 		runInADirectoryNamed(LATIN);
 	}
 
 	@Test
+	@EnabledOnOs({ OS.LINUX, OS.MAC })
 	void aProjectInAJapaneseOrCyrillicDirectoryRuns() throws Exception {
 		runInADirectoryNamed(WIDE);
+	}
+
+	/**
+	 * What Windows does instead, recorded rather than wished away.
+	 *
+	 * Installed under a directory whose name the console's active code page
+	 * cannot hold, jkite.cmd cannot find its own jar: java is handed
+	 * "...\\??????-??????\\jkite\\jkite.jar" and says it cannot access it. The
+	 * path is mangled between the batch file and java, not before - the test
+	 * hands cmd.exe a correct UTF-16 command line, and Windows itself has no
+	 * trouble with the directory. What cannot hold it is %~dp0, which comes
+	 * back through the code page the console happens to be in: 1252 on the CI
+	 * runner, 932 on a Japanese machine, and never all of Unicode.
+	 *
+	 * The cache directory is fine, which is the useful half of this: it
+	 * arrives in an environment variable, and those are UTF-16 all the way.
+	 * See aCacheDirectoryWithANonAsciiNameWorks, which passes here.
+	 *
+	 * The candidate fix is "chcp 65001" at the top of jkite.cmd, and it needs
+	 * judging on a real Windows machine rather than from a CI log: it changes
+	 * the console for whatever runs afterwards, and batch parsing under
+	 * UTF-8 has its own history. Until then this test says what happens, and
+	 * fails the day it stops happening.
+	 */
+	@Test
+	@EnabledOnOs(OS.WINDOWS)
+	void aNonAsciiInstallDirectoryIsMangledByTheConsoleCodePage() throws Exception {
+		Path base = Files.createDirectories(tempDir.resolve(WIDE));
+		Path launcher = installInto(base.resolve("jkite"), CMD_SCRIPT);
+
+		RunResult result = runProcess(command(launcher, "exit", "3"), env(base));
+
+		assertEquals(1, result.exitCode,
+				"jkite.cmd now works under a non-ASCII path; delete this test, enable the two "
+						+ "above on Windows and take the note out of README: " + result.stderr);
+		assertTrue(result.stderr.contains("Unable to access jarfile"), result.stderr);
+		assertTrue(result.stderr.contains("?"), "the path was not mangled after all: " + result.stderr);
 	}
 
 	private void runInADirectoryNamed(String name) throws Exception {
