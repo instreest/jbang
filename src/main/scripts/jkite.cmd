@@ -76,8 +76,9 @@ call :find_java || exit /b 1
 rem The jar goes to java by its 8.3 name, which is ASCII whatever the
 rem directory is called. java.exe converts its own command line to the
 rem machine's ANSI code page, so a path outside that page - a project under
-rem C:\Users\<a Japanese name> on an English Windows, and the other way round -
-rem reaches it as question marks and it says "Unable to access jarfile".
+rem a project under a Japanese profile name on an English Windows, or the
+rem other way round - reaches it as question marks, and it says
+rem "Unable to access jarfile".
 rem
 rem Measured rather than guessed: on a runner in code page 437, with the
 rem installation under a Japanese directory name, cmd.exe could see the file
@@ -85,9 +86,9 @@ rem through a variable and could hand the name to a child process, and
 rem java.exe could not open the jar at that path but could at the 8.3 one.
 rem So this is java's limit and not the console's, and chcp does not touch it.
 rem
-rem jar_path itself is left alone: it is what the messages say, and %~s only
-rem reads well to a machine. Where 8.3 names are turned off for a volume
-rem this gives the long name back unchanged, which is no worse than before.
+rem jar_path itself is left alone: it is what the messages say, and an 8.3
+rem name only reads well to a machine. Where short names are turned off for a
+rem volume this gives the long one back unchanged, which is where we were.
 call :to_short_path jar_arg "%jar_path%"
 set launch_cmd="%java_exec%" %JKITE_JAVA_OPTIONS% -jar "%jar_arg%"
 
