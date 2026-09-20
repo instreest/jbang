@@ -60,6 +60,59 @@ class TestBatchSyntax {
 						+ "in a comment:\n" + String.join("\n", bad));
 	}
 
+	/**
+	 * A variable that changes on every read is useless read with %%, because
+	 * cmd.exe expands a whole parenthesised block once, when it parses it.
+	 * So inside a "for" or an "if", %RANDOM% is one number repeated, not a
+	 * new one each time round - which turns a retry loop into the same
+	 * attempt twenty times. !RANDOM! is read each time, which is the point of
+	 * delayed expansion.
+	 *
+	 * Written after making exactly that mistake in install.cmd's retry for
+	 * its staging directory, where it would have looked like it worked: the
+	 * first attempt succeeds almost always, and the retry only matters on the
+	 * collision it exists for.
+	 *
+	 * Only %RANDOM% and %ERRORLEVEL% - the two that change under the script's
+	 * feet. An ordinary variable set outside the block is meant to be read
+	 * with %% and usually is.
+	 */
+	@Test
+	void aVariableThatChangesIsNotReadWithParseTimeExpansion() throws IOException {
+		Pattern volatileVar = Pattern.compile("%(RANDOM|ERRORLEVEL)%", Pattern.CASE_INSENSITIVE);
+		List<String> bad = new ArrayList<>();
+		for (Path file : batchFiles()) {
+			List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+			int depth = 0;
+			for (int i = 0; i < lines.size(); i++) {
+				String line = lines.get(i);
+				String code = line.trim().toLowerCase().startsWith("rem ") ? "" : line;
+				if (depth > 0 && volatileVar.matcher(code).find()) {
+					bad.add(file + ":" + (i + 1) + "  " + line.trim());
+				}
+				depth += count(code, '(') - count(code, ')');
+				if (depth < 0) {
+					depth = 0;
+				}
+			}
+		}
+
+		assertTrue(bad.isEmpty(),
+				"cmd.exe expands a block once when it parses it, so these read one value and "
+						+ "reuse it; write !RANDOM! or !ERRORLEVEL! instead:\n"
+						+ String.join("\n", bad));
+	}
+
+	private static int count(String line, char c) {
+		int n = 0;
+		for (int i = 0; i < line.length(); i++) {
+			if (line.charAt(i) == c) {
+				n++;
+			}
+		}
+		return n;
+	}
+
 	/** Every %~ on the line that the valid pattern does not account for. */
 	private static List<String> suspect(String line) {
 		List<String> out = new ArrayList<>();

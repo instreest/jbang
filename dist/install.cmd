@@ -55,9 +55,26 @@ if not "%~1"=="" (
 )
 
 rem Everything is fetched into a staging directory first, so a failed download
-rem leaves an existing installation as it was
-set "staging=%TEMP%\jkite-%RANDOM%%RANDOM%"
-mkdir "%staging%" || exit /b 1
+rem leaves an existing installation as it was.
+rem
+rem Retried, because %RANDOM% is not unique: cmd.exe seeds it from the clock,
+rem so two installs started in the same tick draw the same numbers and the
+rem second one's mkdir fails with "already exists". That is not theoretical -
+rem it is what --update does, running install.cmd again right after an
+rem install. mkdir is the one atomic thing here, so whoever it succeeds for
+rem has the name; the other draws the next number, which the winner will
+rem never ask for.
+set "staging="
+for /l %%A in (1,1,20) do (
+  if not defined staging (
+    set "try=%TEMP%\jkite-!RANDOM!!RANDOM!"
+    mkdir "!try!" 2>nul && set "staging=!try!"
+  )
+)
+if not defined staging (
+  echo Could not make a staging directory under %TEMP% 1>&2
+  exit /b 1
+)
 
 echo Installing jkite from !base! into !dir! 1>&2
 rem what a project gets; dist\ in the repository holds the same set
