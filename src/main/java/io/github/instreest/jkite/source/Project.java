@@ -131,7 +131,7 @@ public class Project {
 	 * directives and passed on to the script.
 	 */
 	public Project(Path mainSource, Map<String, String> properties) {
-		this.mainSource = RealPath.of(mainSource);
+		this.mainSource = RealPath.of(mainSource, "The script");
 		this.properties = properties;
 		this.contextProperties = new Properties(System.getProperties());
 		OsDetector.detect(contextProperties);
@@ -192,7 +192,7 @@ public class Project {
 				Util.warnMsg("//SOURCES " + pattern + " (in " + source.getFileName() + ") matched no files");
 			}
 			for (String f : files) {
-				addSource(RealPath.of(baseDir.resolve(f)), false);
+				addSource(RealPath.of(baseDir.resolve(f), "The source named by //SOURCES"), false);
 			}
 		}
 	}
@@ -225,7 +225,7 @@ public class Project {
 					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 							"//FILES target must stay inside the jar. Found: " + dest);
 				}
-				Path from = RealPath.of(baseDir.resolve(src));
+				Path from = RealPath.of(baseDir.resolve(src), "The file named by //FILES");
 				if (!Files.isReadable(from)) {
 					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 							"File could not be found or read: " + from);

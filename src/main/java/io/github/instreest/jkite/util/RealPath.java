@@ -1,9 +1,10 @@
 package io.github.instreest.jkite.util;
 
 import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 
-import dev.jbang.util.Util;
+import dev.jbang.ExitException;
 
 /**
  * The file a shell would open, rather than the one string folding arrives at.
@@ -23,24 +24,30 @@ import dev.jbang.util.Util;
  * walks, and applies ".." to what the link actually reached. Same procedure
  * as the shell, so the same answer.
  *
- * It needs the file to exist, which folding did not, so a path that is not
- * there falls back to folding and lets whoever asked report the missing file
- * in their own words. That keeps this from turning "no such script" into a
- * stack trace.
+ * Unlike folding, it needs the file to exist. Everything here is a file jkite
+ * is about to read - the script, a //SOURCES sibling, a //FILES resource - so
+ * one that is not there is a mistake to report and not a path to carry on
+ * with. It says so, naming which file and why, rather than folding the string
+ * and letting the failure surface somewhere further on as something else.
  */
 public final class RealPath {
 
 	private RealPath() {
 	}
 
-	public static Path of(Path path) {
+	/**
+	 * @param what what this path is, for the message: "The script", "The
+	 *             source named by //SOURCES"
+	 */
+	public static Path of(Path path, String what) {
 		try {
 			return path.toRealPath();
+		} catch (NoSuchFileException e) {
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+					what + " could not be found: " + path);
 		} catch (IOException e) {
-			// not there, or not readable, or a file system that will not say -
-			// the caller has a better message for that than this does
-			Util.verboseMsg("Could not resolve " + path + " to a real path: " + e);
-			return path.toAbsolutePath().normalize();
+			throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+					what + " could not be read: " + path + " (" + e + ")");
 		}
 	}
 }

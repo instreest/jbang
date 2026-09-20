@@ -348,8 +348,9 @@ Paths are resolved the way the file system resolves them, not by folding the
 text. If a directory on the way is a symbolic link and the path has a `..`
 after it, `a/link/../x` is not `a/x` — the link is followed first — so jkite
 asks the file system rather than cancelling the two against each other. It
-runs the file your shell would open. A path that is not there is left as
-written, so a missing script is still reported as a missing script.
+runs the file your shell would open. A file that is not there is reported as
+missing, naming which one it was — the script, a `//SOURCES` sibling or a
+`//FILES` resource.
 
 One more, and it is the JDK's rather than jkite's: a character outside the Basic
 Multilingual Plane — in practice an emoji — anywhere in the path `jkite/` is

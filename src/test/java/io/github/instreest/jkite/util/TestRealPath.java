@@ -1,6 +1,7 @@
 package io.github.instreest.jkite.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -12,6 +13,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
+
+import dev.jbang.ExitException;
 
 /**
  * Where folding a path and walking it give different answers.
@@ -58,7 +61,7 @@ class TestRealPath {
 		Files.createSymbolicLink(dir.resolve("real/link"), dir.resolve("elsewhere"));
 		Path typed = dir.resolve("real/link/../which.txt");
 
-		Path resolved = RealPath.of(typed);
+		Path resolved = RealPath.of(typed, "The script");
 
 		assertEquals("walked", read(resolved),
 				"it folded the string and reached the other file: " + resolved);
@@ -73,24 +76,50 @@ class TestRealPath {
 	void anOrdinaryPathIsUnchanged() throws Exception {
 		Path made = file(dir.resolve("plain/Report.java"), "x");
 
-		assertEquals(made.toRealPath(), RealPath.of(dir.resolve("plain/./Report.java")));
+		assertEquals(made.toRealPath(), RealPath.of(dir.resolve("plain/./Report.java"), "The script"));
 	}
 
 	/** Relative in, absolute out, as before. */
 	@Test
 	void aRelativePathIsStillMadeAbsolute() {
-		assertTrue(RealPath.of(Path.of(".")).isAbsolute());
+		assertTrue(RealPath.of(Path.of("."), "The script").isAbsolute());
 	}
 
 	/**
-	 * A path that is not there is folded rather than thrown about, because
-	 * toRealPath() needs the file to exist and whoever asked has a better
-	 * message for a missing script than an IOException.
+	 * A path that is not there is refused, not folded.
+	 *
+	 * toRealPath() needs the file to exist, and every path that comes through
+	 * here is one jkite is about to read, so there is no case where carrying
+	 * on with a guessed path is the right answer - the failure would only
+	 * surface further on as something harder to read. The message names which
+	 * file it was, because "could not be found" on its own is no use when a
+	 * script pulls in siblings with //SOURCES and resources with //FILES.
 	 */
 	@Test
-	void aPathThatIsNotThereFallsBackToFolding() {
+	void aPathThatIsNotThereIsRefusedAndSaysWhichItWas() {
+		Path missing = dir.resolve("nope/Report.java");
+
+		ExitException e = assertThrows(ExitException.class,
+				() -> RealPath.of(missing, "The source named by //SOURCES"));
+
+		assertEquals(ExitException.EXIT_INVALID_INPUT, e.getStatus(), e.getMessage());
+		assertTrue(e.getMessage().contains("//SOURCES"), e.getMessage());
+		assertTrue(e.getMessage().contains(missing.toString()), e.getMessage());
+	}
+
+	/**
+	 * A ".." over a directory that is not there is the same answer, and it is
+	 * worth its own test: this is exactly the case folding used to swallow -
+	 * it would cancel "nope" against ".." and hand back a path that looks
+	 * perfectly good and names a file nobody asked for.
+	 */
+	@Test
+	void aDotDotOverAMissingDirectoryIsRefusedRatherThanCancelled() {
 		Path missing = dir.resolve("nope/../Report.java");
 
-		assertEquals(dir.resolve("Report.java"), RealPath.of(missing));
+		ExitException e = assertThrows(ExitException.class,
+				() -> RealPath.of(missing, "The script"));
+
+		assertTrue(e.getMessage().contains("could not be found"), e.getMessage());
 	}
 }
