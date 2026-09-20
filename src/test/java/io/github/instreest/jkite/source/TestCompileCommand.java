@@ -69,11 +69,21 @@ class TestCompileCommand {
 		assertEquals("ISO-8859-1", cmd.get(theirs + 1), cmd.toString());
 	}
 
-	/** The sources come last, after every option, or javac reads them as one. */
+	/**
+	 * The sources come last, after every option, or javac reads them as one.
+	 *
+	 * toRealPath() on the expected side because jkite resolves the source to
+	 * the file the shell would open, and a temp directory is reached through
+	 * a link on two of the three platforms here: /var is /private/var on
+	 * macOS, and C:\\Users\\RUNNER~1 is the 8.3 name of C:\\Users\\runneradmin
+	 * on Windows. Comparing against the unresolved path would be asserting
+	 * that jkite does not do the thing it is meant to do.
+	 */
 	@Test
 	void theSourcesComeAfterTheOptions() throws IOException {
 		List<String> cmd = commandFor("class Tool { }\n");
 
-		assertEquals(dir.resolve("Tool.java").toString(), cmd.get(cmd.size() - 1), cmd.toString());
+		assertEquals(dir.resolve("Tool.java").toRealPath().toString(), cmd.get(cmd.size() - 1),
+				cmd.toString());
 	}
 }

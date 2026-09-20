@@ -331,8 +331,13 @@ jkite Report.java
 
 Work through `X:` and nothing outside the code page ever reaches `javac`. It
 needs no administrator rights and changes nothing about the machine — only
-this session, and `subst X: /d` undoes it. A junction (`mklink /J`) works the
-same way. Both are measured on the Windows CI job rather than assumed.
+this session, and `subst X: /d` undoes it.
+
+A junction (`mklink /J`) does **not** work for this, though it looks like it
+should: a junction is a reparse point, so jkite resolves it back to the real
+directory (see below) and the Japanese name comes back. A subst drive is a
+drive-letter mapping rather than a reparse point, so it survives. Both are
+measured on the Windows CI job rather than assumed.
 
 jkite no longer adds to that list: the build directory used to be named after
 the script, so `レポート.java` put its own name into a path of jkite's making as

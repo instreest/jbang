@@ -117,10 +117,28 @@ class TestSubstAndJunction extends AbstractScriptTest {
 		}
 	}
 
-	/** The same through a junction, which is the other way to get an ASCII path. */
+	/**
+	 * A junction is NOT the same, and this is what says so.
+	 *
+	 * It used to pass. Then jkite started resolving sources to the file the
+	 * shell would open, so that a link followed by ".." does not silently
+	 * name a different file - and toRealPath(), which is how that is done,
+	 * follows a junction, because a junction is a reparse point in the file
+	 * system and that is exactly what it is defined to follow. The Japanese
+	 * directory comes back, and the path check refuses it.
+	 *
+	 * That is a real cost of that change and it is recorded rather than
+	 * papered over: somebody who had worked around the code page with a
+	 * junction loses that. subst is not affected - it is a drive-letter
+	 * mapping rather than a reparse point, so toRealPath() does not see
+	 * through it - which is why subst and not a junction is what README
+	 * tells people to use.
+	 *
+	 * It refuses with a reason, which is the part that keeps this tolerable.
+	 */
 	@Test
 	@EnabledOnOs(OS.WINDOWS)
-	void aJunctionHidesAJapaneseDirectoryFromJavac() throws Exception {
+	void aJunctionNoLongerHidesAJapaneseDirectory() throws Exception {
 		Path real = tempDir.resolve(JAPANESE + "-junction");
 		script(real);
 		Path link = tempDir.resolve("ascii-link");
@@ -132,8 +150,12 @@ class TestSubstAndJunction extends AbstractScriptTest {
 		RunResult result = runJkite(link + "\\Report.java", tempDir.resolve("home-junction"));
 		String said = result.stdout + result.stderr;
 
-		assertEquals(0, result.exitCode, said);
-		assertTrue(said.contains("ran"), said);
+		assertTrue(result.exitCode != 0, said);
+		assertTrue(said.contains("The path of the script"),
+				"it failed, but not by naming the path it could not use: " + said);
+		assertTrue(said.contains(JAPANESE),
+				"it did not show the real directory, so the message does not explain itself: "
+						+ said);
 	}
 
 	/**
