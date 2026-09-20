@@ -82,6 +82,25 @@ class TestRun extends AbstractScriptTest {
 		assertTrue(result.stderr.contains("Unknown option: --java"), result.stderr);
 	}
 
+	/**
+	 * --update is documented, so "Unknown option" sends the reader looking for
+	 * a typo they did not make. It is answered by the launcher script rather
+	 * than by the jar - which is what lets an installation whose jar cannot be
+	 * downloaded still update out of that state - so it only works first, and
+	 * the message says that instead.
+	 */
+	@Test
+	void updateAfterAnotherOptionSaysItHasToComeFirst() throws Exception {
+		Path script = tempDir.resolve("Echo.java");
+		Files.write(script, SCRIPT.getBytes(StandardCharsets.UTF_8));
+
+		RunResult result = runProcess(jkite("--verbose", "--update", script.toString()), env());
+
+		assertEquals(2, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("first argument"), result.stderr);
+		assertFalse(result.stderr.contains("Unknown option"), result.stderr);
+	}
+
 	@Test
 	void aDirectoryIsRejectedAsInvalidInput() throws Exception {
 		RunResult result = runProcess(jkite(tempDir.toString()), env());

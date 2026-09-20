@@ -318,6 +318,29 @@ class TestWrapperInstall extends AbstractScriptTest {
 		return hex.toString();
 	}
 
+	/**
+	 * A download that fails says so in a sentence, and exits 1.
+	 *
+	 * "set -e" ends the run on curl's own exit code - 22 for an HTTP error -
+	 * and prints only "curl: (22) The requested URL returned error: 404",
+	 * which names neither the file nor the release it was not in, and hands
+	 * back a status that is not one of jkite's. install.cmd already got this
+	 * right; install.sh did not.
+	 */
+	@Test
+	void aFailedDownloadIsExplainedRatherThanLeftToCurl() throws Exception {
+		wm.resetAll();
+		wm.stubFor(WireMock.get(WireMock.urlMatching("/releases/latest/download/.*"))
+			.willReturn(WireMock.aResponse().withStatus(404)));
+
+		RunResult result = install(project);
+
+		assertEquals(1, result.exitCode, result.stderr);
+		assertTrue(result.stderr.contains("Could not download"), result.stderr);
+		assertFalse(Files.exists(project.resolve("jkite")) && Files.list(project.resolve("jkite")).findAny().isPresent(),
+				"a failed install left files behind: " + project.resolve("jkite"));
+	}
+
 	private RunResult install(Path where) throws Exception {
 		return runProcess(Arrays.asList("bash", DIST.resolve("install.sh").toString(),
 				where.resolve("jkite").toString()), env());

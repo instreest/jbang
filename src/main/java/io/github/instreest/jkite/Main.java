@@ -161,6 +161,18 @@ public final class Main {
 					} else if (a.startsWith("-R")) {
 						o.runtimeOptions.add(a.substring(2));
 					} else if (a.startsWith("-")) {
+						// --update is real, it is just not the jar's: the launcher
+						// script answers it so that an installation whose jar
+						// cannot be downloaded can still update out of that state.
+						// Which means it only works as the first argument, and
+						// "Unknown option" for an option the README documents
+						// sends the reader looking for a typo they did not make.
+						if ("--update".equals(a)) {
+							throw new ExitException(ExitException.EXIT_INVALID_INPUT,
+									"--update has to be the first argument: the launcher script answers"
+											+ " it, so that it works even when the jar cannot be"
+											+ " downloaded.");
+						}
 						throw new ExitException(ExitException.EXIT_INVALID_INPUT, "Unknown option: " + a);
 					} else {
 						o.script = a;

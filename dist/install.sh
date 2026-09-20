@@ -10,7 +10,7 @@
 # Everything comes from a GitHub release, over https. jkite.jar and a JDK
 # are not installed here: jkite.properties pins the version, URL and
 # SHA-256 of each, and the launcher downloads and verifies them once per
-# machine, into ~/.jkite. So a project's history carries about 95 kB of
+# machine, into ~/.jkite. So a project's history carries about 98 kB of
 # scripts rather than binaries. A project that would rather vendor the jar can
 # drop a jkite.jar into jkite/ next to the launcher, and then only a
 # JDK is ever fetched.
@@ -63,15 +63,26 @@ jkite_install() {
          jkite-bootstrap-jar jkite-bootstrap-jar.cmd jkite.properties
          install.sh install.cmd README.md LICENSE"
 
+  # Says what failed and exits 1, the way install.cmd already did. Without
+  # this, "set -e" ends the run on curl's own exit code - 22 for an HTTP
+  # error - and the only thing printed is "curl: (22) The requested URL
+  # returned error: 404", which names neither the file nor the release it was
+  # not in. The commonest way to get here is a tag that does not exist.
+  fetch_failed() {
+    echo "Could not download $1 from $base" 1>&2
+    echo "Check that the release exists and that this machine can reach it." 1>&2
+    exit 1
+  }
+
   fetch() {  # $1 = file to fetch, $2 = file to write
     if command -v curl > /dev/null 2>&1; then
-      curl -fsSL --proto '=https,http' --proto-redir '=https' "$base/$1" -o "$2"
+      curl -fsSL --proto '=https,http' --proto-redir '=https' "$base/$1" -o "$2" || fetch_failed "$1"
     elif command -v wget > /dev/null 2>&1; then
       # as for curl above: no redirect off https, except for the loopback the
       # tests serve on, which the check above has already allowed through
       case "$base" in
-        https://*) wget -q --https-only "$base/$1" -O "$2" ;;
-        *) wget -q "$base/$1" -O "$2" ;;
+        https://*) wget -q --https-only "$base/$1" -O "$2" || fetch_failed "$1" ;;
+        *) wget -q "$base/$1" -O "$2" || fetch_failed "$1" ;;
       esac
     else
       echo "Neither curl nor wget is available" 1>&2

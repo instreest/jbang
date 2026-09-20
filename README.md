@@ -55,7 +55,7 @@ jkite\jkite.cmd tools\Report.java  # Windows
 ````
 
 `install.cmd` installs from a Windows command prompt. The installer writes
-eleven files, about 95 kB, into `jkite/`; commit all of them, the way a
+eleven files, about 98 kB, into `jkite/`; commit all of them, the way a
 Gradle or Maven wrapper is committed.
 
 ## What gets committed, and what gets downloaded
@@ -186,8 +186,10 @@ jkite [<options>] <script.java> [<args>...]
 Options may appear anywhere before the script, `--` ends them, and everything
 after the script is the script's. `-V`, `--version` and `--update` are the
 exception: the launcher answers those itself, without downloading anything, and
-only when they are the first argument. `jkite --verbose --version` is a normal
-run of a script called `--version`.
+only when they are the first argument — that is the form that reports where the
+jar and the pinning come from, and it is the one to paste into a bug report.
+Later on they reach the jar, which answers `--version` with the bare version
+and `--update` with an error, since updating is the launcher's job.
 
 There is deliberately no option that overrides what a script's directives say:
 the tool's author decides what the tool needs, not whoever runs it. The

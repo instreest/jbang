@@ -20,9 +20,11 @@ import org.junit.jupiter.api.Test;
  * What a project takes on by committing jkite/, said the same way everywhere.
  *
  * It is the number that decides whether someone is willing to commit this at
- * all, and it was stated in three places with two different values, neither of
- * them right: README said 90 kB, dist/install.sh and misc/update-dist.sh said
- * 80 kB, and it was 96. Prose drifts because nothing reads it; this reads it.
+ * all, and it was stated in four places with three different values, none of
+ * them right: README said 90 kB, dist/README.md 90, dist/install.sh and
+ * misc/update-dist.sh 80, and it was 96. dist/README.md was left out of this
+ * check when it was first written and promptly drifted again, which is the
+ * argument for the check rather than against it. Prose drifts because nothing reads it; this reads it.
  *
  * The tolerance is wide on purpose. The point is not the exact figure - it is
  * that the three agree with each other and that none of them has quietly gone
@@ -34,6 +36,9 @@ class TestDistSize {
 
 	private static final List<Path> SAYS_SO = java.util.Arrays.asList(
 			Paths.get("README.md"),
+			// the one a project's own contributors read, and the one that had
+			// drifted furthest: it said 90 kB while README said 95
+			Paths.get("dist/README.md"),
 			Paths.get("dist/install.sh"),
 			Paths.get("misc/update-dist.sh"));
 

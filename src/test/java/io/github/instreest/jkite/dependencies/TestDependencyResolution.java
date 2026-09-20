@@ -22,6 +22,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import dev.jbang.ExitException;
 import dev.jbang.dependencies.MavenRepo;
+import dev.jbang.util.Util;
 
 /**
  * Resolving <code>//DEPS</code>, which is the one download a project makes on
@@ -250,5 +251,45 @@ class TestDependencyResolution {
 				Files.deleteIfExists(p);
 			}
 		}
+	}
+
+	/**
+	 * What --offline says when the answer is not already on the machine.
+	 *
+	 * The resolver's own words are "Could not read artifact descriptor for
+	 * ...", which mentions neither the network nor the option that turned it
+	 * off; the reason sits three causes down where nobody looks. Somebody who
+	 * passed --offline asked for exactly this outcome and should be told so in
+	 * the first line, with the coordinates to fetch first.
+	 */
+	@Test
+	void offlineSaysThatOfflineIsWhy() throws IOException {
+		publish("com.example", "absent", "1.0");
+		// published to a repository that is reachable, so the only reason this
+		// cannot resolve is the switch - aether treats a file: repository as
+		// remote like any other and will not look at it offline
+		Util.setOffline(true);
+		try {
+			ExitException e = assertThrows(ExitException.class,
+					() -> DependencyResolver.resolve(deps("com.example:absent:1.0"), repos));
+
+			assertTrue(e.getMessage().contains("--offline"), e.getMessage());
+			assertTrue(e.getMessage().contains("com.example:absent:1.0"), e.getMessage());
+			assertTrue(!e.getMessage().contains("artifact descriptor"),
+					"it is still the resolver's message, which does not mention offline: "
+							+ e.getMessage());
+		} finally {
+			Util.setOffline(false);
+		}
+	}
+
+	/** With the network on, the resolver's own message is the useful one. */
+	@Test
+	void withTheNetworkOnTheResolverStillSpeaksForItself() {
+		ExitException e = assertThrows(ExitException.class,
+				() -> DependencyResolver.resolve(deps("com.example:never-published:1.0"), repos));
+
+		assertTrue(!e.getMessage().contains("--offline"),
+				"it blamed --offline for a failure that had nothing to do with it: " + e.getMessage());
 	}
 }

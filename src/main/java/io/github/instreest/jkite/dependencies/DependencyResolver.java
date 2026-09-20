@@ -123,7 +123,37 @@ public final class DependencyResolver {
 			DependencyCache.store(key, artifacts);
 			Util.verboseMsg("Resolved artifact(s): " + artifacts);
 			return artifacts;
+		} catch (RuntimeException e) {
+			throw offlineIsTheReason(e, depIds);
 		}
+	}
+
+	/**
+	 * Says that --offline is why, when it is.
+	 *
+	 * Asked to resolve something the local repository does not have, the
+	 * resolver reports "Could not read artifact descriptor for ...", which is
+	 * true and mentions neither the network nor the option that turned it off.
+	 * The reason is in the third cause down, where nobody looks:
+	 *
+	 *   Cannot access central (...) in offline mode and the artifact ... has
+	 *   not been downloaded from it before
+	 *
+	 * Somebody who passed --offline asked for exactly this and should be told
+	 * so in the first line, with the coordinates they would need to fetch
+	 * first. Only when offline: with the network on, the resolver's own
+	 * message is the useful one and is left alone.
+	 */
+	private static RuntimeException offlineIsTheReason(RuntimeException e, List<String> depIds) {
+		if (!Util.isOffline()) {
+			return e;
+		}
+		return new ExitException(ExitException.EXIT_INVALID_INPUT,
+				"Cannot resolve these without the network, and --offline was asked for:"
+						+ System.lineSeparator() + "   " + String.join(System.lineSeparator() + "   ", depIds)
+						+ System.lineSeparator()
+						+ "Run once without --offline to put them in the local Maven repository.",
+				e);
 	}
 
 	/**
