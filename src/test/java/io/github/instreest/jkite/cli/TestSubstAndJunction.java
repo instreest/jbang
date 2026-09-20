@@ -153,7 +153,12 @@ class TestSubstAndJunction extends AbstractScriptTest {
 		assertTrue(result.exitCode != 0, said);
 		assertTrue(said.contains("The path of the script"),
 				"it failed, but not by naming the path it could not use: " + said);
-		assertTrue(said.contains(JAPANESE),
+		// "-junction" and not the Japanese itself: the message travels back
+		// through the console's code page, which by construction cannot hold
+		// those characters, so they arrive as "??????". The suffix is on the
+		// real directory and not on the link, which was called "ascii-link",
+		// so its presence is what says the junction was resolved.
+		assertTrue(said.contains("-junction"),
 				"it did not show the real directory, so the message does not explain itself: "
 						+ said);
 	}
