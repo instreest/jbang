@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 public class DependencyUtil {
 	// jkite shim: same API as upstream except resolveDependencies(), which
 	// lives in io.github.instreest.jkite.dependencies.DependencyResolver here. Keep the rest in
-	// sync with upstream when it changes (see misc/upstream-mirror.txt).
+	// sync with upstream when it changes (see misc/upstream-shims.txt).
 
 
 	public static final String ALIAS_JITPACK = "jitpack";

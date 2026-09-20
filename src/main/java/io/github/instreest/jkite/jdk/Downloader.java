@@ -67,7 +67,7 @@ final class Downloader {
 	 */
 	static Optional<String> tryReadString(String url) {
 		try {
-			Path tmp = Files.createTempFile("jbang", ".txt");
+			Path tmp = Files.createTempFile("jkite", ".txt");
 			try {
 				transfer(url, tmp);
 				return Optional.of(new String(Files.readAllBytes(tmp), java.nio.charset.StandardCharsets.UTF_8));

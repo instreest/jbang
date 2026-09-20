@@ -133,7 +133,7 @@ test {
 		layout.buildDirectory.dir('should-be-ignored').get().asFile.absolutePath
 	testLogging {
 		events "failed"
-		exceptionFormat "full"
+		exceptionFormat = "full"
 	}
 	// How many actually ran. A test class that is silently skipped - an
 	// @EnabledOnOs that never matches, a platform assumption that is not true

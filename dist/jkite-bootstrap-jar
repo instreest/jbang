@@ -66,7 +66,7 @@ property() {
 
 read_properties() {
   if [ ! -f "$propertiesFile" ]; then
-    echo "$propertiesFile not found. Re-run $abs_jbang_dir/install.sh to restore it." 1>&2
+    echo "$propertiesFile not found. Re-run $abs_jkite_dir/install.sh to restore it." 1>&2
     return 1
   fi
   distributionVersion=$(property distributionVersion)
@@ -258,8 +258,8 @@ install_jar_locked() {
 
 # --- Main --------------------------------------------------------------------
 
-abs_jbang_dir=$(script_dir)
-propertiesFile=$abs_jbang_dir/jkite.properties
+abs_jkite_dir=$(script_dir)
+propertiesFile=$abs_jkite_dir/jkite.properties
 
 read_properties || exit 1
 jarDir="$CACHEDIR/jkite/$distributionVersion"

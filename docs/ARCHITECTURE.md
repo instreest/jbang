@@ -12,7 +12,7 @@ every project that pins the same version.
 ```mermaid
 flowchart LR
   subgraph repo["the tool's repository (git)"]
-    L["jkite/<br/>8 scripts + jkite.properties<br/>+ LICENSE and README<br/>89 kB"]
+    L["jkite/<br/>8 scripts + jkite.properties<br/>+ LICENSE and README<br/>about 98 kB"]
     T["tools/Report.java<br/>//JAVA //DEPS //SOURCES"]
   end
   subgraph machine["~/.jkite (per machine, shared)"]
@@ -85,8 +85,8 @@ Four places, and no others.
 | `//DEPS` | Maven Central, or `//REPOS` (https, or a `file:` path) | the checksums the repository publishes, as Maven checks them |
 
 The first two happen in the shell, before any JVM exists; the last two happen
-in the jar. Each side asks before it fetches, which is why a cold first run
-asks twice. `JKITE_CONFIRM_DOWNLOADS` governs both.
+in the jar. Each side asks before it fetches, which is why a cold first run asks
+at least twice, and three times when the `//JAVA` JDK has to be installed too. `JKITE_CONFIRM_DOWNLOADS` governs both.
 
 A checksum is checked when something is downloaded and, where it can be
 afforded, whenever what was downloaded is used again: the launcher hashes

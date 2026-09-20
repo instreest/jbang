@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
  * <code>dev.jbang.util.JavaUtil</code>, with the same signatures and
  * behaviour. The JDK management part of upstream's class lives in
  * <code>dev.jbang.jdk</code> here. Keep this in sync with upstream when it
- * changes (see misc/upstream-mirror.txt).
+ * changes (see misc/upstream-shims.txt).
  */
 public class JavaUtil {
 

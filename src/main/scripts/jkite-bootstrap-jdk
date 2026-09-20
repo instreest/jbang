@@ -94,7 +94,7 @@ platform() {
 read_properties() {
   local plat
   if [ ! -f "$propertiesFile" ]; then
-    echo "$propertiesFile not found. Re-run $abs_jbang_dir/install.sh to restore it." 1>&2
+    echo "$propertiesFile not found. Re-run $abs_jkite_dir/install.sh to restore it." 1>&2
     return 1
   fi
   plat=$(platform) || return 1
@@ -276,8 +276,8 @@ install_jdk_locked() {
 
 # --- Main --------------------------------------------------------------------
 
-abs_jbang_dir=$(script_dir)
-propertiesFile=$abs_jbang_dir/jkite.properties
+abs_jkite_dir=$(script_dir)
+propertiesFile=$abs_jkite_dir/jkite.properties
 
 if [ ! -x "$jdkDir/bin/java" ]; then
   read_properties || exit 1

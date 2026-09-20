@@ -49,6 +49,19 @@ It reads those from the [Coursier](https://github.com/coursier/jvm-index) JVM
 index on Maven Central, once, here. The scripts a project commits therefore
 have nothing to resolve and nothing to parse; they download, verify and unpack.
 
+**Never hand-edit `dist/jkite.properties`.** The SHA-256 in it is of a jar that
+was built, so any change to what the jar contains — including a rename — means
+re-running the script, and the one time that did not happen the committed pin
+was the checksum of an artifact nothing served. `misc/update-dist.sh --check`,
+which CI runs, now refuses a version, URL and checksum that no longer describe
+one artifact; it cannot recompute the checksum, because that is a property of a
+release asset and not of a checkout.
+
+The jar is reproducible (`preserveFileTimestamps = false`,
+`reproducibleFileOrder = true`), so the jar uploaded to the release is
+bit-for-bit the one whose checksum went into `dist/`, and a rebuild from the
+same commit gives the same digest.
+
 `dist/` is what a project installs and is also what the release carries as
 assets, which is why `gh release create` uploads it: `install.sh` fetches from
 `releases/latest/download/`, so the newest release is found through GitHub's

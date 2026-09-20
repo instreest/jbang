@@ -39,6 +39,9 @@ class TestDistSize {
 			// the one a project's own contributors read, and the one that had
 			// drifted furthest: it said 90 kB while README said 95
 			Paths.get("dist/README.md"),
+			// the fifth copy, and the one that had gone stalest: the diagram
+			// said 89 kB while everything else said 98
+			Paths.get("docs/ARCHITECTURE.md"),
 			Paths.get("dist/install.sh"),
 			Paths.get("misc/update-dist.sh"));
 

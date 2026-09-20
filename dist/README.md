@@ -22,7 +22,11 @@ against a SHA-256 committed in `jkite.properties`:
 2. A JDK, into `~/.jkite/cache/jdks/bootstrap`, but only if the machine has
    no usable one. `JAVA_HOME` and a `javac` on the `PATH` are used when they are
    Java 11 or newer.
-3. The JDK a tool asks for with `//JAVA`, and its `//DEPS` from Maven Central.
+
+Those two are the launcher's, and they are the two this project pins. The jar
+then fetches what the tool itself asks for — the JDK named by `//JAVA`, and the
+`//DEPS` from Maven Central — and those are verified against the checksums their
+publishers serve, not against anything in `jkite.properties`.
 
 Nothing is written into the project, and the caches are per machine, so other
 projects pinning the same version download nothing. Several runs at once are

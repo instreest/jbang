@@ -31,7 +31,9 @@ import dev.jbang.util.Util;
  * </pre>
  *
  * Every one of them can be thrown away: the next run builds or fetches what it
- * needs again. <code>--clear-cache</code> does exactly that.
+ * needs again. <code>--clear-cache</code> does that for all of them but
+ * <code>jdks/</code>, which it keeps and names, because a JDK is pinned and
+ * costs minutes to fetch again.
  */
 public final class Settings {
 	public static final String ENV_DIR = "JKITE_DIR";

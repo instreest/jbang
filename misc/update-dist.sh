@@ -24,8 +24,10 @@
 #   gh release create v0.2.0 dist/* build/libs/jkite.jar
 #   git add dist && git commit -m 'Release 0.2.0'
 #
-# --check rebuilds nothing and only compares the copied scripts; the jar and
-# the JDK it cannot check, as neither is here.
+# --check rebuilds nothing. It compares the copied scripts, checks that both
+# installers list every file in dist/, and checks that the three lines pinning
+# the jar still describe one artifact. The jar's SHA-256 it cannot verify -
+# that is the checksum of a release asset, not of anything in the checkout.
 #
 # Needs curl, unzip and awk on top of what the build needs.
 #
@@ -84,6 +86,52 @@ installer_list() {  # $1 = the installer to read the list out of
   esac | tr ' \t\n' '\n\n\n' | grep -v '^$' | sort
 }
 
+# The three lines that pin the jar have to describe one artifact.
+#
+# They did not once. A commit renaming the project from jbanglite to jkite
+# hand-edited distributionUrl - the release, and the jar's own filename, both
+# changed - and left distributionSha256Sum alone, so the committed pin was the
+# checksum of a jar that no longer existed under a name nothing served. Every
+# install at that version would have failed the verification jkite exists to
+# do, and nothing said so, because the SHA-256 of an artifact that has not been
+# built yet is not something a checkout can recompute.
+#
+# What a checkout CAN say is that the three lines still agree with each other:
+# the URL has to name this repository, the version in the tag has to be
+# distributionVersion, and the file at the end has to be jkite.jar. That is
+# exactly what a hand edit breaks and what update-dist.sh always gets right, so
+# it turns "somebody edited this by hand" into a failing check rather than a
+# failing install.
+check_pin() {
+  properties=dist/jkite.properties
+  pinnedVersion=$(sed -n 's/^distributionVersion=//p' "$properties")
+  pinnedUrl=$(sed -n 's/^distributionUrl=//p' "$properties")
+  pinnedSha=$(sed -n 's/^distributionSha256Sum=//p' "$properties")
+  expectedUrl="$releaseBaseUrl/$repo/releases/download/v$pinnedVersion/jkite.jar"
+
+  if [ -z "$pinnedVersion" ] || [ -z "$pinnedUrl" ] || [ -z "$pinnedSha" ]; then
+    echo "$properties does not pin the jar: version, URL and SHA-256 must all be set" 1>&2
+    return 1
+  fi
+  if [ "$pinnedUrl" != "$expectedUrl" ]; then
+    echo "$properties pins a URL that does not match its own version:" 1>&2
+    echo "  distributionUrl:     $pinnedUrl" 1>&2
+    echo "  from the version:    $expectedUrl" 1>&2
+    echo "  (run misc/update-dist.sh <version> rather than editing by hand)" 1>&2
+    return 1
+  fi
+  case $pinnedSha in
+    [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*)
+      [ ${#pinnedSha} -eq 64 ] || {
+        echo "$properties: distributionSha256Sum is not a SHA-256: $pinnedSha" 1>&2
+        return 1
+      } ;;
+    *)
+      echo "$properties: distributionSha256Sum is not a SHA-256: $pinnedSha" 1>&2
+      return 1 ;;
+  esac
+}
+
 check_installers() {
   present=$(ls dist | sort)
   bad=
@@ -111,12 +159,14 @@ if [ "${1:-}" = "--check" ]; then
     failed=1
   fi
   check_installers || failed=1
+  check_pin || failed=1
   if [ -n "$failed" ]; then
     exit 1
   fi
   echo "dist/ is up to date with the launcher scripts and LICENSE," 1>&2
-  echo "and both installers list every file in it" 1>&2
-  echo "(the jar and the JDK are downloads and are not checked here)" 1>&2
+  echo "both installers list every file in it, and the pinned jar's URL and" 1>&2
+  echo "version agree" 1>&2
+  echo "(the jar's SHA-256 is of a build and is not recomputed here)" 1>&2
   exit 0
 fi
 

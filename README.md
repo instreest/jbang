@@ -163,7 +163,7 @@ naming it. Say what the script is made of with `//SOURCES` instead.
 ## Options
 
 There are no subcommands. jkite runs the script, and only `--help`,
-`--version` and `--update` do something else.
+`--version`, `--update` and `--clear-cache` do something else.
 
 ```
 jkite [<options>] <script.java> [<args>...]
@@ -272,9 +272,9 @@ export JKITE_JAVA_OPTIONS="-Djavax.net.ssl.trustStore=/path/to/truststore.p12 \
 
 ## Downloads ask first
 
-jkite fetches three kinds of thing: its own jar, a JDK to run that jar with,
-and the dependencies a script declares. When something has to be fetched it says
-what, and on a terminal it asks.
+jkite fetches four kinds of thing: its own jar, a JDK to run that jar with, the
+JDK a script asks for with `//JAVA`, and the dependencies a script declares.
+When something has to be fetched it says what, and on a terminal it asks.
 
 ```
 jkite has to download:
@@ -287,8 +287,10 @@ Continue? [Y/n]:
 Only a download that would really happen is asked about, so this is a first-run
 question rather than a per-run one. A JDK that is already installed never
 reaches it, and neither does a dependency already in the local Maven repository.
-A cold first run asks twice: the launcher about the jar and the JDK, the jar
-about the dependencies. `--update` asks before replacing an installation.
+A cold first run asks at least twice — the launcher about its jar and the JDK to
+start it with, the jar about the dependencies — and a third time when the script
+names a `//JAVA` the machine does not have. `--update` asks before replacing an
+installation.
 
 | | |
 | --- | --- |
@@ -315,9 +317,11 @@ which is what the setting is for; pass `--yes` if you meant to allow it.
 
 ## Paths
 
-A project can live where your projects live. Non-ASCII directory names work —
-Japanese, Cyrillic and accented Latin are all tested, on Linux, macOS and
-Windows — and so do paths past Windows' 260-character limit.
+A project can live where your projects live, with one Windows caveat below.
+Non-ASCII directory names work on Linux and macOS — Japanese, Cyrillic and
+accented Latin are all tested — and on Windows they work as long as the whole
+path is inside the machine's code page. Paths past Windows' 260-character limit
+work everywhere.
 
 Windows needed work for that, and the reason is worth knowing if you hit
 something like it elsewhere. `java.exe` converts its own command line to the

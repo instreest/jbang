@@ -33,7 +33,7 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 
 /**
- * Shared infrastructure for functional tests of JBang startup scripts. Provides
+ * Shared infrastructure for functional tests of jkite's launcher scripts. Provides
  * WireMock lifecycle, process execution helpers, archive creation utilities,
  * and a base environment map for the tests.
  */

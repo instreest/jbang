@@ -68,7 +68,7 @@ print_version() {
     echo "No distributionVersion in $propertiesFile" 1>&2
     exit 1
   fi
-  vendored=$abs_jbang_dir/jkite.jar
+  vendored=$abs_jkite_dir/jkite.jar
   cached=$CACHEDIR/jkite/$pinned/jkite.jar
   if [ -f "$vendored" ]; then
     actual=$(jar_version "$vendored")
@@ -186,18 +186,18 @@ no_terminal() {
 # running the install.sh that sits next to this script. Needs no Java and no
 # jar, so it works even when the pinned jar can no longer be downloaded.
 run_update() {
-  local installer=$abs_jbang_dir/install.sh
+  local installer=$abs_jkite_dir/install.sh
   if [ ! -f "$installer" ]; then
     echo "$installer not found, so this installation cannot update itself." 1>&2
     exit 1
   fi
-  confirm_downloads "  - a new jkite installation into $abs_jbang_dir
+  confirm_downloads "  - a new jkite installation into $abs_jkite_dir
 " || exit 1
   if [ -n "$1" ]; then export JKITE_REF=$1; fi
-  bash "$installer" "$abs_jbang_dir" || exit $?
-  if [ -f "$abs_jbang_dir/jkite.jar" ]; then
+  bash "$installer" "$abs_jkite_dir" || exit $?
+  if [ -f "$abs_jkite_dir/jkite.jar" ]; then
     echo 1>&2
-    echo "Warning: $abs_jbang_dir/jkite.jar was not touched, and a jar next to" 1>&2
+    echo "Warning: $abs_jkite_dir/jkite.jar was not touched, and a jar next to" 1>&2
     echo "the launcher wins over jkite.properties, so that old jar still runs." 1>&2
     echo "Remove it, or replace it with the jar of the version just installed." 1>&2
   fi
@@ -293,7 +293,7 @@ setup_java_exec() {
   if find_existing_java; then
     return
   fi
-  JAVA_HOME=$(bash "$abs_jbang_dir/jkite-bootstrap-jdk") || exit 1
+  JAVA_HOME=$(bash "$abs_jkite_dir/jkite-bootstrap-jdk") || exit 1
   export JAVA_HOME
   JAVA_EXEC="$JAVA_HOME/bin/java"
 }
@@ -325,7 +325,7 @@ for arg in "$@"; do
   esac
 done
 
-abs_jbang_dir=$(script_dir)
+abs_jkite_dir=$(script_dir)
 
 # Windows shells (Cygwin, Git Bash, MSYS2) hand over to the Windows launcher.
 # The reason is the JDK: Temurin ships Windows as a .zip, and
@@ -348,13 +348,13 @@ abs_jbang_dir=$(script_dir)
 # working either way.
 case "$(uname -s)" in
   CYGWIN*|MINGW*|MSYS*)
-    if [ -f "$abs_jbang_dir/jkite.cmd" ]; then
+    if [ -f "$abs_jkite_dir/jkite.cmd" ]; then
       # cygpath ships with all three of these shells. If it is somehow not
       # there, stop rather than running "cmd /c ''" with the arguments after
       # it, which would have cmd.exe run the first of them as a command.
-      win_cmd=$(cygpath -m "$abs_jbang_dir/jkite.cmd") || exit 1
+      win_cmd=$(cygpath -m "$abs_jkite_dir/jkite.cmd") || exit 1
       if [ -z "$win_cmd" ]; then
-        echo "cygpath could not convert $abs_jbang_dir/jkite.cmd" 1>&2
+        echo "cygpath could not convert $abs_jkite_dir/jkite.cmd" 1>&2
         exit 1
       fi
       cmd /c "$win_cmd" "$@"
@@ -365,7 +365,7 @@ esac
 
 if [[ -z "$JKITE_DIR" ]]; then LITEDIR="$HOME/.jkite"; else LITEDIR="$JKITE_DIR"; fi
 if [[ -z "$JKITE_CACHE_DIR" ]]; then CACHEDIR="$LITEDIR/cache"; else CACHEDIR="$JKITE_CACHE_DIR"; fi
-propertiesFile=$abs_jbang_dir/jkite.properties
+propertiesFile=$abs_jkite_dir/jkite.properties
 
 # The two options this script answers itself. Both are about the installation
 # rather than about a script, so neither runs the jar and neither needs a JDK.
@@ -388,7 +388,7 @@ esac
 # It is run through bash rather than executed, so a checkout that lost the
 # execute bit (core.fileMode=false, a zip download) still works, as it does
 # for this script itself.
-jarPath=$abs_jbang_dir/jkite.jar
+jarPath=$abs_jkite_dir/jkite.jar
 
 # What the two bootstrap scripts would have to fetch. Both are asked about at
 # once, so a first run asks a single question rather than one per download.
@@ -410,7 +410,7 @@ if [ -n "$netItems" ]; then
 fi
 
 if [ ! -f "$jarPath" ]; then
-  jarPath=$(bash "$abs_jbang_dir/jkite-bootstrap-jar") || exit 1
+  jarPath=$(bash "$abs_jkite_dir/jkite-bootstrap-jar") || exit 1
 fi
 
 setup_java_exec
