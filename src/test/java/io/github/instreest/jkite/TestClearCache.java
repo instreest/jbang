@@ -82,6 +82,54 @@ class TestClearCache {
 	}
 
 	/**
+	 * The dependency jars go too, because that is what the option is for.
+	 *
+	 * They used to live in ~/.m2/repository, so --clear-cache removed the
+	 * resolved class paths and left the files they named: the next run
+	 * compiled against exactly the same bytes as the last one, and the option
+	 * had not done the one thing its name promises. "Start from nothing"
+	 * meant nothing at all while the jars that reach the class path were
+	 * somewhere jkite did not empty.
+	 */
+	@Test
+	void theDependencyJarsGoTooSoThatTheNextRunReallyStartsCold() throws IOException {
+		Path deps = Settings.getCacheDir(Settings.CacheClass.deps);
+		Path jar = Files.createDirectories(deps.resolve("com/example/thing/1.0"))
+			.resolve("thing-1.0.jar");
+		Files.write(jar, "x".getBytes(StandardCharsets.UTF_8));
+		Said said = new Said(jar);
+
+		Settings.clearCache(said::accept, null);
+
+		int named = said.firstMentionOf(deps.toString());
+		assertTrue(named >= 0, "it never said it would clear the dependencies: " + said.lines);
+		assertTrue(said.jarStillThere.get(named),
+				"it named the directory only after emptying it:\n" + String.join("\n", said.lines));
+		assertFalse(Files.exists(jar), "the dependency jar is still there: " + said.lines);
+	}
+
+	/**
+	 * A repository somebody else named is not jkite's to empty. Pointed at
+	 * ~/.m2/repository - which is the reason the variable exists - clearing
+	 * it would throw away every artifact every other build on the machine had
+	 * fetched, from an option whose blast radius reads as "jkite's cache".
+	 */
+	@Test
+	void aRepositorySomebodyElseNamedIsLeftAlone() throws IOException {
+		Path deps = Settings.getCacheDir(Settings.CacheClass.deps);
+		Path jar = Files.createDirectories(deps.resolve("com/example/kept/1.0"))
+			.resolve("kept-1.0.jar");
+		Files.write(jar, "x".getBytes(StandardCharsets.UTF_8));
+		List<String> lines = new ArrayList<>();
+
+		Settings.clearCache(lines::add, "/somewhere/of/their/own");
+
+		assertTrue(lines.stream().anyMatch(l -> l.contains("not jkite's to empty")),
+				String.join("\n", lines));
+		assertTrue(Files.exists(jar), "it emptied the cache repository anyway: " + lines);
+	}
+
+	/**
 	 * Every kind of cached thing sits under the cache directory, with no
 	 * variable of its own to move it.
 	 *

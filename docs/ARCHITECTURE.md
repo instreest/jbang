@@ -20,8 +20,8 @@ flowchart LR
     B["cache/jdks/bootstrap"]
     S["cache/jdks/&lt;version&gt;"]
     A["cache/jars/&lt;name&gt;.&lt;hash&gt;/"]
+    M["cache/deps (local Maven repository)"]
   end
-  M["~/.m2/repository"]
   L -- "pins version + SHA-256" --> J
   L -- "pins version + SHA-256" --> B
   T --> A
@@ -57,7 +57,7 @@ sequenceDiagram
   end
   L->>JAR: exec java -jar, replacing the shell
   JAR->>JAR: read directives through DirectiveParser
-  JAR->>JAR: resolve //DEPS against ~/.m2 first
+  JAR->>JAR: resolve //DEPS against cache/deps first
   alt dependencies are missing
     JAR->>U: names them and asks
     U-->>JAR: yes

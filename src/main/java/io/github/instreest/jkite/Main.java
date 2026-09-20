@@ -274,7 +274,8 @@ public final class Main {
 		realOut.println("  --verbose            Print what is being done");
 		realOut.println("  --quiet              Only print errors");
 		realOut.println("  --fresh              Ignore caches and rebuild/re-resolve everything");
-		realOut.println("  --clear-cache        Remove the built jars and resolved dependencies, and exit");
+		realOut.println("  --clear-cache        Remove the built jars, dependency jars and resolved");
+		realOut.println("                       class paths, and exit");
 		realOut.println("  -o, --offline        Never access the network");
 		realOut.println("  -Dkey=value          System property for directive substitution and the script");
 		realOut.println("  -R<option>           Additional JVM option when running");

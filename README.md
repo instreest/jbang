@@ -177,7 +177,7 @@ jkite [<options>] <script.java> [<args>...]
 | `--verbose` | print what is being done |
 | `--quiet` | only print errors |
 | `--fresh` | ignore the caches and rebuild |
-| `--clear-cache` | remove the built jars and resolved dependencies, and exit. It prints the directories before it empties them; the installed JDKs are kept |
+| `--clear-cache` | remove the built jars, the dependency jars and the resolved class paths, and exit. It prints the directories before it empties them; the installed JDKs are kept, and so is a repository `JKITE_MAVEN_REPO` names |
 | `-o`, `--offline` | never access the network |
 | `-Dkey=value` | a system property, for `${...}` in directives and for the script |
 | `-R<option>` | an extra JVM option for the script |
@@ -206,7 +206,7 @@ keep JBang's names because the parser is JBang's, unchanged.
 | `JKITE_ASSUME_YES` | set to `1`, `true` or `yes` to answer yes in advance, like `--yes` |
 | `JKITE_DIR` | base directory (default `~/.jkite`) |
 | `JKITE_CACHE_DIR` | cache directory (default `$JKITE_DIR/cache`) |
-| `JKITE_MAVEN_REPO` | local Maven repository to use instead of `~/.m2/repository` |
+| `JKITE_MAVEN_REPO` | local Maven repository to use instead of jkite's own; set it to `~/.m2/repository` to share the machine's |
 | `JKITE_DEFAULT_JAVA_VERSION` | JDK to use when a script names none (default 17) |
 | `JKITE_JDK_INDEX` | read the JVM index from here instead of from Maven Central |
 | `JKITE_JAVA_OPTIONS` | JVM options for jkite itself |
@@ -221,6 +221,24 @@ Everything jkite writes goes under `JKITE_DIR`; nothing is written into
 the project. Several runs at once are safe: each download is taken by one run
 while the others wait, and every file is renamed into place only once it is
 complete, so a build matrix never trips over a half-written file.
+
+That includes the dependency jars, which go into a local Maven repository of
+jkite's own at `$JKITE_CACHE_DIR/deps` rather than into `~/.m2/repository`.
+Maven Resolver would use `~/.m2` by default, and everywhere else in jkite what
+reaches the class path is pinned by a SHA-256 the project commits — so taking
+a jar out of a directory that any other build on the machine can write to, and
+that jkite neither pins nor owns, was the one place where what ran depended on
+the machine rather than on the project. It also meant emptying `JKITE_DIR` did
+not give you a cold machine, which is what `--clear-cache` is for.
+
+The cost is that a machine which already has an artifact in `~/.m2` fetches it
+again, and `--clear-cache` now removes the jars as well as the resolved class
+paths. `JKITE_MAVEN_REPO=~/.m2/repository` buys the sharing back, and jkite
+then leaves that directory alone when clearing the cache. Only the directory of
+files moves either way: mirrors, proxies and credentials are still read from
+`~/.m2/settings.xml`, since those describe the machine's route to a repository
+and not which bytes come back. A `<localRepository>` set in that file is
+overridden, as it is by Maven's own `-Dmaven.repo.local`.
 
 ## Behind a proxy
 

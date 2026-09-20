@@ -54,7 +54,9 @@ import io.github.instreest.jkite.Version;
  * Resolves Maven coordinates (including their transitive dependencies) to
  * local files using Maven Resolver through MIMA. Only Maven Central is used
  * as remote repository (plus mirrors/proxies from ~/.m2/settings.xml); the
- * local repository is the standard ~/.m2/repository unless JKITE_MAVEN_REPO is set.
+ * local repository is jkite's own, under the cache, unless JKITE_MAVEN_REPO
+ * names another - see Settings.getLocalMavenRepo for why it is not
+ * ~/.m2/repository.
  */
 public final class DependencyResolver {
 	private final Set<MavenRepo> repositories = new LinkedHashSet<>();
@@ -165,9 +167,9 @@ public final class DependencyResolver {
 	 * old repository.
 	 */
 	private static String cacheKey(List<String> depIds, List<MavenRepo> repos) {
-		Path localRepo = Settings.getLocalMavenRepoOverride();
+		Path localRepo = Settings.getLocalMavenRepo();
 		return repos.stream().map(MavenRepo::toString).collect(Collectors.joining(","))
-				+ "|" + (localRepo != null ? localRepo.toAbsolutePath() : "")
+				+ "|" + localRepo.toAbsolutePath()
 				+ "|" + String.join(Settings.CP_SEPARATOR, depIds);
 	}
 
@@ -210,7 +212,7 @@ public final class DependencyResolver {
 		}
 	}
 
-	/** The local Maven repository in use (e.g. ~/.m2/repository). */
+	/** The local Maven repository in use, as the resolver resolved it. */
 	public static Path getLocalMavenRepo() {
 		try (Session r = new Session(true, false, Collections.emptyList())) {
 			return r.context.repositorySystemSession().getLocalRepository().getBasedir().toPath();
@@ -264,7 +266,7 @@ public final class DependencyResolver {
 			.userProperties(userProperties)
 			.offline(offline)
 			.withUserSettings(true)
-			.withLocalRepositoryOverride(Settings.getLocalMavenRepoOverride())
+			.withLocalRepositoryOverride(Settings.getLocalMavenRepo())
 			.repositories(toRemoteRepositories(repositories))
 			.addRepositoriesOp(ContextOverrides.AddRepositoriesOp.REPLACE)
 			// Deliberately Maven's own behaviour rather than the stricter rule

@@ -24,6 +24,7 @@ import dev.jbang.util.Util;
  *   cache/            ($JKITE_CACHE_DIR)
  *     jars/           compiled scripts
  *     jdks/           JDKs installed by jkite
+ *     deps/           the local Maven repository: the dependency jars
  *     urls/           files being downloaded
  *     .locks/         held while a cache entry is written
  *     dependency_cache.txt
@@ -84,7 +85,7 @@ public final class Settings {
 	public static final int DEFAULT_LOCK_TIMEOUT = 600;
 
 	public enum CacheClass {
-		urls, jars, jdks
+		urls, jars, jdks, deps
 	}
 
 	private Settings() {
@@ -156,10 +157,46 @@ public final class Settings {
 		return getCacheDir().resolve(DEPENDENCY_CACHE_FILE);
 	}
 
-	/** Optional override of the local Maven repository (JKITE_MAVEN_REPO). */
-	public static Path getLocalMavenRepoOverride() {
-		String repo = System.getenv(ENV_MAVEN_REPO);
-		return repo != null ? Paths.get(repo) : null;
+	/**
+	 * The local Maven repository: jkite's own, under the cache, unless
+	 * JKITE_MAVEN_REPO names another.
+	 *
+	 * Not ~/.m2/repository, which is what Maven Resolver would pick by
+	 * itself. Everything else a run needs is pinned by a SHA-256 the project
+	 * commits and lands under JKITE_DIR; the dependencies were the one thing
+	 * that came out of a directory jkite neither pins nor owns. That made two
+	 * claims untrue at once. "Everything jkite writes goes under JKITE_DIR"
+	 * was not, and emptying JKITE_DIR did not return the machine to a cold
+	 * one, because the jars that actually reach the class path were still
+	 * sitting in ~/.m2 - which, since the JVM takes user.home from the passwd
+	 * entry rather than from HOME, could not even be moved out of the way.
+	 * Whatever another build did to that directory decided what a jkite run
+	 * compiled against, without saying so.
+	 *
+	 * The cost is real and is the reason this is not obviously right: a
+	 * machine that already holds an artifact in ~/.m2 fetches it again. That
+	 * is the price of a run being the project's rather than the machine's,
+	 * and JKITE_MAVEN_REPO=~/.m2/repository buys the sharing back for anyone
+	 * who would rather have it.
+	 *
+	 * Only the directory of files moves. Mirrors, proxies and credentials are
+	 * still read from ~/.m2/settings.xml, because those describe the machine's
+	 * route to a repository, which is exactly what jkite should not be
+	 * reinventing. A &lt;localRepository&gt; in that file is overridden, like
+	 * Maven's own default.
+	 */
+	public static Path getLocalMavenRepo() {
+		return localMavenRepo(System.getenv(ENV_MAVEN_REPO));
+	}
+
+	/**
+	 * The same, with the variable passed in, so that the default can be
+	 * tested. The test run sets JKITE_MAVEN_REPO - it wants a repository of
+	 * its own - and a test that read the environment would therefore never
+	 * see the default it exists to pin.
+	 */
+	static Path localMavenRepo(String override) {
+		return override != null ? Paths.get(override) : getCacheDir(CacheClass.deps);
 	}
 
 	public static int getDefaultJavaVersion() {
@@ -226,17 +263,33 @@ public final class Settings {
 
 	/**
 	 * Throws away what the cache can produce again: the built jars, whatever a
-	 * download left behind, and the resolved class paths. The installed JDKs
-	 * are left where they are - they are pinned, there are few of them, and
-	 * fetching one again costs minutes - and so is jkite's own jar, which is
-	 * running.
+	 * download left behind, the resolved class paths, and the dependency jars
+	 * they point at. The installed JDKs are left where they are - they are
+	 * pinned, there are few of them, and fetching one again costs minutes -
+	 * and so is jkite's own jar, which is running.
+	 *
+	 * The dependency jars are in that list because of what this option is
+	 * for. Emptying the cache is how somebody asks for the next run to start
+	 * from nothing, and while the jars lived in ~/.m2 that was not what they
+	 * got: the resolved class paths went and the files they named stayed, so
+	 * the next run used the same bytes as the last one and the option had not
+	 * done the one thing its name promises. Only jkite's own repository is
+	 * emptied - a JKITE_MAVEN_REPO pointing at ~/.m2/repository, or anywhere
+	 * else somebody chose, is somebody else's directory and is left alone.
 	 *
 	 * @param say where each line goes, as it happens
 	 */
 	public static void clearCache(Consumer<String> say) {
+		clearCache(say, System.getenv(ENV_MAVEN_REPO));
+	}
+
+	/** The same, with the variable passed in, as for localMavenRepo above. */
+	static void clearCache(Consumer<String> say, String mavenRepoOverride) {
 		Path jars = getCacheDir(CacheClass.jars);
 		Path urls = getCacheDir(CacheClass.urls);
 		Path deps = getDependencyCacheFile();
+		// null when JKITE_MAVEN_REPO points somewhere of the user's own
+		Path repo = mavenRepoOverride == null ? getCacheDir(CacheClass.deps) : null;
 		// Printed as it goes rather than collected and returned, so that the
 		// list of what is about to be removed is on the screen before it is:
 		// jkite asks before it downloads, and the one thing it does that
@@ -247,12 +300,26 @@ public final class Settings {
 		say.accept("Removing the contents of:");
 		say.accept("  " + jars + "   (built jars)");
 		say.accept("  " + urls + "   (unfinished downloads)");
+		if (repo != null) {
+			say.accept("  " + repo + "   (dependency jars)");
+		}
 		if (Files.exists(deps)) {
 			say.accept("  " + deps + "   (resolved dependencies)");
 		}
 		say.accept("");
 		say.accept(removeContents(jars, "built jars"));
 		say.accept(removeContents(urls, "unfinished downloads"));
+		if (repo != null) {
+			// counted before it goes, because removeContents counts what it
+			// deletes and what it deletes here is a handful of top-level group
+			// directories - "removed 3 dependency jars" for three hundred of
+			// them is worse than saying nothing
+			long depJars = countJars(repo);
+			say.accept(removeContents(repo, "dependency trees holding " + depJars + (depJars == 1 ? " jar" : " jars")));
+		} else {
+			say.accept("kept " + mavenRepoOverride + " (" + ENV_MAVEN_REPO
+					+ " names it, so it is not jkite's to empty)");
+		}
 		if (Files.exists(deps)) {
 			say.accept(Util.deletePath(deps, true)
 					? "removed the resolved dependencies of " + deps
@@ -260,6 +327,15 @@ public final class Settings {
 		}
 		say.accept("kept the JDKs in " + getCacheDir(CacheClass.jdks)
 				+ " (remove that directory by hand to fetch them again)");
+	}
+
+	/** How many jars are under a local repository, for the message above. */
+	private static long countJars(Path repo) {
+		try (Stream<Path> found = Files.walk(repo)) {
+			return found.filter(p -> p.getFileName().toString().endsWith(".jar")).count();
+		} catch (IOException e) {
+			return 0;
+		}
 	}
 
 	private static String removeContents(Path dir, String what) {
