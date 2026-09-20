@@ -34,6 +34,7 @@ import io.github.instreest.jkite.spi.SourceDirectives;
 import dev.jbang.util.JavaUtil;
 import io.github.instreest.jkite.util.OsDetector;
 import io.github.instreest.jkite.util.Placeholders;
+import io.github.instreest.jkite.util.RealPath;
 import dev.jbang.util.Util;
 
 /**
@@ -130,7 +131,7 @@ public class Project {
 	 * directives and passed on to the script.
 	 */
 	public Project(Path mainSource, Map<String, String> properties) {
-		this.mainSource = mainSource.toAbsolutePath().normalize();
+		this.mainSource = RealPath.of(mainSource);
 		this.properties = properties;
 		this.contextProperties = new Properties(System.getProperties());
 		OsDetector.detect(contextProperties);
@@ -191,7 +192,7 @@ public class Project {
 				Util.warnMsg("//SOURCES " + pattern + " (in " + source.getFileName() + ") matched no files");
 			}
 			for (String f : files) {
-				addSource(baseDir.resolve(f).toAbsolutePath().normalize(), false);
+				addSource(RealPath.of(baseDir.resolve(f)), false);
 			}
 		}
 	}
@@ -224,7 +225,7 @@ public class Project {
 					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 							"//FILES target must stay inside the jar. Found: " + dest);
 				}
-				Path from = baseDir.resolve(src).toAbsolutePath().normalize();
+				Path from = RealPath.of(baseDir.resolve(src));
 				if (!Files.isReadable(from)) {
 					throw new ExitException(ExitException.EXIT_INVALID_INPUT,
 							"File could not be found or read: " + from);

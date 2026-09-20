@@ -229,4 +229,42 @@ class TestSecondHopPaths extends AbstractScriptTest {
 		assertTrue(!said.contains("Invalid filename") && !said.contains("checkDirectory"),
 				"it still gets as far as javac, so the check did not look at this path: " + said);
 	}
+
+	/**
+	 * The same divergence, end to end: does jkite run the file a shell would
+	 * open?
+	 *
+	 * real/link points at elsewhere, so "real/link/../Report.java" walks into
+	 * elsewhere and back out, landing on the one at the top - while folding
+	 * the string stays inside real and finds the other. Each prints its own
+	 * word, so what comes out says which file was compiled, rather than which
+	 * spelling of a path jkite settled on.
+	 *
+	 * Symbolic links on Windows need administrator rights or developer mode,
+	 * which a runner does not have, so this is the POSIX statement of it. The
+	 * unit test beside RealPath is the same measurement without the process.
+	 */
+	@Test
+	@EnabledOnOs({ OS.LINUX, OS.MAC })
+	void aLinkFollowedByDotDotRunsTheFileTheShellWouldOpen() throws Exception {
+		Path root = tempDir.resolve("links");
+		Files.createDirectories(root.resolve("elsewhere"));
+		say(root.resolve("real"), "folded");
+		say(root, "walked");
+		Files.createSymbolicLink(root.resolve("real/link"), root.resolve("elsewhere"));
+
+		RunResult result = runJkite(root.resolve("real/link/../Report.java"), tempDir.resolve("home-links"));
+		String said = result.stdout + result.stderr;
+
+		assertEquals(0, result.exitCode, said);
+		assertTrue(said.contains("walked"), "it compiled the other file: " + said);
+	}
+
+	/** A script that prints which of the two copies of itself it is. */
+	private void say(Path dir, String word) throws IOException {
+		Files.createDirectories(dir);
+		Files.write(dir.resolve("Report.java"), ("class Report {\n"
+				+ "  public static void main(String[] a) { System.out.println(\"" + word + "\"); }\n"
+				+ "}\n").getBytes(StandardCharsets.UTF_8));
+	}
 }

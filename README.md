@@ -339,6 +339,13 @@ the script, so `レポート.java` put its own name into a path of jkite's makin
 well. It does not any more. A name that already worked is used exactly as it
 is, so nothing is renamed and nothing is rebuilt for it.
 
+Paths are resolved the way the file system resolves them, not by folding the
+text. If a directory on the way is a symbolic link and the path has a `..`
+after it, `a/link/../x` is not `a/x` — the link is followed first — so jkite
+asks the file system rather than cancelling the two against each other. It
+runs the file your shell would open. A path that is not there is left as
+written, so a missing script is still reported as a missing script.
+
 One more, and it is the JDK's rather than jkite's: a character outside the Basic
 Multilingual Plane — in practice an emoji — anywhere in the path `jkite/` is
 installed under. `java -jar` then fails before anything of jkite runs, with
